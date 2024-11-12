@@ -1,8 +1,12 @@
 package modules
 
 import (
+	"os"
+	"os/exec"
 	"strconv"
 	"time"
+
+	"github.com/amarnathcjd/gogram/telegram"
 )
 
 func parseBirthday(dat, month, year int32) string {
@@ -31,4 +35,16 @@ func tillDate(dat, month int32) string {
 	days := timeBday.Sub(currTime).Hours() / 24
 
 	return strconv.Itoa(int(days)) + " days"
+}
+
+func UpdateSourceCodeHandle(m *telegram.NewMessage) error {
+	msg, _ := m.Reply("<code>Updating source code...</code>")
+	defer msg.Delete()
+
+	processID := os.Getpid()
+	exec.Command("git", "pull").Run()
+	exec.Command("setsid", "go", "run", ".").Start()
+	exec.Command("kill", "-9", strconv.Itoa(processID)).Run()
+
+	return nil
 }
