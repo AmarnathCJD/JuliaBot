@@ -23,39 +23,46 @@ func GatherSystemInfo(m *telegram.NewMessage) error {
 	pid := int32(os.Getpid())
 	proc, err := process.NewProcess(pid)
 	if err != nil {
-		return fmt.Errorf("failed to get process info: %w", err)
+		return fmt.Errorf("❌ Failed to get process info: %w", err)
 	}
 
-	info := "<b>>>---- System Data ----<<</b>\n\n"
+	info := "<b>💻 System Info:</b>\n\n"
+
 	cpuPercent, err := proc.Percent(0)
 	if err == nil {
-		info += fmt.Sprintf("<b>CPU Usage:</b> %.2f%%\n", cpuPercent)
+		info += fmt.Sprintf("🖥️ <b>CPU:</b> %.2f%%\n", cpuPercent)
 	} else {
-		info += "<b>CPU Usage Error:</b> " + err.Error() + "\n"
+		info += "⚠️ <b>CPU Error:</b> " + err.Error() + "\n"
 	}
 
 	procMemInfo, err := proc.MemoryInfo()
 	if err == nil {
-		info += fmt.Sprintf("<b>Process Memory Usage:</b> %.2f MB\n", float64(procMemInfo.RSS)/(1024*1024))
+		info += fmt.Sprintf("📊 <b>Process Mem:</b> %.2f MB\n", float64(procMemInfo.RSS)/(1024*1024))
 	} else {
-		info += "<b>Process Memory Error:</b> " + err.Error() + "\n"
+		info += "⚠️ <b>Process Mem Error:</b> " + err.Error() + "\n"
 	}
 
-	info += fmt.Sprintf("<b>Uptime:</b> %s\n", time.Since(startTime).Round(time.Second))
-	info += fmt.Sprintf("<b>OS:</b> %s\n", runtime.GOOS)
-	info += fmt.Sprintf("<b>Arch:</b> %s\n", runtime.GOARCH)
-	info += fmt.Sprintf("<b>CPUs:</b> %d\n", runtime.NumCPU())
-	info += fmt.Sprintf("<b>Goroutines:</b> %d\n", runtime.NumGoroutine())
-	info += fmt.Sprintf("<b>Process ID:</b> %d\n", pid)
+	info += fmt.Sprintf("⏱️ <b>Uptime:</b> %s\n", time.Since(startTime).Round(time.Second))
+
+	info += fmt.Sprintf("🧑‍💻 <b>OS:</b> %s | <b>Arch:</b> %s\n", runtime.GOOS, runtime.GOARCH)
+	info += fmt.Sprintf("🚀 <b>CPUs:</b> %d | <b>Goroutines:</b> %d\n", runtime.NumCPU(), runtime.NumGoroutine())
+	info += fmt.Sprintf("🆔 <b>PID:</b> %d\n", pid)
+
 	memInfo, err := mem.VirtualMemory()
 	if err == nil {
-		info += fmt.Sprintf("<b>Total Memory:</b> %.2f GB\n", float64(memInfo.Total)/(1024*1024*1024))
-		info += fmt.Sprintf("<b>Used Memory:</b> %.2f GB (%.2f%%)\n", float64(memInfo.Used)/(1024*1024*1024), memInfo.UsedPercent)
+		info += fmt.Sprintf("💾 <b>Memory:</b> %.2f GB / %.2f GB (%.2f%%)\n", float64(memInfo.Used)/(1024*1024*1024), float64(memInfo.Total)/(1024*1024*1024), memInfo.UsedPercent)
 	} else {
-		info += "<b>Memory Error:</b> " + err.Error() + "\n"
+		info += "⚠️ <b>Memory Error:</b> " + err.Error() + "\n"
 	}
+	f, _ := telegram.ResolveBotFileID("AgAABZq_MRv8XKlV4gk2goxvC_A")
 
-	_, err = m.ReplyMedia("https://img.freepik.com/premium-photo/heart-health-monitoring-system-tracks-vitals-computer-hospital_926058-9438.jpg", telegram.MediaOptions{Caption: info})
+	_, err = m.ReplyMedia(
+		f,
+		telegram.MediaOptions{Caption: info},
+	)
+	if err != nil {
+		m.Reply(info)
+	}
 	return err
 }
 
