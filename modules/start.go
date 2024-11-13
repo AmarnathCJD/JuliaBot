@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
+	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/process"
 )
@@ -29,8 +30,10 @@ func GatherSystemInfo(m *telegram.NewMessage) error {
 	info := "<b>💻 System Info:</b>\n\n"
 
 	cpuPercent, err := proc.Percent(0)
+	cpuFreq, err := cpu.Percent(0, false)
+	cpuInfo, err := cpu.Info()
 	if err == nil {
-		info += fmt.Sprintf("🖥️ <b>CPU:</b> %.2f%%\n", cpuPercent)
+		info += fmt.Sprintf("🖥️ <b>CPU:</b> %.2f%% (T: %.2f%%, F: %.2fGhz)\n", cpuPercent, cpuFreq[0], cpuInfo[0].Mhz/1024)
 	} else {
 		info += "⚠️ <b>CPU Error:</b> " + err.Error() + "\n"
 	}
