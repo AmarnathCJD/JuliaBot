@@ -3,47 +3,60 @@ package modules
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
+	"github.com/shirou/gopsutil/v4/mem"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 var startTime = time.Now()
 
 func StartHandle(m *telegram.NewMessage) error {
 	m.Reply("Hellow! :)")
-	return m.React("❤️")
+	return m.React(getRandomEmoticon())
 }
 
 func GatherSystemInfo(m *telegram.NewMessage) error {
-	pid := os.Getpid()
-	os := "<b>---- System Data ----</b>\n\n<b>Uptime:</b> " + time.Since(startTime).String() + "\n<b>PowerOS:</b> " + runtime.GOOS + "\n"
-	os += "<b>Arch:</b> " + runtime.GOARCH + "\n"
-	os += fmt.Sprintf("<b>CPUs:</b> %d\n", runtime.NumCPU())
-	os += fmt.Sprintf("<b>Goroutines:</b> %d\n", runtime.NumGoroutine())
-	cmd_to_get_currentprocess_memory := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "rss=")
-	output, err := cmd_to_get_currentprocess_memory.Output()
-
+	pid := int32(os.Getpid())
+	proc, err := process.NewProcess(pid)
 	if err != nil {
-		os += "<b>Error:</b> " + err.Error() + "\n"
-	} else {
-		os += "<b>Memory Usage:</b> " + strings.TrimSpace(string(output)) + " KB\n"
+		return fmt.Errorf("failed to get process info: %w", err)
 	}
 
-	cmd_to_get_currentprocess_cpu := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "%cpu=")
-	output, err = cmd_to_get_currentprocess_cpu.Output()
-
-	if err != nil {
-		os += "<b>Error:</b> " + err.Error() + "\n"
+	// System data
+	info := "<b>---- System Data ----</b>\n\n"
+	info += fmt.Sprintf("<b>Uptime:</b> %s\n", time.Since(startTime).Round(time.Second))
+	info += fmt.Sprintf("<b>OS:</b> %s\n", runtime.GOOS)
+	info += fmt.Sprintf("<b>Arch:</b> %s\n", runtime.GOARCH)
+	info += fmt.Sprintf("<b>CPUs:</b> %d\n", runtime.NumCPU())
+	info += fmt.Sprintf("<b>Goroutines:</b> %d\n", runtime.NumGoroutine())
+	info += fmt.Sprintf("<b>Process ID:</b> %d\n", pid)
+	memInfo, err := mem.VirtualMemory()
+	if err == nil {
+		info += fmt.Sprintf("<b>Total Memory:</b> %.2f GB\n", float64(memInfo.Total)/(1024*1024*1024))
+		info += fmt.Sprintf("<b>Used Memory:</b> %.2f GB (%.2f%%)\n", float64(memInfo.Used)/(1024*1024*1024), memInfo.UsedPercent)
 	} else {
-		os += "<b>CPU Usage:</b> " + strings.TrimSpace(string(output)) + " %\n"
+		info += "<b>Memory Error:</b> " + err.Error() + "\n"
 	}
 
-	_, err = m.Reply(os)
+	cpuPercent, err := proc.Percent(0)
+	if err == nil {
+		info += fmt.Sprintf("<b>CPU Usage:</b> %.2f%%\n", cpuPercent)
+	} else {
+		info += "<b>CPU Usage Error:</b> " + err.Error() + "\n"
+	}
+
+	procMemInfo, err := proc.MemoryInfo()
+	if err == nil {
+		info += fmt.Sprintf("<b>Process Memory Usage:</b> %.2f MB\n", float64(procMemInfo.RSS)/(1024*1024))
+	} else {
+		info += "<b>Process Memory Error:</b> " + err.Error() + "\n"
+	}
+
+	_, err = m.Reply(info)
 	return err
 }
 
