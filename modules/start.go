@@ -26,22 +26,7 @@ func GatherSystemInfo(m *telegram.NewMessage) error {
 		return fmt.Errorf("failed to get process info: %w", err)
 	}
 
-	// System data
-	info := "<b>---- System Data ----</b>\n\n"
-	info += fmt.Sprintf("<b>Uptime:</b> %s\n", time.Since(startTime).Round(time.Second))
-	info += fmt.Sprintf("<b>OS:</b> %s\n", runtime.GOOS)
-	info += fmt.Sprintf("<b>Arch:</b> %s\n", runtime.GOARCH)
-	info += fmt.Sprintf("<b>CPUs:</b> %d\n", runtime.NumCPU())
-	info += fmt.Sprintf("<b>Goroutines:</b> %d\n", runtime.NumGoroutine())
-	info += fmt.Sprintf("<b>Process ID:</b> %d\n", pid)
-	memInfo, err := mem.VirtualMemory()
-	if err == nil {
-		info += fmt.Sprintf("<b>Total Memory:</b> %.2f GB\n", float64(memInfo.Total)/(1024*1024*1024))
-		info += fmt.Sprintf("<b>Used Memory:</b> %.2f GB (%.2f%%)\n", float64(memInfo.Used)/(1024*1024*1024), memInfo.UsedPercent)
-	} else {
-		info += "<b>Memory Error:</b> " + err.Error() + "\n"
-	}
-
+	info := "<b>>>---- System Data ----<<</b>\n\n"
 	cpuPercent, err := proc.Percent(0)
 	if err == nil {
 		info += fmt.Sprintf("<b>CPU Usage:</b> %.2f%%\n", cpuPercent)
@@ -56,7 +41,21 @@ func GatherSystemInfo(m *telegram.NewMessage) error {
 		info += "<b>Process Memory Error:</b> " + err.Error() + "\n"
 	}
 
-	_, err = m.Reply(info)
+	info += fmt.Sprintf("<b>Uptime:</b> %s\n", time.Since(startTime).Round(time.Second))
+	info += fmt.Sprintf("<b>OS:</b> %s\n", runtime.GOOS)
+	info += fmt.Sprintf("<b>Arch:</b> %s\n", runtime.GOARCH)
+	info += fmt.Sprintf("<b>CPUs:</b> %d\n", runtime.NumCPU())
+	info += fmt.Sprintf("<b>Goroutines:</b> %d\n", runtime.NumGoroutine())
+	info += fmt.Sprintf("<b>Process ID:</b> %d\n", pid)
+	memInfo, err := mem.VirtualMemory()
+	if err == nil {
+		info += fmt.Sprintf("<b>Total Memory:</b> %.2f GB\n", float64(memInfo.Total)/(1024*1024*1024))
+		info += fmt.Sprintf("<b>Used Memory:</b> %.2f GB (%.2f%%)\n", float64(memInfo.Used)/(1024*1024*1024), memInfo.UsedPercent)
+	} else {
+		info += "<b>Memory Error:</b> " + err.Error() + "\n"
+	}
+
+	_, err = m.ReplyMedia("https://img.freepik.com/premium-photo/heart-health-monitoring-system-tracks-vitals-computer-hospital_926058-9438.jpg", telegram.MediaOptions{Caption: info})
 	return err
 }
 

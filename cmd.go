@@ -32,7 +32,7 @@ func initFunc(c *telegram.Client) {
 
 		c.On("message:/start", modules.StartHandle)
 		c.On("message:/help", modules.HelpHandle)
-		c.On("message:/system", modules.GatherSystemInfo)
+		c.On("message:/sys", modules.GatherSystemInfo)
 		c.On("message:/info", modules.UserHandle)
 		c.On("message:/json", modules.JsonHandle)
 		c.On("message:/ping", modules.PingHandle)
