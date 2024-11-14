@@ -5,3 +5,6 @@
 /tmp/
 *.ipa
 *.mp4
+system_rendered.svg
+system_rendered.png
+*.py

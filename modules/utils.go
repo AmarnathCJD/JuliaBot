@@ -1,12 +1,20 @@
 package modules
 
 import (
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/disk"
+	"github.com/shirou/gopsutil/v4/mem"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 func parseBirthday(dat, month, year int32) string {
@@ -47,4 +55,161 @@ func UpdateSourceCodeHandle(m *telegram.NewMessage) error {
 	exec.Command("kill", "-9", strconv.Itoa(processID)).Run()
 
 	return nil
+}
+
+func IsImageDepsInstalled() bool {
+	// check of cairosvg and ffmpeg is installed
+	_, err := exec.LookPath("cairosvg")
+	if err != nil {
+		return false
+	}
+
+	_, err = exec.LookPath("ffmpeg")
+	if err != nil {
+		return false
+	}
+
+	return true
+}
+
+func gatherSystemInfo() (*SystemInfo, error) {
+	pid := int32(os.Getpid())
+	proc, err := process.NewProcess(pid)
+	if err != nil {
+		return nil, err
+	}
+
+	memr, err := proc.MemoryInfo()
+	if err != nil {
+		return nil, err
+	}
+
+	cpuPercent, err := cpu.Percent(0, false)
+	if err != nil {
+		return nil, err
+	}
+
+	cpuInfo, err := cpu.Info()
+
+	processMemory := HumanBytes(memr.RSS)
+	cpuPercentStr := strconv.FormatFloat(cpuPercent[0], 'f', 2, 64) + "%"
+
+	memInfo, err := mem.VirtualMemory()
+	if err != nil {
+		return nil, err
+	}
+
+	memUsed := HumanBytes(memInfo.Used)
+	memTotal := HumanBytes(memInfo.Total)
+
+	diskInfo, err := disk.Usage("/")
+
+	return &SystemInfo{
+		NumGoroutines: runtime.NumGoroutine(),
+		ProcessID:     pid,
+		ProcessMemory: processMemory,
+		OS:            runtime.GOOS,
+		Arch:          runtime.GOARCH + " (" + strconv.Itoa(runtime.NumCPU()) + " CPUs)",
+		Uptime:        time.Since(startTime).Round(time.Second).String(),
+		MemUsed:       memUsed,
+		MemTotal:      memTotal,
+		CPUPercent:    cpuPercentStr,
+		CPUPerc:       cpuPercent[0],
+		MemPerc:       memInfo.UsedPercent,
+		CPUName:       cpuInfo[0].ModelName,
+		DiskUsed:      HumanBytes(diskInfo.Used),
+		DiskTotal:     HumanBytes(diskInfo.Total),
+		DiskPerc:      diskInfo.UsedPercent,
+	}, nil
+}
+
+func HumanBytes(bytes uint64) string {
+	const unit = 1024
+	if bytes < unit {
+		return strconv.FormatUint(bytes, 10) + " B"
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+type SystemInfo struct {
+	NumGoroutines int
+	ProcessID     int32
+	ProcessMemory string
+	OS            string
+	Arch          string
+	Uptime        string
+	MemUsed       string
+	MemTotal      string
+	MemPerc       float64
+	CPUPercent    string
+	CPUPerc       float64
+	CPUName       string
+	DiskUsed      string
+	DiskTotal     string
+	DiskPerc      float64
+}
+
+func FillAndRenderSVG() (string, error) {
+	fi, err := os.Open("./assets/system.svg")
+	if err != nil {
+		return "", err
+	}
+
+	defer fi.Close()
+	content, err := io.ReadAll(fi)
+	if err != nil {
+		return "", err
+	}
+
+	info, err := gatherSystemInfo()
+	if err != nil {
+		return "", err
+	}
+
+	svgContent := string(content)
+	svgContent = strings.NewReplacer("{{cpu_perc}}", info.CPUPercent, "{{cpu_width}}", strconv.Itoa(findWidth(info.CPUPerc/100)),
+		"{{mem_used}}", info.MemUsed, "{{mem_total}}", info.MemTotal, "{{mem_width}}", strconv.Itoa(findWidth(info.MemPerc/100)),
+		"{{goroutines}}", strconv.Itoa(info.NumGoroutines), "{{pid}}", strconv.Itoa(int(info.ProcessID)),
+		"{{mem_proc}}", info.ProcessMemory,
+		"{{cpu_name}}", trimString(info.CPUName, 40), "{{disk_used}}", info.DiskUsed, "{{disk_total}}", info.DiskTotal, "{{disk_width}}", strconv.Itoa(findWidth(info.DiskPerc/100)),
+		"{{operating_sys}}", info.OS, "{{arch}}", info.Arch, "{{uptime}}", info.Uptime).Replace(svgContent)
+
+	fo, err := os.Create("./assets/system_rendered.svg")
+	if err != nil {
+		return "", err
+	}
+
+	defer fo.Close()
+	_, err = fo.WriteString(svgContent)
+	if err != nil {
+		return "", err
+	}
+
+	// convert to png cairosvg a.svg -o o.png -s 4
+	cmd := exec.Command("cairosvg", "./assets/system_rendered.svg", "-o", "./assets/system_rendered.png", "-s", "4")
+	err = cmd.Run()
+	if err != nil {
+		return "", fmt.Errorf("failed to convert svg to png: %w", err)
+	}
+
+	defer os.Remove("./assets/system_rendered.svg")
+	return "./assets/system_rendered.png", nil
+}
+
+func findWidth(perc float64) int {
+	totalW := 360
+	return int(float64(totalW) * perc)
+}
+
+func trimString(s string, length int) string {
+	if len(s) > length {
+		return s[:length] + ""
+	}
+
+	return s
 }

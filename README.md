@@ -28,6 +28,18 @@ go run .
 - Easy to use
 - Extendable
 
+### Optional Dependencies
+
+- [CairoSVG](https://cairosvg.org/)
+    ```bash
+    sudo apt-get install cairosvg
+    ```
+
+- [FFmpeg](https://ffmpeg.org/)
+    ```bash
+    sudo apt-get install ffmpeg
+    ```
+
 ### License
 
 - [MIT](LICENSE)

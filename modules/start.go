@@ -2,15 +2,11 @@ package modules
 
 import (
 	"fmt"
-	"os"
 	"runtime"
 	"strconv"
 	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
-	"github.com/shirou/gopsutil/v4/cpu"
-	"github.com/shirou/gopsutil/v4/mem"
-	"github.com/shirou/gopsutil/v4/process"
 )
 
 var startTime = time.Now()
@@ -21,42 +17,37 @@ func StartHandle(m *telegram.NewMessage) error {
 }
 
 func GatherSystemInfo(m *telegram.NewMessage) error {
-	pid := int32(os.Getpid())
-	proc, err := process.NewProcess(pid)
+	if IsImageDepsInstalled() {
+		renderedImage, err := FillAndRenderSVG()
+		if err != nil {
+			m.Reply("❌ Failed to render image: " + err.Error())
+			return err
+		}
+
+		_, err = m.ReplyMedia(
+			renderedImage,
+			telegram.MediaOptions{Caption: "System Info"},
+		)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	system, err := gatherSystemInfo()
 	if err != nil {
-		return fmt.Errorf("❌ Failed to get process info: %w", err)
+		return err
 	}
 
 	info := "<b>💻 System Info:</b>\n\n"
-
-	cpuPercent, err := proc.Percent(0)
-	cpuFreq, err := cpu.Percent(0, false)
-	cpuInfo, err := cpu.Info()
-	if err == nil {
-		info += fmt.Sprintf("🖥️ <b>CPU:</b> %.2f%% (T: %.2f%%, F: %.2fGhz)\n", cpuPercent, cpuFreq[0], cpuInfo[0].Mhz/1024)
-	} else {
-		info += "⚠️ <b>CPU Error:</b> " + err.Error() + "\n"
-	}
-
-	procMemInfo, err := proc.MemoryInfo()
-	if err == nil {
-		info += fmt.Sprintf("📊 <b>Process Mem:</b> %.2f MB\n", float64(procMemInfo.RSS)/(1024*1024))
-	} else {
-		info += "⚠️ <b>Process Mem Error:</b> " + err.Error() + "\n"
-	}
-
-	info += fmt.Sprintf("⏱️ <b>Uptime:</b> %s\n", time.Since(startTime).Round(time.Second))
-
+	info += fmt.Sprintf("🖥️ <b>CPU:</b> %.2f%%\n", system.CPUPerc)
+	info += fmt.Sprintf("📊 <b>Process Mem:</b> %s\n", system.ProcessMemory)
+	info += fmt.Sprintf("⏱️ <b>Uptime:</b> %s\n", system.Uptime)
 	info += fmt.Sprintf("🧑‍💻 <b>OS:</b> %s | <b>Arch:</b> %s\n", runtime.GOOS, runtime.GOARCH)
 	info += fmt.Sprintf("🚀 <b>CPUs:</b> %d | <b>Goroutines:</b> %d\n", runtime.NumCPU(), runtime.NumGoroutine())
-	info += fmt.Sprintf("🆔 <b>PID:</b> %d\n", pid)
-
-	memInfo, err := mem.VirtualMemory()
-	if err == nil {
-		info += fmt.Sprintf("💾 <b>Memory:</b> %.2f GB / %.2f GB (%.2f%%)\n", float64(memInfo.Used)/(1024*1024*1024), float64(memInfo.Total)/(1024*1024*1024), memInfo.UsedPercent)
-	} else {
-		info += "⚠️ <b>Memory Error:</b> " + err.Error() + "\n"
-	}
+	info += fmt.Sprintf("🆔 <b>PID:</b> %d\n", system.ProcessID)
+	info += fmt.Sprintf("💾 <b>Memory:</b> %s / %s (%.2f%%)\n", system.MemUsed, system.MemTotal, system.MemPerc)
+	info += fmt.Sprintf("💽 <b>Disk:</b> %s / %s (%.2f%%)\n", system.DiskUsed, system.DiskTotal, system.DiskPerc)
 	f, _ := telegram.ResolveBotFileID("AgAABZq_MRv8XKlV4gk2goxvC_A")
 
 	_, err = m.ReplyMedia(
