@@ -18,7 +18,7 @@ func StartHandle(m *telegram.NewMessage) error {
 
 func GatherSystemInfo(m *telegram.NewMessage) error {
 	if IsImageDepsInstalled() {
-		renderedImage, err := FillAndRenderSVG()
+		renderedImage, err := FillAndRenderSVG(false)
 		if err != nil {
 			m.Reply("❌ Failed to render image: " + err.Error())
 			return err
@@ -26,7 +26,7 @@ func GatherSystemInfo(m *telegram.NewMessage) error {
 
 		_, err = m.ReplyMedia(
 			renderedImage,
-			telegram.MediaOptions{Caption: "System Info"},
+			telegram.MediaOptions{Spoiler: true},
 		)
 		if err != nil {
 			return err

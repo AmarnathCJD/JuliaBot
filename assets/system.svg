@@ -1,9 +1,8 @@
 <svg width="460" height="460" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 460"
     preserveAspectRatio="xMidYMin slice">
     <defs>
-
         <clipPath id="rounded-edge">
-            <rect x="0" y="0" width="460" height="460" rx="20" ry="20" />
+            <rect x="0" y="0" width="460" height="460" rx="20" ry="0" />
         </clipPath>
 
         <filter id="neon-glow">

@@ -154,7 +154,7 @@ type SystemInfo struct {
 	DiskPerc      float64
 }
 
-func FillAndRenderSVG() (string, error) {
+func FillAndRenderSVG(webp bool) (string, error) {
 	fi, err := os.Open("./assets/system.svg")
 	if err != nil {
 		return "", err
@@ -195,6 +195,17 @@ func FillAndRenderSVG() (string, error) {
 	err = cmd.Run()
 	if err != nil {
 		return "", fmt.Errorf("failed to convert svg to png: %w", err)
+	}
+
+	if webp {
+		cmd = exec.Command("ffmpeg", "-i", "./assets/system_rendered.png", "-vcodec", "webp", "./assets/system_rendered.webp")
+		err = cmd.Run()
+		if err != nil {
+			return "", fmt.Errorf("failed to convert png to webp: %w", err)
+		}
+
+		defer os.Remove("./assets/system_rendered.png")
+		return "./assets/system_rendered.webp", nil
 	}
 
 	defer os.Remove("./assets/system_rendered.svg")
