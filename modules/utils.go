@@ -52,6 +52,7 @@ func UpdateSourceCodeHandle(m *telegram.NewMessage) error {
 	processID := os.Getpid()
 	exec.Command("git", "pull").Run()
 	exec.Command("setsid", "go", "run", ".").Start()
+	msg.Edit("<code>Restarted successfully.</code>")
 	exec.Command("kill", "-9", strconv.Itoa(processID)).Run()
 
 	return nil
