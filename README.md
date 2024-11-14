@@ -40,6 +40,11 @@ go run .
     sudo apt-get install ffmpeg
     ```
 
+- [Ubuntu Fonts](https://design.ubuntu.com/font/)
+    ```bash
+    sudo apt install fonts-ubuntu
+    ```
+
 ### License
 
 - [MIT](LICENSE)
