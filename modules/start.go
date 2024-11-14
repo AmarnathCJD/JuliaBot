@@ -17,16 +17,18 @@ func StartHandle(m *telegram.NewMessage) error {
 }
 
 func GatherSystemInfo(m *telegram.NewMessage) error {
+	msg, _ := m.Reply("<code>...System Information...</code>")
+
 	if IsImageDepsInstalled() {
 		renderedImage, err := FillAndRenderSVG(false)
 		if err != nil {
-			m.Reply("❌ Failed to render image: " + err.Error())
+			msg.Edit("❌ Failed to render image: " + err.Error())
 			return err
 		}
 
-		_, err = m.ReplyMedia(
-			renderedImage,
-			telegram.MediaOptions{Spoiler: true},
+		_, err = msg.Edit(
+			"",
+			telegram.SendOptions{Spoiler: true, Media: renderedImage, Caption: ""},
 		)
 		if err != nil {
 			return err
@@ -50,12 +52,12 @@ func GatherSystemInfo(m *telegram.NewMessage) error {
 	info += fmt.Sprintf("💽 <b>Disk:</b> %s / %s (%.2f%%)\n", system.DiskUsed, system.DiskTotal, system.DiskPerc)
 	f, _ := telegram.ResolveBotFileID("AgAABZq_MRv8XKlV4gk2goxvC_A")
 
-	_, err = m.ReplyMedia(
-		f,
-		telegram.MediaOptions{Caption: info},
+	_, err = msg.Edit(
+		"",
+		telegram.SendOptions{Caption: info, Media: f},
 	)
 	if err != nil {
-		m.Reply(info)
+		msg.Edit(info)
 	}
 	return err
 }
