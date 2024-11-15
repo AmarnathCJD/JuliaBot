@@ -497,11 +497,11 @@ func (c *Client) allocateRemainingWorkers(dc int32, w []Sender, numWorkers, wPre
 
 func (c *Client) createAndAppendSender(dcId int, senders []Sender, senderIndex int) {
 	fmt.Println(c.GetDC(), dcId)
-	// conn, err := c.CreateExportedSender(dcId)
-	// if conn != nil && err == nil {
-	senders[senderIndex] = Sender{c: c}
-	//go c.AddNewExportedSenderToMap(dcId, conn)
-	//}
+	conn, err := c.CreateExportedSender(dcId)
+	if conn != nil && err == nil {
+		senders[senderIndex] = Sender{c: conn}
+		go c.AddNewExportedSenderToMap(dcId, conn)
+	}
 }
 
 func (c *Client) downloadParts(mu *sync.Mutex, w []Sender, partSize int, doneArray []bool, numWorkers int, location InputFileLocation, fs *Destination, opts *DownloadOptions, parts int64, doneBytes *atomic.Int64) {
