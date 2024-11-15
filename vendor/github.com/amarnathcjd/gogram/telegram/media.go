@@ -458,6 +458,14 @@ func (c *Client) DownloadMedia(file interface{}, Opts ...*DownloadOptions) (stri
 	}
 
 	c.retryFailedParts(totalParts, dc, w, doneArray, &fs, opts, location, partSize, &doneBytes)
+	// clean exported senders
+	// for i := 0; i < len(w); i++ {
+	// 	if w[i].c != nil {
+	// 		w[i].c.Terminate()
+	// 		fmt.Println("terminated sender: numGoroutines: ", runtime.NumGoroutine())
+	// 	}
+	// }
+
 	return dest, nil
 }
 
@@ -483,25 +491,28 @@ func (c *Client) initializeWorkers(numWorkers int, dc int32) ([]Sender, int) {
 func (c *Client) allocateRemainingWorkers(dc int32, w []Sender, numWorkers, wPreallocated int) {
 	for i := wPreallocated; i < numWorkers; i++ {
 		c.createAndAppendSender(int(dc), w, i)
+		fmt.Println("created new sender: numGoroutines: ", runtime.NumGoroutine())
 	}
 }
 
 func (c *Client) createAndAppendSender(dcId int, senders []Sender, senderIndex int) {
-	conn, err := c.CreateExportedSender(dcId)
-	if conn != nil && err == nil {
-		senders[senderIndex] = Sender{c: conn}
-		go c.AddNewExportedSenderToMap(dcId, conn)
-	}
+	fmt.Println(c.GetDC(), dcId)
+	// conn, err := c.CreateExportedSender(dcId)
+	// if conn != nil && err == nil {
+	senders[senderIndex] = Sender{c: c}
+	//go c.AddNewExportedSenderToMap(dcId, conn)
+	//}
 }
 
 func (c *Client) downloadParts(mu *sync.Mutex, w []Sender, partSize int, doneArray []bool, numWorkers int, location InputFileLocation, fs *Destination, opts *DownloadOptions, parts int64, doneBytes *atomic.Int64) {
 	wg := sync.WaitGroup{}
 	sem := make(chan struct{}, 1)
+	partSem := make(chan struct{}, len(w))
 
 	for p := int64(0); p < parts; p++ {
 		sem <- struct{}{}
 		wg.Add(1)
-		go func(p int64) {
+		func(p int64) {
 			dl_rt++
 			defer func() { dl_rt-- }()
 			defer wg.Done()
@@ -512,7 +523,9 @@ func (c *Client) downloadParts(mu *sync.Mutex, w []Sender, partSize int, doneArr
 				mu.Unlock()
 
 				if found {
+					partSem <- struct{}{}
 					go c.downloadPart(mu, w, workerIndex, int(p), partSize, doneArray, location, fs, opts, doneBytes, parts*int64(partSize))
+					<-partSem
 					break
 				}
 			}
@@ -616,7 +629,7 @@ func (c *Client) processDownloadedPart(upl UploadFile, p int, doneArray []bool, 
 
 	doneBytes.Add(int64(len(buffer)))
 	if opts.ProgressCallback != nil {
-		go opts.ProgressCallback(size, doneBytes.Load())
+		opts.ProgressCallback(size, doneBytes.Load())
 	}
 }
 
@@ -662,6 +675,7 @@ downloadLastPartStartPoint:
 	errorChan := make(chan error, 1)
 
 	go func() {
+		ot_rt++
 		upl, err := w[0].c.UploadGetFile(&UploadGetFileParams{
 			Location:     location,
 			Offset:       int64(int(parts) * partSize),
