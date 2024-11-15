@@ -1,6 +1,8 @@
 package modules
 
 import (
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,18 +86,46 @@ func UploadHandle(m *telegram.NewMessage) error {
 }
 
 func DownloadHandle(m *telegram.NewMessage) error {
-	if !m.IsReply() {
+	if !m.IsReply() && m.Args() == "" {
 		m.Reply("Reply to a file to download it")
 		return nil
 	}
 
-	r, err := m.GetReplyMessage()
-	if err != nil {
-		m.Reply("Error: " + err.Error())
-		return nil
+	var r, msg *telegram.NewMessage
+	if m.IsReply() {
+		reply, err := m.GetReplyMessage()
+		if err != nil {
+			m.Reply("Error: " + err.Error())
+			return nil
+		}
+
+		r = reply
+		msg, _ = m.Reply("Downloading...")
+	} else {
+		reg := regexp.MustCompile(`t.me/(\w+)/(\d+)`)
+		match := reg.FindStringSubmatch(m.Args())
+		if len(match) != 3 {
+			m.Reply("Invalid link")
+			return nil
+		}
+
+		username := match[1]
+		id, err := strconv.Atoi(match[2])
+		if err != nil {
+			m.Reply("Invalid link")
+			return nil
+		}
+
+		msg, err := m.Client.GetMessageByID(username, int32(id))
+		if err != nil {
+			m.Reply("Error: " + err.Error())
+			return nil
+		}
+
+		r = msg
+		msg, _ = m.Reply("Downloading... (from " + username + " " + strconv.Itoa(id) + ")")
 	}
 
-	msg, _ := m.Reply("Downloading...")
 	uploadStartTimestamp := time.Now()
 
 	var pm *telegram.ProgressManager
