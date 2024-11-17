@@ -13,10 +13,13 @@ var startTime = time.Now()
 
 func StartHandle(m *telegram.NewMessage) error {
 	m.Reply("Hellow! :)")
-	return m.React(getRandomEmoticon())
+	m.React(getRandomEmoticon())
+	return nil
 }
 
 func GatherSystemInfo(m *telegram.NewMessage) error {
+	m.ChatType()
+
 	msg, _ := m.Reply("<code>...System Information...</code>")
 
 	if IsImageDepsInstalled() {

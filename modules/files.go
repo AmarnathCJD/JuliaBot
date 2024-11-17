@@ -1,7 +1,9 @@
 package modules
 
 import (
+	"fmt"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -79,6 +81,7 @@ func UploadHandle(m *telegram.NewMessage) error {
 		msg.Edit("Error: " + err.Error())
 		return nil
 	} else {
+
 		msg.Edit("Uploaded " + filename + " in <code>" + time.Since(uploadStartTimestamp).String() + "</code>")
 	}
 
@@ -133,16 +136,18 @@ func DownloadHandle(m *telegram.NewMessage) error {
 	if fi, err := r.Download(&telegram.DownloadOptions{
 		ProgressCallback: func(total, curr int64) {
 			if pm == nil {
-				pm = telegram.NewProgressManager(total, 5)
+				pm = telegram.NewProgressManager(total, 2)
 			}
 			if pm.ShouldEdit() {
-				m.Client.EditMessage(m.ChatID(), msg.ID, pm.GetStats(curr))
+				//m.Client.EditMessage(m.ChatID(), msg.ID, pm.GetStats(curr))
+				fmt.Println(pm.GetStats(curr))
 			}
 		},
 	}); err != nil {
 		msg.Edit("Error: " + err.Error())
 		return nil
 	} else {
+		runtime.GC()
 		msg.Edit("Downloaded " + fi + " in <code>" + time.Since(uploadStartTimestamp).String() + "</code>")
 	}
 

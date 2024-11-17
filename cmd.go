@@ -43,6 +43,7 @@ func initFunc(c *telegram.Client) {
 		c.On("message:/dl", modules.DownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
 
 		c.On("inline:pin", modules.PinterestInlineHandle)
+		c.On("inline:sp", modules.InlineSpotify)
 
 		c.On(telegram.OnParticipant, modules.UserJoinHandle)
 
