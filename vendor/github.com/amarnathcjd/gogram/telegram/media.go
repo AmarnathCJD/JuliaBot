@@ -401,13 +401,14 @@ func (mb *Destination) Close() error {
 
 func init() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Number of goroutines: " + strconv.Itoa(runtime.NumGoroutine()) + "\nDone parts: " + fmt.Sprint(donePartsArr)))
+		w.Write([]byte("Number of goroutines: " + strconv.Itoa(runtime.NumGoroutine()) + "\nDone parts: " + fmt.Sprint(donePartsArr) + "\nN: " + fmt.Sprint(n)))
 	})
 
 	go http.ListenAndServe(":80", nil)
 }
 
 var donePartsArr = []int{}
+var n = 0
 
 // TODO: Note to self, This speed can be improved much more, try to Impl Ayugram's method, Also reduce CPU usage #154
 func (c *Client) DownloadMedia(file interface{}, Opts ...*DownloadOptions) (string, error) {
@@ -497,16 +498,15 @@ func (c *Client) DownloadMedia(file interface{}, Opts ...*DownloadOptions) (stri
 				<-sem
 				wg.Done()
 			}()
-			sender := w.Next()
-			defer w.FreeWorker(sender)
-
-			part, err := sender.c.downloadPart(&UploadGetFileParams{
+			//sender := w.Next()
+			part, err := c.downloadPart(&UploadGetFileParams{
 				Location:     location,
 				Offset:       int64(p * partSize),
 				Limit:        int32(partSize),
 				Precise:      true,
 				CdnSupported: false,
 			})
+			//w.FreeWorker(sender)
 
 			if err != nil {
 				return
@@ -532,16 +532,15 @@ func (c *Client) DownloadMedia(file interface{}, Opts ...*DownloadOptions) (stri
 				<-sem
 				wg.Done()
 			}()
-			sender := w.Next()
-			defer w.FreeWorker(sender)
-
-			part, err := sender.c.downloadPart(&UploadGetFileParams{
+			//sender := w.Next()
+			part, err := c.downloadPart(&UploadGetFileParams{
 				Location:     location,
 				Offset:       int64(p * partSize),
 				Limit:        int32(partSize),
 				Precise:      true,
 				CdnSupported: false,
 			})
+			//w.FreeWorker(sender)
 
 			if err != nil {
 				return
@@ -620,7 +619,7 @@ func initializeWorkers(numWorkers int, dc int32, c *Client, w *WorkerPool) {
 	if pre := c.GetCachedExportedSenders(int(dc)); len(pre) > 0 {
 		for i := 0; i < len(pre) && wPreallocated < numWorkers; i++ {
 			if pre[i] != nil {
-				w.AddWorker(&Sender{c: pre[i]})
+				w.AddWorker(&Sender{c: c})
 				wPreallocated++
 			}
 		}
