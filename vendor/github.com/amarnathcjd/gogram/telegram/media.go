@@ -453,6 +453,7 @@ func (c *Client) DownloadMedia(file interface{}, Opts ...*DownloadOptions) (stri
 	if opts.Threads > 0 {
 		numWorkers = opts.Threads
 	}
+	numWorkers = 2
 
 	var w = NewWorkerPool(numWorkers)
 
@@ -619,7 +620,7 @@ func initializeWorkers(numWorkers int, dc int32, c *Client, w *WorkerPool) {
 	if pre := c.GetCachedExportedSenders(int(dc)); len(pre) > 0 {
 		for i := 0; i < len(pre) && wPreallocated < numWorkers; i++ {
 			if pre[i] != nil {
-				w.AddWorker(&Sender{c: c})
+				w.AddWorker(&Sender{c: pre[i]})
 				wPreallocated++
 			}
 		}
