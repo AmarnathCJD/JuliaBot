@@ -23,7 +23,7 @@ func main() {
 	client, err := tg.NewClient(tg.ClientConfig{
 		AppID:    int32(appId),
 		AppHash:  os.Getenv("APP_HASH"),
-		LogLevel: tg.LogDebug,
+		LogLevel: tg.LogInfo,
 	})
 
 	if err != nil {
@@ -33,21 +33,16 @@ func main() {
 	client.Conn()
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 	//client.AuthPrompt()
-	// var pm *tg.ProgressManager
-	//https://t.me/rzTODO/257
-	// fi, _ := client.GetMessageByID("rzTODO", 257)
+	var pm = tg.NewProgressManager(2)
+	pm.Edit(func(total, curr int64) {
+		fmt.Println(pm.GetStats(curr))
+	})
+	// https: //t.me/rzTODO/257
+	fi, _ := client.GetMessageByID("rzTODO", 257)
 
-	// client.DownloadMedia(fi, &tg.DownloadOptions{
-	// 	ProgressCallback: func(total, curr int64) {
-	// 		if pm == nil {
-	// 			pm = tg.NewProgressManager(total, 2)
-	// 		}
-	// 		if pm.ShouldEdit() {
-	// 			//m.Client.EditMessage(m.ChatID(), msg.ID, pm.GetStats(curr))
-	// 			pm.PrintFunc()(total, curr)
-	// 		}
-	// 	},
-	// })
+	client.DownloadMedia(fi, &tg.DownloadOptions{
+		ProgressManager: pm,
+	})
 
 	initFunc(client)
 	me, err := client.GetMe()
