@@ -453,7 +453,7 @@ func (c *Client) DownloadMedia(file interface{}, Opts ...*DownloadOptions) (stri
 	if opts.Threads > 0 {
 		numWorkers = opts.Threads
 	}
-	numWorkers = 2
+	//numWorkers = 2
 
 	var w = NewWorkerPool(numWorkers)
 
@@ -469,6 +469,9 @@ func (c *Client) DownloadMedia(file interface{}, Opts ...*DownloadOptions) (stri
 	var sem = make(chan struct{}, numWorkers*2)
 	var wg sync.WaitGroup
 	var doneBytes atomic.Int64
+
+	// TAKE RETRY MECH TO OUTSIDE, and try, set pyrogram to gg sesssion, ipv6 support,
+	// fix dl ul cpu usage. thats it.
 
 	if opts.ProgressManager != nil {
 		opts.ProgressManager.SetTotalSize(size)
