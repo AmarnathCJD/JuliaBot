@@ -38,7 +38,7 @@ func main() {
 		fmt.Println(pm.GetStats(curr))
 	})
 	// https: //t.me/rzTODO/257
-	fi, _ := client.GetMessageByID("rzTODO", 257)
+	fi, _ := client.GetMessageByID("rzTODO", 258)
 
 	client.DownloadMedia(fi, &tg.DownloadOptions{
 		ProgressManager: pm,

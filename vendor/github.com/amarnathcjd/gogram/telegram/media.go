@@ -520,7 +520,7 @@ func (c *Client) DownloadMedia(file interface{}, Opts ...*DownloadOptions) (stri
 				donePartsArr = append(donePartsArr, p)
 			}
 		}(int(p))
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 	wg.Wait()
 
@@ -554,7 +554,7 @@ func (c *Client) DownloadMedia(file interface{}, Opts ...*DownloadOptions) (stri
 				donePartsArr = append(donePartsArr, p)
 			}
 		}(p)
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	wg.Wait()
