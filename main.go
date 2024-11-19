@@ -32,6 +32,7 @@ func main() {
 	}
 
 	client.Conn()
+	client.LoginBot(os.Getenv("BOT_TOKEN"))
 
 	initFunc(client)
 	me, err := client.GetMe()
