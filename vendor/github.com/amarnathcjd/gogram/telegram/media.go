@@ -424,7 +424,7 @@ func (c *Client) DownloadMedia(file interface{}, Opts ...*DownloadOptions) (stri
 	}
 	dest := getValue(opts.FileName, fileName)
 
-	partSize := 2048 * 512 // 1MB
+	partSize := 2048 * 512 / 4 // 1MB
 	if opts.ChunkSize > 0 {
 		if opts.ChunkSize > 1048576 || (1048576%opts.ChunkSize) != 0 {
 			return "", errors.New("chunk size must be a multiple of 1048576 (1MB)")
@@ -472,6 +472,7 @@ func (c *Client) DownloadMedia(file interface{}, Opts ...*DownloadOptions) (stri
 
 	// TAKE RETRY MECH TO OUTSIDE, and try, set pyrogram to gg sesssion, ipv6 support,
 	// fix dl ul cpu usage. thats it.
+	// prohess also kinda fcked up, fix that too.
 
 	if opts.ProgressManager != nil {
 		opts.ProgressManager.SetTotalSize(size)
@@ -494,6 +495,8 @@ func (c *Client) DownloadMedia(file interface{}, Opts ...*DownloadOptions) (stri
 		}(progressCtx)
 	}
 
+	MAX_RETRIES := 3
+
 	for p := int64(0); p < parts; p++ {
 		wg.Add(1)
 		sem <- struct{}{}
@@ -502,26 +505,39 @@ func (c *Client) DownloadMedia(file interface{}, Opts ...*DownloadOptions) (stri
 				<-sem
 				wg.Done()
 			}()
-			//sender := w.Next()
-			part, err := c.downloadPart(&UploadGetFileParams{
-				Location:     location,
-				Offset:       int64(p * partSize),
-				Limit:        int32(partSize),
-				Precise:      true,
-				CdnSupported: false,
-			})
-			//w.FreeWorker(sender)
 
-			if err != nil {
-				return
-			}
+			for i := 0; i < MAX_RETRIES; i++ {
+				sender := w.Next()
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
 
-			c.Log.Debug("downloaded part ", p, "/", totalParts, " len: ", len(part)/1024, "KB")
+				part, err := sender.c.MakeRequestCtx(ctx, &UploadGetFileParams{
+					Location:     location,
+					Offset:       int64(p * partSize),
+					Limit:        int32(partSize),
+					Precise:      true,
+					CdnSupported: false,
+				})
+				w.FreeWorker(sender)
 
-			if part != nil {
-				go fs.WriteAt(part, int64(p)*int64(partSize))
-				doneBytes.Add(int64(len(part)))
-				donePartsArr = append(donePartsArr, p)
+				if err != nil {
+					fmt.Println(err)
+					continue
+				}
+
+				switch v := part.(type) {
+				case *UploadFileObj:
+					go fs.WriteAt(v.Bytes, int64(p)*int64(partSize))
+					doneBytes.Add(int64(len(v.Bytes)))
+					donePartsArr = append(donePartsArr, p)
+				case *UploadFileCdnRedirect:
+					panic("cdn redirect not implemented") // TODO
+				case nil:
+					continue
+				default:
+					return
+				}
+				break
 			}
 		}(int(p))
 		time.Sleep(10 * time.Millisecond)
@@ -536,7 +552,7 @@ func (c *Client) DownloadMedia(file interface{}, Opts ...*DownloadOptions) (stri
 				<-sem
 				wg.Done()
 			}()
-			//sender := w.Next()
+			sender := w.Next()
 			part, err := c.downloadPart(&UploadGetFileParams{
 				Location:     location,
 				Offset:       int64(p * partSize),
@@ -544,7 +560,7 @@ func (c *Client) DownloadMedia(file interface{}, Opts ...*DownloadOptions) (stri
 				Precise:      true,
 				CdnSupported: false,
 			})
-			//w.FreeWorker(sender)
+			w.FreeWorker(sender)
 
 			if err != nil {
 				return
