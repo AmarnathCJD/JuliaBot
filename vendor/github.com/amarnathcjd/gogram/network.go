@@ -5,7 +5,6 @@ package gogram
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"path/filepath"
 	"reflect"
 
@@ -16,14 +15,6 @@ import (
 	"github.com/amarnathcjd/gogram/internal/utils"
 	"github.com/pkg/errors"
 )
-
-var y = 0
-
-func init() {
-	http.HandleFunc("/y", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, fmt.Sprintf("Y: %d", y))
-	})
-}
 
 func (m *MTProto) sendPacket(request tl.Object, expectedTypes ...reflect.Type) (chan tl.Object, int64, error) {
 	msg, err := tl.Marshal(request)
@@ -75,7 +66,6 @@ func (m *MTProto) sendPacket(request tl.Object, expectedTypes ...reflect.Type) (
 		}
 	}
 	errorSendPacket := m.transport.WriteMsg(data, seqNo)
-	y++
 	if errorSendPacket != nil {
 		return nil, msgID, fmt.Errorf("writing message: %w", errorSendPacket)
 	}

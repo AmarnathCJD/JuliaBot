@@ -21,9 +21,10 @@ func main() {
 
 	appId, _ := strconv.Atoi(os.Getenv("APP_ID"))
 	client, err := tg.NewClient(tg.ClientConfig{
-		AppID:    int32(appId),
-		AppHash:  os.Getenv("APP_HASH"),
-		LogLevel: tg.LogDebug,
+		AppID:     int32(appId),
+		AppHash:   os.Getenv("APP_HASH"),
+		LogLevel:  tg.LogDebug,
+		ForceIPv6: true,
 	})
 
 	if err != nil {
@@ -31,8 +32,9 @@ func main() {
 	}
 
 	client.Conn()
-	client.SendMedia("roseloverx", "Avatar.The.Last.Airbender.S01E01.720p.WEB-HD.x264-Pahe.in.mkv")
 	return
+	// client.SendMedia("roseloverx", "Avatar.The.Last.Airbender.S01E01.720p.WEB-HD.x264-Pahe.in.mkv")
+	// return
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 	//client.AuthPrompt()
 	var pm = tg.NewProgressManager(2)

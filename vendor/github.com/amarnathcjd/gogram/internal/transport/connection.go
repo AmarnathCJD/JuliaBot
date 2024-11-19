@@ -4,9 +4,11 @@ package transport
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -21,19 +23,54 @@ type tcpConn struct {
 type TCPConnConfig struct {
 	Ctx     context.Context
 	Host    string
+	IpV6    bool
 	Timeout time.Duration
 	Socks   *url.URL
+}
+
+func formatIPv6WithPort(ipv6WithPort string) (string, error) {
+	// Find the last colon to split the port
+	lastColon := strings.LastIndex(ipv6WithPort, ":")
+	if lastColon == -1 {
+		return "", fmt.Errorf("invalid IPv6 address with port")
+	}
+
+	// Extract the address and port
+	address := ipv6WithPort[:lastColon]
+	port := ipv6WithPort[lastColon+1:]
+
+	// Validate that the port is numeric
+	if len(port) == 0 || strings.ContainsAny(port, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+		return "", fmt.Errorf("invalid port number")
+	}
+
+	// Return the formatted address
+	return fmt.Sprintf("[%s]:%s", address, port), nil
 }
 
 func NewTCP(cfg TCPConnConfig) (Conn, error) {
 	if cfg.Socks != nil && cfg.Socks.Host != "" {
 		return newSocksTCP(cfg)
 	}
-	tcpAddr, err := net.ResolveTCPAddr("tcp", cfg.Host)
+	tcpPrefix := "tcp"
+	if cfg.IpV6 {
+		fmt.Println("ipv6")
+		tcpPrefix = "tcp6"
+
+		cfg.Host, _ = formatIPv6WithPort(cfg.Host)
+
+	}
+
+	// cfg.Host = "[2001:4860:4860::8888]:443"
+
+	// its in 2001:0b28:f23f:f005:0000:0000:0000:000a:443, format
+	// change it to [2001:0b28:f23f:f005::a]:443
+
+	tcpAddr, err := net.ResolveTCPAddr(tcpPrefix, cfg.Host)
 	if err != nil {
 		return nil, errors.Wrap(err, "resolving tcp")
 	}
-	conn, err := net.DialTCP("tcp", nil, tcpAddr)
+	conn, err := net.DialTCP(tcpPrefix, nil, tcpAddr)
 	if err != nil {
 		return nil, errors.Wrap(err, "dialing tcp")
 	}

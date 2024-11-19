@@ -35,11 +35,10 @@ type Sender struct {
 
 type WorkerPool struct {
 	sync.Mutex
-	workers []*Sender    // List of all workers
-	free    chan *Sender // Channel for free workers
+	workers []*Sender
+	free    chan *Sender
 }
 
-// NewWorkerPool initializes a worker pool with the specified size.
 func NewWorkerPool(size int) *WorkerPool {
 	return &WorkerPool{
 		workers: make([]*Sender, 0, size),
@@ -47,7 +46,6 @@ func NewWorkerPool(size int) *WorkerPool {
 	}
 }
 
-// AddWorker adds a new worker to the pool and marks it as free.
 func (wp *WorkerPool) AddWorker(s *Sender) {
 	wp.Lock()
 	defer wp.Unlock()
@@ -55,14 +53,12 @@ func (wp *WorkerPool) AddWorker(s *Sender) {
 	wp.free <- s // Mark the worker as free immediately
 }
 
-// Next waits until a free worker becomes available and returns it.
 func (wp *WorkerPool) Next() *Sender {
-	return <-wp.free // Block until a worker is available in the free channel
+	return <-wp.free
 }
 
-// FreeWorker adds a worker back to the free channel, making it available again.
 func (wp *WorkerPool) FreeWorker(s *Sender) {
-	wp.free <- s // Push the worker back to the channel
+	wp.free <- s
 }
 
 type Source struct {

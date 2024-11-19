@@ -20,37 +20,37 @@ import (
 	"github.com/pkg/errors"
 )
 
-var DataCenters = map[int]string{
-	1: "149.154.175.58:443",
-	2: "149.154.167.50:443",
-	3: "149.154.175.100:443",
-	4: "149.154.167.91:443",
-	5: "91.108.56.151:443",
-}
+// var DataCenters = map[int]string{
+// 	1: "149.154.175.58:443",
+// 	2: "149.154.167.50:443",
+// 	3: "149.154.175.100:443",
+// 	4: "149.154.167.91:443",
+// 	5: "91.108.56.151:443",
+// }
 
-var TestDataCenters = map[int]string{
-	1: "149.154.175.10:443",
-	2: "149.154.167.40:443",
-	3: "149.154.175.117:443",
-}
+// var TestDataCenters = map[int]string{
+// 	1: "149.154.175.10:443",
+// 	2: "149.154.167.40:443",
+// 	3: "149.154.175.117:443",
+// }
 
 func FileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
 
-func GetHostIp(dcID int, test bool) string {
-	if test {
-		if ip, ok := TestDataCenters[dcID]; ok {
-			return ip
-		}
-	}
+// func GetHostIp(dcID int, test bool, ipv6 bool) string {
+// 	if test {
+// 		if ip, ok := TestDataCenters[dcID]; ok {
+// 			return ip
+// 		}
+// 	}
 
-	if ip, ok := DataCenters[dcID]; ok {
-		return ip
-	}
-	panic("invalid dc-id provided")
-}
+// 	if ip, ok := DataCenters[dcID]; ok {
+// 		return ip
+// 	}
+// 	panic("invalid dc-id provided")
+// }
 
 func joinAbsWorkingDir(filename string) string {
 	if filename == "" {
