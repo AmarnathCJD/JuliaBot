@@ -23,7 +23,7 @@ func main() {
 	client, err := tg.NewClient(tg.ClientConfig{
 		AppID:    int32(appId),
 		AppHash:  os.Getenv("APP_HASH"),
-		LogLevel: tg.LogInfo,
+		LogLevel: tg.LogDebug,
 	})
 
 	if err != nil {
