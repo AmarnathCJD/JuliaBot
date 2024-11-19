@@ -31,6 +31,8 @@ func main() {
 	}
 
 	client.Conn()
+	client.SendMedia("roseloverx", "Avatar.The.Last.Airbender.S01E01.720p.WEB-HD.x264-Pahe.in.mkv")
+	return
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 	//client.AuthPrompt()
 	var pm = tg.NewProgressManager(2)

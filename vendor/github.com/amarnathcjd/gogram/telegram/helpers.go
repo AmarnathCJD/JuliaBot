@@ -481,8 +481,8 @@ mediaTypeSwitch:
 		} else {
 			if _, err := os.Stat(media); err == nil {
 				uploadOpts := &UploadOptions{}
-				if attr.ProgressCallback != nil {
-					uploadOpts.ProgressCallback = attr.ProgressCallback
+				if attr.ProgressManager != nil {
+					uploadOpts.ProgressManager = attr.ProgressManager
 				}
 				uploadOpts.Threads = attr.UploadThreads
 
@@ -596,7 +596,7 @@ mediaTypeSwitch:
 	case []byte, *io.Reader, *bytes.Buffer, *os.File:
 		var uopts *UploadOptions = &UploadOptions{}
 		if attr != nil {
-			uopts.ProgressCallback = attr.ProgressCallback
+			uopts.ProgressManager = attr.ProgressManager
 			if attr.FileName != "" {
 				uopts.FileName = attr.FileName
 			}
