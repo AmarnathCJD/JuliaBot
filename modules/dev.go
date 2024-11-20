@@ -167,6 +167,9 @@ func EvalHandle(m *telegram.NewMessage) error {
 	}
 
 	resp := perfomEval(code, m)
+	resp = strings.TrimSpace(resp)
+	resp = fmt.Sprintf("<pre lang='go'>%s</pre>", resp)
+
 	if resp != "" {
 		if _, err := m.Reply(resp); err != nil {
 			fmt.Println(err)

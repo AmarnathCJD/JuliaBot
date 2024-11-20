@@ -64,18 +64,14 @@ func UploadHandle(m *telegram.NewMessage) error {
 	msg, _ := m.Reply("Uploading...")
 	uploadStartTimestamp := time.Now()
 
-	//var pm *telegram.ProgressManager
+	var pm = telegram.NewProgressManager(5)
+	pm.Edit(func(a, b int64) {
+		m.Client.EditMessage(m.ChatID(), msg.ID, pm.GetStats(a))
+	})
 
 	if _, err := m.RespondMedia(filename, telegram.MediaOptions{
-		Spoiler: spoiler,
-		// ProgressCallback: func(total, curr int64) {
-		// 	if pm == nil {
-		// 		//pm = telegram.NewProgressManager(total, 5)
-		// 	}
-		// 	// if pm.ShouldEdit() {
-		// 	// 	m.Client.EditMessage(m.ChatID(), msg.ID, pm.GetStats(curr))
-		// 	// }
-		// },
+		Spoiler:         spoiler,
+		ProgressManager: pm,
 	}); err != nil {
 		msg.Edit("Error: " + err.Error())
 		return nil
@@ -130,18 +126,13 @@ func DownloadHandle(m *telegram.NewMessage) error {
 
 	uploadStartTimestamp := time.Now()
 
-	//var pm *telegram.ProgressManager
+	var pm = telegram.NewProgressManager(5)
+	pm.Edit(func(a, b int64) {
+		m.Client.EditMessage(m.ChatID(), msg.ID, pm.GetStats(a))
+	})
 
 	if fi, err := r.Download(&telegram.DownloadOptions{
-		// ProgressCallback: func(total, curr int64) {
-		// 	if pm == nil {
-		// 	//	pm = telegram.NewProgressManager(total, 2)
-		// 	}
-		// 	if pm.ShouldEdit() {
-		// 		//m.Client.EditMessage(m.ChatID(), msg.ID, pm.GetStats(curr))
-		// 		fmt.Println(pm.GetStats(curr))
-		// 	}
-		// },
+		ProgressManager: pm,
 	}); err != nil {
 		msg.Edit("Error: " + err.Error())
 		return nil

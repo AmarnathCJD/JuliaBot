@@ -21,10 +21,9 @@ func main() {
 
 	appId, _ := strconv.Atoi(os.Getenv("APP_ID"))
 	client, err := tg.NewClient(tg.ClientConfig{
-		AppID:     int32(appId),
-		AppHash:   os.Getenv("APP_HASH"),
-		LogLevel:  tg.LogInfo,
-		ForceIPv6: true,
+		AppID:    int32(appId),
+		AppHash:  os.Getenv("APP_HASH"),
+		LogLevel: tg.LogDebug,
 	})
 
 	if err != nil {
