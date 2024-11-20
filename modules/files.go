@@ -2,7 +2,6 @@ package modules
 
 import (
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -137,7 +136,6 @@ func DownloadHandle(m *telegram.NewMessage) error {
 		msg.Edit("Error: " + err.Error())
 		return nil
 	} else {
-		runtime.GC()
 		msg.Edit("Downloaded " + fi + " in <code>" + time.Since(uploadStartTimestamp).String() + "</code>")
 	}
 
