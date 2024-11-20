@@ -294,8 +294,11 @@ func (c *Client) UploadFile(src interface{}, Opts ...*UploadOptions) (InputFile,
 		}
 	}
 
+	close(sem)
+	close(progressTicker)
+
 	if opts.ProgressManager != nil {
-		//	opts.ProgressManager.call(size, size)
+		opts.ProgressManager.call(size, size)
 	}
 
 	if opts.FileName != "" {
