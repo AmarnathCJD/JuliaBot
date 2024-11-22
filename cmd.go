@@ -45,7 +45,7 @@ func initFunc(c *telegram.Client) {
 		c.On("inline:pin", modules.PinterestInlineHandle)
 		c.On("inline:sp", modules.InlineSpotify)
 
-		c.On("cmd:paste", modules.PasteBinHandler)
+		c.On("command:paste", modules.PasteBinHandler)
 
 		c.On(telegram.OnParticipant, modules.UserJoinHandle)
 
