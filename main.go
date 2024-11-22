@@ -31,6 +31,17 @@ func main() {
 	}
 
 	client.Conn()
+
+	// var p = telegram.NewProgressManager(3)
+	// p.Edit(func(a, b int64) {
+	// 	fmt.Println(p.GetStats(b))
+	// })
+	// m, _ := client.GetMessageByID("rztodo", 263)
+	// m.Download(&tg.DownloadOptions{
+	// 	ProgressManager: p,
+	// })
+	// return
+
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 
 	initFunc(client)
