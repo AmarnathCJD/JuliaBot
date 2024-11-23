@@ -176,7 +176,7 @@ func EvalHandle(m *telegram.NewMessage) error {
 
 	if resp != "" {
 		if _, err := m.Reply(resp); err != nil {
-			fmt.Println(err)
+			m.Reply(resp)
 		}
 	}
 	return nil
