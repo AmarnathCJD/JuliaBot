@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 
@@ -35,9 +36,29 @@ func YtSongDL(m *telegram.NewMessage) error {
 	re := regexp.MustCompile(`onVideoOptionSelected\('(.+?)', '(.+?)', '(.+?)', (\d+), '(.+?)', '(.+?)'\)`)
 	matches := re.FindAllStringSubmatch(vid, -1)
 	for _, match := range matches {
+
 		if match[5] == "mp4a" {
-			m.ReplyMedia(&telegram.InputMediaDocumentExternal{
-				URL: match[2],
+			fi, _ := http.Get(match[2])
+			if fi.StatusCode != 200 {
+				m.Reply("<code>video not found.</code>")
+				return nil
+			}
+
+			defer fi.Body.Close()
+			body, _ := io.ReadAll(fi.Body)
+			os.WriteFile("song.mp3", body, 0644)
+			defer os.Remove("song.mp3")
+
+			m.ReplyMedia("song.mp3", telegram.MediaOptions{
+				Attributes: []telegram.DocumentAttribute{
+					&telegram.DocumentAttributeFilename{
+						FileName: strings.Split(match[3], "', '")[1] + ".mp3",
+					},
+					&telegram.DocumentAttributeAudio{
+						Title:     strings.Split(match[3], "', '")[1],
+						Performer: "RoseloverX",
+					},
+				},
 			})
 		}
 	}
