@@ -37,9 +37,13 @@ func ShellHandle(m *telegram.NewMessage) error {
 	cmx.Stdout = &out
 	var errx bytes.Buffer
 	cmx.Stderr = &errx
-	_ = cmx.Run()
+	err := cmx.Run()
 
 	if errx.String() == "" && out.String() == "" {
+		if err != nil {
+			m.Reply("<code>Error:</code> <b>" + err.Error() + "</b>")
+			return nil
+		}
 		m.Reply("<code>No Output</code>")
 		return nil
 	}
