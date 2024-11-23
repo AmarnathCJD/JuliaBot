@@ -1,47 +1,73 @@
 package modules
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
-	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/amarnathcjd/gogram/telegram"
 )
 
 func YtSongDL(m *telegram.NewMessage) error {
-	m.Reply("<code>Feature Under Maintainance!!!</code>")
-	return nil
 	args := m.Args()
 	if args == "" {
-		m.Reply("Provide song name!")
+		m.Reply("Provide song url~")
 		return nil
 	}
 
-	// Get the video ID
-	cmd_to_get_id := exec.Command("yt-dlp", "ytsearch:"+args, "--get-id")
-	output, err := cmd_to_get_id.Output()
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	videoID := strings.TrimSpace(string(output))
-
-	// Download the song
-	cmd := exec.Command("yt-dlp", "https://www.youtube.com/watch?v="+videoID, "--embed-metadata", "--embed-thumbnail", "-f", "bestaudio", "-x", "--audio-format", "mp3", "-o", "%(id)s.mp3")
-	err = cmd.Run()
-	if err != nil {
-		log.Println(err)
-		return err
+	if !strings.Contains(args, "youtube.com") {
+		m.Reply("Invalid URL")
+		return nil
 	}
 
-	fmt.Println("Downloaded the song")
+	vid, err := getVid(args)
+	if err != nil {
+		log.Println(err)
+		m.Reply("Failed to fetch video")
+		return nil
+	}
 
-	m.RespondMedia(videoID + ".mp3")
-
+	re := regexp.MustCompile(`onVideoOptionSelected\('(.+?)', '(.+?)', '(.+?)', (\d+), '(.+?)', '(.+?)'\)`)
+	matches := re.FindAllStringSubmatch(vid, -1)
+	for _, match := range matches {
+		if match[5] == "mp4a" {
+			m.ReplyMedia(&telegram.InputMediaDocumentExternal{
+				URL: match[2],
+			})
+		}
+	}
 	return nil
+}
+
+func getVid(videoURL string) (string, error) {
+	payload := []byte(`videoURL=` + videoURL)
+
+	req, err := http.NewRequest("POST", "https://ssyoutube.online/yt-video-detail/", bytes.NewBuffer(payload))
+	if err != nil {
+		return "", fmt.Errorf("error creating request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error sending request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading response: %w", err)
+	}
+
+	return string(body), nil
 }
 
 type Sptfy struct {
