@@ -70,6 +70,7 @@ var msg_id int32 = %d
 var client *telegram.Client
 var message *telegram.NewMessage
 var m *telegram.NewMessage
+var r *telegram.NewMessage
 ` + "var msg = `%s`\nvar snd = `%s`\nvar cht = `%s`\nvar chn = `%s`" + `
 
 
@@ -123,7 +124,7 @@ func main() {
 
 	message = &messageX[0]
 	m = message
-	r, _ := message.GetReplyMessage()
+	r, _ = message.GetReplyMessage()
 
 	fmt.Println("output-start")
 	evalCode()
