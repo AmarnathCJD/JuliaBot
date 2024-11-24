@@ -213,7 +213,14 @@ func perfomEval(code string, m *telegram.NewMessage) string {
 	cmd := exec.Command("go", "run", "tmp/eval.go")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		errx := fmt.Sprintf("Error: %s\nOutput: <code>%s</code>", err, strings.Split(string(out), "tmp\\eval.go:")[1])
+		xy := strings.Split(string(out), "tmp\\eval.go:")
+		var xy_2 string
+		if len(xy) > 1 {
+			xy_2 = strings.Join(xy[1:], "tmp\\eval.go:")
+		} else {
+			xy_2 = string(out)
+		}
+		errx := fmt.Sprintf("Error: %s\nOutput: <code>%s</code>", err, xy_2)
 		return strings.TrimSpace(errx)
 	}
 	outN := strings.Split(string(out), "output-start")
