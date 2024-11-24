@@ -123,6 +123,7 @@ func main() {
 
 	message = &messageX[0]
 	m = message
+	r, _ := message.GetReplyMessage()
 
 	fmt.Println("output-start")
 	evalCode()
