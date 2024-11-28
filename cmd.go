@@ -47,6 +47,8 @@ func initFunc(c *telegram.Client) {
 
 		c.On("command:paste", modules.PasteBinHandler)
 
+		c.On("command:ai", modules.AIImageGEN)
+
 		c.On(telegram.OnParticipant, modules.UserJoinHandle)
 
 		modules.Mods.Init(c)

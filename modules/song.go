@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"regexp"
@@ -21,15 +20,24 @@ func YtSongDL(m *telegram.NewMessage) error {
 		return nil
 	}
 
+	var channelId string = "(unknown)"
+	var thumbImage string
+
 	if !strings.Contains(args, "youtube.com") {
-		m.Reply("Invalid URL")
-		return nil
+		vidId, channel, thumb, err := searchYouTube(args)
+		if err != nil {
+			m.Reply("<code>video not found.</code>")
+			return nil
+		}
+
+		args = "https://www.youtube.com/watch?v=" + vidId
+		channelId = channel
+		thumbImage = thumb
 	}
 
 	vid, err := getVid(args)
 	if err != nil {
-		log.Println(err)
-		m.Reply("Failed to fetch video")
+		m.Reply("<code>video not found.</code>")
 		return nil
 	}
 
@@ -56,13 +64,64 @@ func YtSongDL(m *telegram.NewMessage) error {
 					},
 					&telegram.DocumentAttributeAudio{
 						Title:     strings.Split(match[3], "', '")[1],
-						Performer: "RoseloverX",
+						Performer: channelId,
 					},
 				},
+				Thumb: thumbImage,
 			})
 		}
 	}
 	return nil
+}
+
+func searchYouTube(query string) (string, string, string, error) {
+	searchQuery := strings.ReplaceAll(query, " ", "+")
+	url := "https://www.youtube.com/results?search_query=" + searchQuery
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", "", "", fmt.Errorf("error creating request: %w", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", "", fmt.Errorf("error sending request: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", "", fmt.Errorf("error reading response: %w", err)
+	}
+
+	bodyText := string(body)
+	urlRegex := regexp.MustCompile(`https://i\.ytimg\.com/vi/[\w-]+/`)
+	urls := urlRegex.FindAllString(bodyText, -1)
+
+	channelRegex := regexp.MustCompile(`"\/@[\w-]+"`)
+	channels := channelRegex.FindAllString(bodyText, -1)
+
+	if len(urls) == 0 || len(channels) == 0 {
+		return "", "", "", fmt.Errorf("no results found")
+	}
+
+	videoIDs := []string{}
+	for _, url := range urls {
+		parts := strings.Split(url, "/")
+		if len(parts) >= 5 {
+			videoIDs = append(videoIDs, parts[4])
+		}
+	}
+
+	if len(videoIDs) == 0 {
+		return "", "", "", fmt.Errorf("no video IDs found")
+	}
+
+	if len(channels) == 0 {
+		return "", "", "", fmt.Errorf("no channels found")
+	}
+
+	return videoIDs[0], channels[0][2 : len(channels[0])-1], "https://i.ytimg.com/vi/" + videoIDs[0] + "/default.jpg", nil
 }
 
 func getVid(videoURL string) (string, error) {

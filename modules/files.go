@@ -64,9 +64,7 @@ func UploadHandle(m *telegram.NewMessage) error {
 	uploadStartTimestamp := time.Now()
 
 	var pm = telegram.NewProgressManager(5)
-	pm.Edit(func(a, b int64) {
-		msg.Edit(pm.GetStats(b))
-	})
+	pm.Edit(mediaDownloadProgress(filename, msg, pm))
 
 	if _, err := m.RespondMedia(filename, telegram.MediaOptions{
 		Spoiler:         spoiler,
@@ -125,9 +123,7 @@ func DownloadHandle(m *telegram.NewMessage) error {
 	uploadStartTimestamp := time.Now()
 
 	var pm = telegram.NewProgressManager(5)
-	pm.Edit(func(a, b int64) {
-		msg.Edit(pm.GetStats(b))
-	})
+	pm.Edit(mediaDownloadProgress(r.File.Name, msg, pm))
 
 	if fi, err := r.Download(&telegram.DownloadOptions{
 		ProgressManager: pm,
