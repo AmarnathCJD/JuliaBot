@@ -73,7 +73,7 @@ func UploadHandle(m *telegram.NewMessage) error {
 		msg.Edit("Error: " + err.Error())
 		return nil
 	} else {
-		msg.Edit("Uploaded " + filename + " in <code>" + time.Since(uploadStartTimestamp).String() + "</code>")
+		msg.Edit("Uploaded <code>" + filename + "</code> in <code>" + time.Since(uploadStartTimestamp).String() + "</code>")
 	}
 
 	return nil
@@ -131,7 +131,7 @@ func DownloadHandle(m *telegram.NewMessage) error {
 		msg.Edit("Error: " + err.Error())
 		return nil
 	} else {
-		msg.Edit("Downloaded " + fi + " in <code>" + time.Since(uploadStartTimestamp).String() + "</code>")
+		msg.Edit("Downloaded <code>" + fi + "</code> in <code>" + time.Since(uploadStartTimestamp).String() + "</code>")
 	}
 
 	return nil

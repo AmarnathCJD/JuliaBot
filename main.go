@@ -30,6 +30,8 @@ func main() {
 		panic(err)
 	}
 
+	client.Logger.Info("Bot started, Loading modules...")
+
 	client.Conn()
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 
@@ -40,6 +42,6 @@ func main() {
 		panic(err)
 	}
 
-	client.Logger.Info(fmt.Sprintf("Bot started as @%s, in %s.", me.Username, time.Since(time.Unix(startTimeStamp, 0)).String()))
+	client.Logger.Info(fmt.Sprintf("Authenticated as @%s, in %s.", me.Username, time.Since(time.Unix(startTimeStamp, 0)).String()))
 	client.Idle()
 }
