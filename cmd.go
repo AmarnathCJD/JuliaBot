@@ -35,8 +35,8 @@ func initFunc(c *telegram.Client) {
 		c.On("message:/sys", modules.GatherSystemInfo)
 		c.On("message:/info", modules.UserHandle)
 		c.On("message:/json", modules.JsonHandle)
-		c.On("message:/ping", modules.PingHandle)
-		c.On("message:/eval", modules.EvalHandle, telegram.FilterFunc(FilterOwnerNoReply))
+		c.On("message:.ping", modules.PingHandle)
+		c.On("command:eval", modules.EvalHandle, telegram.FilterFunc(FilterOwnerNoReply))
 
 		c.On("message:/file", modules.SendFileByIDHandle)
 		c.On("message:/fid", modules.GetFileIDHandle)

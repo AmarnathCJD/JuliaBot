@@ -65,13 +65,15 @@ import "fmt"
 import "github.com/amarnathcjd/gogram/telegram"
 import "encoding/json"
 
+%s
+
 var msg_id int32 = %d
 
 var client *telegram.Client
 var message *telegram.NewMessage
 var m *telegram.NewMessage
 var r *telegram.NewMessage
-` + "var msg = `%s`\nvar snd = `%s`\nvar cht = `%s`\nvar chn = `%s`" + `
+` + "var msg = `%s`\nvar snd = `%s`\nvar cht = `%s`\nvar chn = `%s`\nvar cch = `%s`" + `
 
 
 func evalCode() {
@@ -90,6 +92,8 @@ func main() {
 	client, _ = telegram.NewClient(telegram.ClientConfig{
 		StringSession: "%s",
 	})
+
+	client.Cache.ImportJSON([]byte(cch))
 
 	client.Conn()
 
@@ -166,30 +170,66 @@ func packMessage(c *telegram.Client, message telegram.Message, sender *telegram.
 }
 `
 
+func resolveImports(code string) (string, []string) {
+	var imports []string
+	importsRegex := regexp.MustCompile(`import\s*\(([\s\S]*?)\)|import\s*\"([\s\S]*?)\"`)
+	importsMatches := importsRegex.FindAllStringSubmatch(code, -1)
+	for _, v := range importsMatches {
+		if v[1] != "" {
+			imports = append(imports, v[1])
+		} else {
+			imports = append(imports, v[2])
+		}
+	}
+	code = importsRegex.ReplaceAllString(code, "")
+	return code, imports
+}
+
 func EvalHandle(m *telegram.NewMessage) error {
 	code := m.Args()
+	code, imports := resolveImports(code)
+
 	if code == "" {
 		return nil
 	}
 
-	resp := perfomEval(code, m)
+	defer os.Remove("tmp/eval.go")
+	defer os.Remove("tmp/eval_out.txt")
+	defer os.Remove("tmp")
+
+	resp, isfile := perfomEval(code, m, imports)
+	if isfile {
+		if _, err := m.ReplyMedia(resp, telegram.MediaOptions{Caption: "Output"}); err != nil {
+			m.Reply("Error: " + err.Error())
+		}
+		return nil
+	}
 	resp = strings.TrimSpace(resp)
-	resp = fmt.Sprintf("<pre lang='go'>%s</pre>", resp)
 
 	if resp != "" {
 		if _, err := m.Reply(resp); err != nil {
-			m.Reply(resp)
+			m.Reply(err)
 		}
 	}
 	return nil
 }
 
-func perfomEval(code string, m *telegram.NewMessage) string {
+func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, bool) {
 	msg_b, _ := json.Marshal(m.Message)
 	snd_b, _ := json.Marshal(m.Sender)
 	cnt_b, _ := json.Marshal(m.Chat)
 	chn_b, _ := json.Marshal(m.Channel)
-	code_file := fmt.Sprintf(boiler_code_for_eval, m.ID, msg_b, snd_b, cnt_b, chn_b, code, m.Client.ExportSession())
+	cache_b, _ := m.Client.Cache.ExportJSON()
+	var importStatement string = ""
+	if len(imports) > 0 {
+		importStatement = "import (\n"
+		for _, v := range imports {
+			importStatement += `"` + v + `"` + "\n"
+		}
+		importStatement += ")\n"
+	}
+
+	code_file := fmt.Sprintf(boiler_code_for_eval, importStatement, m.ID, msg_b, snd_b, cnt_b, chn_b, cache_b, code, m.Client.ExportSession())
 	tmp_dir := "tmp"
 	_, err := os.ReadDir(tmp_dir)
 	if err != nil {
@@ -199,38 +239,46 @@ func perfomEval(code string, m *telegram.NewMessage) string {
 		}
 	}
 
-	defer os.Remove(tmp_dir + "/eval.go")
-	defer os.Remove(tmp_dir + "/cache.db")
-	defer os.Remove(tmp_dir)
-
-	// copy cache.db file to tmp
-	_, err = os.Stat("cache.db")
-	if err == nil {
-		f, _ := os.ReadFile("cache.db")
-		_ = os.WriteFile(tmp_dir+"/cache.db", f, 0644)
-	}
+	//defer os.Remove(tmp_dir)
 
 	os.WriteFile(tmp_dir+"/eval.go", []byte(code_file), 0644)
 	cmd := exec.Command("go", "run", "tmp/eval.go")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		xy := strings.Split(string(out), "tmp\\eval.go:")
-		var xy_2 string
-		if len(xy) > 1 {
-			xy_2 = strings.Join(xy[1:], "tmp\\eval.go:")
-		} else {
-			xy_2 = string(out)
+	var stdOut bytes.Buffer
+	cmd.Stdout = &stdOut
+	var stdErr bytes.Buffer
+	cmd.Stderr = &stdErr
+
+	err = cmd.Run()
+	if stdOut.String() == "" && stdErr.String() == "" {
+		if err != nil {
+			return fmt.Sprintf("<b>#EVALERR:</b> <code>%s</code>", err.Error()), false
 		}
-		errx := fmt.Sprintf("Error: %s\nOutput: <code>%s</code>", err, xy_2)
-		return strings.TrimSpace(errx)
-	}
-	outN := strings.Split(string(out), "output-start")
-
-	if len(outN) > 1 {
-		return strings.TrimSpace(outN[1])
+		return "<b>#EVALOut:</b> <code>No Output</code>", false
 	}
 
-	return "No Output."
+	if stdOut.String() != "" {
+		if len(stdOut.String()) > 4095 {
+			os.WriteFile("tmp/eval_out.txt", []byte(stdOut.String()), 0644)
+			return "tmp/eval_out.txt", true
+		}
+
+		return fmt.Sprintf("<b>#EVALOut:</b> <code>%s</code>", stdOut.String()), false
+	}
+
+	if stdErr.String() != "" {
+		var regexErr = regexp.MustCompile(`eval.go:\d+:\d+:`)
+		errMsg := regexErr.Split(stdErr.String(), -1)
+		if len(errMsg) > 1 {
+			if len(errMsg[1]) > 4095 {
+				os.WriteFile("tmp/eval_out.txt", []byte(errMsg[1]), 0644)
+				return "tmp/eval_out.txt", true
+			}
+			return fmt.Sprintf("<b>#EVALERR:</b> <code>%s</code>", strings.TrimSpace(errMsg[1])), false
+		}
+		return fmt.Sprintf("<b>#EVALERR:</b> <code>%s</code>", stdErr.String()), false
+	}
+
+	return "<b>#EVALOut:</b> <code>No Output</code>", false
 }
 
 func JsonHandle(m *telegram.NewMessage) error {

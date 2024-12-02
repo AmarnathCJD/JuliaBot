@@ -171,9 +171,12 @@ func UserHandle(m *telegram.NewMessage) error {
 }
 
 func PingHandle(m *telegram.NewMessage) error {
-	startTime := time.Now()
+	msgTime := m.OriginalUpdate.(*telegram.MessageObj).Date
+	since := time.Since(time.Unix(int64(msgTime), 0))
+
+	//startTime := time.Now()
 	sentMessage, _ := m.Reply("Pinging...")
-	_, err := sentMessage.Edit(fmt.Sprintf("<code>Pong!</code> <code>%s</code>", time.Since(startTime).String()))
+	_, err := sentMessage.Edit(fmt.Sprintf("<code>Pong!</code> <code>%s</code>", since))
 	return err
 }
 
