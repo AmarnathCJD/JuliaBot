@@ -48,6 +48,7 @@ func initFunc(c *telegram.Client) {
 		c.On("command:paste", modules.PasteBinHandler)
 
 		c.On("command:ai", modules.AIImageGEN)
+		c.On("command:truec", modules.TruecallerHandle)
 
 		c.On(telegram.OnParticipant, modules.UserJoinHandle)
 
