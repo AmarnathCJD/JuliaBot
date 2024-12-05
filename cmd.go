@@ -26,6 +26,7 @@ func initFunc(c *telegram.Client) {
 
 	if LOAD_MODULES {
 		c.On("message:/mz", modules.YtSongDL)
+		c.On("message:/spot", modules.SpotifyHandler)
 		c.On("message:/sh", modules.ShellHandle, telegram.FilterFunc(FilterOwner))
 		c.On("message:/ul", modules.UploadHandle, telegram.FilterFunc(FilterOwnerNoReply))
 		c.On("message:/upd", modules.UpdateSourceCodeHandle, telegram.FilterFunc(FilterOwnerNoReply))
@@ -40,7 +41,7 @@ func initFunc(c *telegram.Client) {
 
 		c.On("message:/file", modules.SendFileByIDHandle)
 		c.On("message:/fid", modules.GetFileIDHandle)
-		c.On("message:/dl", modules.DownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
+		c.On("message:.dl", modules.DownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
 
 		c.On("inline:pin", modules.PinterestInlineHandle)
 		c.On("inline:sp", modules.InlineSpotify)
