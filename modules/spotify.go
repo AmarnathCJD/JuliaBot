@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
@@ -162,7 +163,14 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 	defer os.Remove("song.ogg")
 
 	rebuildOgg("song.ogg")
-	m.ReplyMedia("song.ogg", telegram.MediaOptions{
+	fixedFile, err := RepairOGG("song.ogg")
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	defer os.Remove(fixedFile)
+	m.ReplyMedia(fixedFile, telegram.MediaOptions{
 		Attributes: []telegram.DocumentAttribute{
 			&telegram.DocumentAttributeFilename{
 				FileName: "song.ogg",
@@ -176,4 +184,15 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 	})
 
 	return nil
+}
+
+func RepairOGG(inputFile string) (string, error) {
+	outputFile := inputFile[:len(inputFile)-len(".ogg")] + "_repaired.ogg"
+	cmd := exec.Command("ffmpeg", "-i", inputFile, "-vn", "-acodec", "libvorbis", outputFile)
+	err := cmd.Run()
+	if err != nil {
+		return inputFile, fmt.Errorf("failed to repair file: %w", err)
+	}
+
+	return outputFile, nil
 }
