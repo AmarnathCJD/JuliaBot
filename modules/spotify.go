@@ -134,11 +134,11 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 		CDNURL string `json:"cdnurl"`
 		Key    string `json:"key"`
 		Name   string `json:"name"`
-		Artist string `json:"artist"`
+		Aritst string `json:"artist"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		b.Article("Error", "Failed to decode response", "Error")
+		b.Article("Error", "Failed to decode response", err.Error())
 		i.Answer(b.Results())
 		return nil
 	}
