@@ -186,6 +186,7 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	fmt.Println("dl took:", time.Since(a))
 	a = time.Now()
 	rebuildOgg("song.ogg")
+	os.Exit(1)
 	fmt.Println("rebuild took:", time.Since(a))
 	a = time.Now()
 	fixedFile, err := RepairOGG("song.ogg")
@@ -286,8 +287,10 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 }
 
 func RepairOGG(inputFile string) (string, error) {
+	// ffmpeg -i song.ogg -c copy fixed_song.ogg
+
 	outputFile := inputFile[:len(inputFile)-len(".ogg")] + "_repaired.ogg"
-	cmd := exec.Command("ffmpeg", "-i", inputFile, "-vn", "-acodec", "libvorbis", outputFile)
+	cmd := exec.Command("ffmpeg", "-i", inputFile, "-c", "copy", outputFile)
 	err := cmd.Run()
 	if err != nil {
 		return inputFile, fmt.Errorf("failed to repair file: %w", err)
