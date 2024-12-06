@@ -232,7 +232,7 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 		Title:       response.Name,
 		Description: response.Aritst,
 		SendMessage: &telegram.InputBotInlineMessageMediaAuto{
-			Message: "",
+			Message: "<b>Decryption Time: <code>" + decryptTime + "</code></b>",
 			ReplyMarkup: telegram.NewKeyboard().AddRow(
 				bt.SwitchInline("Search Again", true, "sp"),
 			).Build(),
@@ -241,7 +241,6 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 
 	b.InlineResults = append(b.InlineResults, res)
 	i.Answer(b.Results())
-	fmt.Println("Decryption Time:", decryptTime)
 	return nil
 }
 
@@ -263,6 +262,7 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 		Key    string `json:"key"`
 		Name   string `json:"name"`
 		Aritst string `json:"artist"`
+		Tc     string `json:"tc"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
@@ -307,6 +307,8 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 		return nil
 	}
 
+	b := telegram.Button{}
+
 	defer os.Remove(fixedFile)
 	m.ReplyMedia(fixedFile, telegram.MediaOptions{
 		Attributes: []telegram.DocumentAttribute{
@@ -320,6 +322,9 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 		},
 		Caption:  "<b>Decryption Time: <code>" + decryptTime + "</code></b>",
 		MimeType: "audio/mpeg",
+		ReplyMarkup: telegram.NewKeyboard().AddRow(
+			b.URL("Spotify Link", fmt.Sprintf("https://open.spotify.com/track/%s", response.Tc)),
+		).Build(),
 	})
 
 	return nil
