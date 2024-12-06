@@ -186,7 +186,6 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	fmt.Println("dl took:", time.Since(a))
 	a = time.Now()
 	rebuildOgg("song.ogg")
-	os.Exit(1)
 	fmt.Println("rebuild took:", time.Since(a))
 	a = time.Now()
 	fixedFile, err := RepairOGG("song.ogg")
