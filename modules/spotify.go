@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
@@ -105,6 +106,92 @@ func decryptAudioFile(filePath string, hexKey string) ([]byte, string, error) {
 
 	decryptTime := time.Since(startTime).Milliseconds()
 	return decryptedBuffer, fmt.Sprintf("%dms", decryptTime), nil
+}
+
+func SpotifyInlineHandler(i *telegram.InlineQuery) error {
+	if i.Query == "" || strings.Contains(i.Query, "pin") {
+		return nil
+	}
+
+	b := i.Builder()
+	args := i.Args()
+	if args == "" {
+		b.Article("No query", "Please enter a spotify song id or query to search for", "No query")
+		i.Answer(b.Results())
+		return nil
+	}
+
+	req, _ := http.NewRequest("GET", "http://localhost:5000/search_track/"+args, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		b.Article("Error", "Failed to search for song", "Error")
+		i.Answer(b.Results())
+		return nil
+	}
+
+	defer resp.Body.Close()
+	var response struct {
+		CDNURL string `json:"cdnurl"`
+		Key    string `json:"key"`
+		Name   string `json:"name"`
+		Artist string `json:"artist"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		b.Article("Error", "Failed to decode response", "Error")
+		i.Answer(b.Results())
+		return nil
+	}
+
+	if response.CDNURL == "" || response.Key == "" {
+		b.Article("No song found", "No song found for the query", "No song found")
+		i.Answer(b.Results())
+		return nil
+	}
+
+	rawFile, err := http.Get(response.CDNURL)
+	if err != nil {
+		b.Article("Error", "Failed to download song", "Error")
+		i.Answer(b.Results())
+		return nil
+	}
+
+	defer rawFile.Body.Close()
+	buffer, err := io.ReadAll(rawFile.Body)
+	if err != nil {
+		b.Article("Error", "Failed to read song", "Error")
+		i.Answer(b.Results())
+		return nil
+	}
+
+	os.WriteFile("song.encrypted", buffer, 0644)
+	defer os.Remove("song.encrypted")
+
+	decryptedBuffer, decryptTime, err := decryptAudioFile("song.encrypted", response.Key)
+	if err != nil {
+		b.Article("Error", "Failed to decrypt song", "Error")
+		i.Answer(b.Results())
+		return nil
+	}
+
+	os.WriteFile("song.ogg", decryptedBuffer, 0644)
+	defer os.Remove("song.ogg")
+
+	rebuildOgg("song.ogg")
+	fixedFile, err := RepairOGG("song.ogg")
+	if err != nil {
+		b.Article("Error", "Failed to repair song", "Error")
+		i.Answer(b.Results())
+		return nil
+	}
+
+	defer os.Remove(fixedFile)
+	b.Document(fixedFile, &telegram.ArticleOptions{
+		MimeType: "audio/mpeg",
+	})
+	i.Answer(b.Results())
+	fmt.Println("Decryption Time:", decryptTime)
+	return nil
 }
 
 func SpotifyHandler(m *telegram.NewMessage) error {
