@@ -199,17 +199,7 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 		return nil
 	}
 
-	b.Document(telegram.InputMediaUploadedDocument{
-		File: fi,
-		Attributes: []telegram.DocumentAttribute{
-			&telegram.DocumentAttributeFilename{
-				FileName: "song.ogg",
-			},
-			&telegram.DocumentAttributeAudio{
-				Title:     response.Name,
-				Performer: response.Aritst,
-			},
-		},
+	b.Document(fi, &telegram.ArticleOptions{
 		MimeType: "audio/mpeg",
 	})
 	fmt.Println(i.Answer(b.Results()))
