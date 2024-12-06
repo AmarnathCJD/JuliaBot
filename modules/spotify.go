@@ -219,6 +219,7 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	}
 
 	dc := ul.(*telegram.MessageMediaDocument).Document.(*telegram.DocumentObj)
+	bt := telegram.Button{}
 
 	res := &telegram.InputBotInlineResultDocument{
 		ID:   "song_1",
@@ -232,6 +233,9 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 		Description: response.Aritst,
 		SendMessage: &telegram.InputBotInlineMessageMediaAuto{
 			Message: "",
+			ReplyMarkup: telegram.NewKeyboard().AddRow(
+				bt.SwitchInline("Search Again", true, "sp"),
+			).Build(),
 		},
 	}
 
