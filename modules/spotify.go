@@ -212,7 +212,7 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 		},
 		MimeType: "audio/mpeg",
 	})
-	i.Answer(b.Results())
+	fmt.Println(i.Answer(b.Results()))
 	fmt.Println("Decryption Time:", decryptTime)
 	return nil
 }
