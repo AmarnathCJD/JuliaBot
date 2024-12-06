@@ -112,6 +112,7 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	if i.Query == "" || strings.Contains(i.Query, "pin") {
 		return nil
 	}
+	a := time.Now()
 
 	b := i.Builder()
 	args := i.Args()
@@ -121,7 +122,9 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 		return nil
 	}
 
-	req, _ := http.NewRequest("GET", "http://localhost:5000/search_track/"+args, nil)
+	fmt.Println("Searching for:", args)
+
+	req, _ := http.NewRequest("GET", "http://localhost:5000/get_track/"+args, nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		b.Article("Error", "Failed to search for song", "Error")
@@ -138,6 +141,9 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		fmt.Println("Error:", err)
+		dt, _ := json.Marshal(response)
+		fmt.Println(string(dt))
 		b.Article("Error", "Failed to decode response", err.Error())
 		i.Answer(b.Results())
 		return nil
@@ -177,8 +183,13 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	os.WriteFile("song.ogg", decryptedBuffer, 0644)
 	defer os.Remove("song.ogg")
 
+	fmt.Println("dl took:", time.Since(a))
+	a = time.Now()
 	rebuildOgg("song.ogg")
+	fmt.Println("rebuild took:", time.Since(a))
+	a = time.Now()
 	fixedFile, err := RepairOGG("song.ogg")
+	fmt.Println("repair took:", time.Since(a))
 	if err != nil {
 		b.Article("Error", "Failed to repair song", "Error")
 		i.Answer(b.Results())
