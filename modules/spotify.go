@@ -180,7 +180,8 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 				Performer: response.Aritst,
 			},
 		},
-		Caption: "<b>Decryption Time: <code>" + decryptTime + "</code></b>",
+		Caption:  "<b>Decryption Time: <code>" + decryptTime + "</code></b>",
+		MimeType: "audio/mpeg",
 	})
 
 	return nil
