@@ -218,7 +218,24 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 		return nil
 	}
 
-	b.Document(ul.(*telegram.MessageMediaDocument).Document.(*telegram.DocumentObj))
+	dc := ul.(*telegram.MessageMediaDocument).Document.(*telegram.DocumentObj)
+
+	res := &telegram.InputBotInlineResultDocument{
+		ID:   "song_1",
+		Type: "audio",
+		Document: &telegram.InputDocumentObj{
+			ID:            dc.ID,
+			AccessHash:    dc.AccessHash,
+			FileReference: dc.FileReference,
+		},
+		Title:       response.Name,
+		Description: response.Aritst,
+		SendMessage: &telegram.InputBotInlineMessageMediaAuto{
+			Message: "",
+		},
+	}
+
+	b.InlineResults = append(b.InlineResults, res)
 	i.Answer(b.Results())
 	fmt.Println("Decryption Time:", decryptTime)
 	return nil
