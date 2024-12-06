@@ -112,7 +112,7 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	if i.Query == "" || strings.Contains(i.Query, "pin") {
 		return nil
 	}
-	a := time.Now()
+	//a := time.Now()
 
 	b := i.Builder()
 	args := i.Args()
@@ -183,13 +183,8 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	os.WriteFile("song.ogg", decryptedBuffer, 0644)
 	defer os.Remove("song.ogg")
 
-	fmt.Println("dl took:", time.Since(a))
-	a = time.Now()
 	rebuildOgg("song.ogg")
-	fmt.Println("rebuild took:", time.Since(a))
-	a = time.Now()
 	fixedFile, err := RepairOGG("song.ogg")
-	fmt.Println("repair took:", time.Since(a))
 	if err != nil {
 		b.Article("Error", "Failed to repair song", "Error")
 		i.Answer(b.Results())
@@ -197,9 +192,33 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	}
 
 	defer os.Remove(fixedFile)
-	b.Document(fixedFile, &telegram.ArticleOptions{
+	fi, err := i.Client.UploadFile(fixedFile)
+	if err != nil {
+		b.Article("Error", "Failed to upload song", "Error")
+		i.Answer(b.Results())
+		return nil
+	}
+
+	ul, err := i.Client.MessagesUploadMedia("", &telegram.InputPeerSelf{}, &telegram.InputMediaUploadedDocument{
+		File: fi,
+		Attributes: []telegram.DocumentAttribute{
+			&telegram.DocumentAttributeFilename{
+				FileName: "song.ogg",
+			},
+			&telegram.DocumentAttributeAudio{
+				Title:     response.Name,
+				Performer: response.Aritst,
+			},
+		},
 		MimeType: "audio/mpeg",
 	})
+	if err != nil {
+		b.Article("Error", "Failed to upload song", "Error")
+		i.Answer(b.Results())
+		return nil
+	}
+
+	b.Document(ul)
 	i.Answer(b.Results())
 	fmt.Println("Decryption Time:", decryptTime)
 	return nil
