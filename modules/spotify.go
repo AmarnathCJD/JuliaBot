@@ -192,14 +192,8 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	}
 
 	defer os.Remove(fixedFile)
-	fi, err := i.Client.UploadFile(fixedFile)
-	if err != nil {
-		b.Article("Error", "Failed to upload song", "Error")
-		i.Answer(b.Results())
-		return nil
-	}
 
-	b.Document(fi, &telegram.ArticleOptions{
+	b.Document(fixedFile, &telegram.ArticleOptions{
 		MimeType: "audio/mpeg",
 	})
 	fmt.Println(i.Answer(b.Results()))
