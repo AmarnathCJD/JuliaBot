@@ -199,7 +199,7 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 		return nil
 	}
 
-	ul, err := i.Client.MessagesUploadMedia("", &telegram.InputPeerSelf{}, &telegram.InputMediaUploadedDocument{
+	b.Document(&telegram.InputMediaUploadedDocument{
 		File: fi,
 		Attributes: []telegram.DocumentAttribute{
 			&telegram.DocumentAttributeFilename{
@@ -212,13 +212,6 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 		},
 		MimeType: "audio/mpeg",
 	})
-	if err != nil {
-		b.Article("Error", "Failed to upload song", "Error")
-		i.Answer(b.Results())
-		return nil
-	}
-
-	b.Document(ul)
 	i.Answer(b.Results())
 	fmt.Println("Decryption Time:", decryptTime)
 	return nil
