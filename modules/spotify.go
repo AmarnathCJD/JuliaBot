@@ -3,6 +3,7 @@ package modules
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -186,7 +187,7 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	defer os.Remove("song.ogg")
 
 	rebuildOgg("song.ogg")
-	fixedFile, err := RepairOGG("song.ogg", response)
+	fixedFile, _, err := RepairOGG("song.ogg", response)
 	if err != nil {
 		b.Article("Error", "Failed to repair song", "Error")
 		i.Answer(b.Results())
@@ -298,7 +299,7 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 	defer os.Remove("song.ogg")
 
 	rebuildOgg("song.ogg")
-	fixedFile, err := RepairOGG("song.ogg", response)
+	fixedFile, thumb, err := RepairOGG("song.ogg", response)
 	if err != nil {
 		m.Reply("Error: " + err.Error())
 		return nil
@@ -317,6 +318,7 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 				Performer: response.Aritst,
 			},
 		},
+		Thumb:    thumb,
 		Spoiler:  true,
 		Caption:  "<b>Decryption Time: <code>" + decryptTime + "</code></b>",
 		MimeType: "audio/mpeg",
@@ -328,21 +330,44 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 	return nil
 }
 
-func RepairOGG(inputFile string, r SpotifyResponse) (string, error) {
+func RepairOGG(inputFile string, r SpotifyResponse) (string, []byte, error) {
 	cov, err := http.Get(r.Cover)
 	if err != nil {
-		return inputFile, fmt.Errorf("failed to download cover: %w", err)
+		return inputFile, nil, fmt.Errorf("failed to download cover: %w", err)
 	}
 	defer cov.Body.Close()
 	coverData, err := io.ReadAll(cov.Body)
 	if err != nil {
-		return inputFile, fmt.Errorf("failed to read cover: %w", err)
+		return inputFile, nil, fmt.Errorf("failed to read cover: %w", err)
 	}
 	outputFile := fmt.Sprintf("%s.ogg", r.Tc)
 	cmd := exec.Command("ffmpeg", "-i", inputFile, "-c", "copy", outputFile)
+
 	err = cmd.Run()
 	if err != nil {
-		return inputFile, fmt.Errorf("failed to repair file: %w", err)
+		return inputFile, nil, fmt.Errorf("failed to repair file: %w", err)
+	}
+
+	// if vorbiscomment is available, use it to add metadata
+	_, err = exec.LookPath("vorbiscomment")
+	if err == nil {
+		base64CoverData := base64.StdEncoding.EncodeToString(coverData)
+		vorbisFi := "METADATA_BLOCK_PICTURE=" + base64CoverData + "\n"
+		vorbisFi += "ALBUM=Spotify\n"
+		vorbisFi += "ARTIST=" + r.Aritst + "\n"
+		vorbisFi += "TITLE=" + r.Name + "\n"
+		vorbisFi += "GENRE=Spotify, Music, Gogram, RoseLoverX\n"
+		vorbisFi += "DATE=" + fmt.Sprintf("%d", time.Now().Year()) + "\n"
+		vorbisFi += "LYRICS=" + strings.ReplaceAll(r.Lyrics, "\n", " \\n") + "\n"
+		os.WriteFile("vorbis.txt", []byte(vorbisFi), 0644)
+		defer os.Remove("vorbis.txt")
+		cmd = exec.Command("vorbiscomment", "-a", outputFile, "-c", "vorbis.txt")
+		err = cmd.Run()
+		if err != nil {
+			return inputFile, coverData, fmt.Errorf("failed to add metadata: %w", err)
+		}
+
+		return outputFile, coverData, nil
 	}
 
 	tag, err := id3v2.Open(outputFile, id3v2.Options{Parse: true})
@@ -392,5 +417,5 @@ func RepairOGG(inputFile string, r SpotifyResponse) (string, error) {
 		SynchronizedTexts: lyr,
 	})
 
-	return outputFile, tag.Save()
+	return outputFile, coverData, tag.Save()
 }

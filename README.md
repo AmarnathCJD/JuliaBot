@@ -45,6 +45,11 @@ go run .
     sudo apt install fonts-ubuntu
     ```
 
+- [Vorbis Tools](https://xiph.org/vorbis/)
+    ```bash
+    sudo apt-get install vorbis-tools
+    ```
+
 ### License
 
 - [MIT](LICENSE)
