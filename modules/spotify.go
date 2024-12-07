@@ -3,7 +3,6 @@ package modules
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -351,8 +350,7 @@ func RepairOGG(inputFile string, r SpotifyResponse) (string, []byte, error) {
 	// if vorbiscomment is available, use it to add metadata
 	_, err = exec.LookPath("vorbiscomment")
 	if err == nil {
-		base64CoverData := base64.StdEncoding.EncodeToString(coverData)
-		vorbisFi := "METADATA_BLOCK_PICTURE=" + base64CoverData + "\n"
+		vorbisFi := "METADATA_BLOCK_PICTURE=" + createVorbisImageBlock(coverData) + "\n"
 		vorbisFi += "ALBUM=Spotify\n"
 		vorbisFi += "ARTIST=" + r.Aritst + "\n"
 		vorbisFi += "TITLE=" + r.Name + "\n"
@@ -418,4 +416,13 @@ func RepairOGG(inputFile string, r SpotifyResponse) (string, []byte, error) {
 	})
 
 	return outputFile, coverData, tag.Save()
+}
+
+func createVorbisImageBlock(imageBytes []byte) string {
+	os.WriteFile("cover.jpg", imageBytes, 0644)
+	defer os.Remove("cover.jpg")
+	exec.Command("./cover_gen.sh", "cover.jpg").Run()
+	coverData, _ := os.ReadFile("cover.base64")
+	defer os.Remove("cover.base64")
+	return string(coverData)
 }
