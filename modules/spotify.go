@@ -10,10 +10,13 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
+	"github.com/tramhao/id3v2"
 )
 
 func rebuildOgg(filename string) {
@@ -108,11 +111,20 @@ func decryptAudioFile(filePath string, hexKey string) ([]byte, string, error) {
 	return decryptedBuffer, fmt.Sprintf("%dms", decryptTime), nil
 }
 
+type SpotifyResponse struct {
+	CDNURL string `json:"cdnurl"`
+	Key    string `json:"key"`
+	Name   string `json:"name"`
+	Aritst string `json:"artist"`
+	Tc     string `json:"tc"`
+	Cover  string `json:"cover"`
+	Lyrics string `json:"lyrics"`
+}
+
 func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	if i.Query == "" || strings.Contains(i.Query, "pin") {
 		return nil
 	}
-	//a := time.Now()
 
 	b := i.Builder()
 	args := i.Args()
@@ -121,8 +133,6 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 		i.Answer(b.Results())
 		return nil
 	}
-
-	fmt.Println("Searching for:", args)
 
 	req, _ := http.NewRequest("GET", "http://localhost:5000/get_track/"+args, nil)
 	resp, err := http.DefaultClient.Do(req)
@@ -133,17 +143,9 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	}
 
 	defer resp.Body.Close()
-	var response struct {
-		CDNURL string `json:"cdnurl"`
-		Key    string `json:"key"`
-		Name   string `json:"name"`
-		Aritst string `json:"artist"`
-	}
+	var response SpotifyResponse
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		fmt.Println("Error:", err)
-		dt, _ := json.Marshal(response)
-		fmt.Println(string(dt))
 		b.Article("Error", "Failed to decode response", err.Error())
 		i.Answer(b.Results())
 		return nil
@@ -184,7 +186,7 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	defer os.Remove("song.ogg")
 
 	rebuildOgg("song.ogg")
-	fixedFile, err := RepairOGG("song.ogg")
+	fixedFile, err := RepairOGG("song.ogg", response)
 	if err != nil {
 		b.Article("Error", "Failed to repair song", "Error")
 		i.Answer(b.Results())
@@ -212,6 +214,7 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 		},
 		MimeType: "audio/mpeg",
 	})
+
 	if err != nil {
 		b.Article("Error", "Failed to upload song", "Error")
 		i.Answer(b.Results())
@@ -246,7 +249,7 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 
 func SpotifyHandler(m *telegram.NewMessage) error {
 	if m.Args() == "" {
-		m.Reply("Usage: /spot <spotify-song-id / query>")
+		m.Reply("Usage: /spot <code><spotify-song-id / query></code>")
 		return nil
 	}
 
@@ -257,13 +260,7 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 		return nil
 	}
 	defer resp.Body.Close()
-	var response struct {
-		CDNURL string `json:"cdnurl"`
-		Key    string `json:"key"`
-		Name   string `json:"name"`
-		Aritst string `json:"artist"`
-		Tc     string `json:"tc"`
-	}
+	var response SpotifyResponse
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		m.Reply("Error: " + err.Error())
@@ -301,7 +298,7 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 	defer os.Remove("song.ogg")
 
 	rebuildOgg("song.ogg")
-	fixedFile, err := RepairOGG("song.ogg")
+	fixedFile, err := RepairOGG("song.ogg", response)
 	if err != nil {
 		m.Reply("Error: " + err.Error())
 		return nil
@@ -313,13 +310,14 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 	m.ReplyMedia(fixedFile, telegram.MediaOptions{
 		Attributes: []telegram.DocumentAttribute{
 			&telegram.DocumentAttributeFilename{
-				FileName: "song.ogg",
+				FileName: fmt.Sprintf("%s.ogg", response.Name),
 			},
 			&telegram.DocumentAttributeAudio{
 				Title:     response.Name,
 				Performer: response.Aritst,
 			},
 		},
+		Spoiler:  true,
 		Caption:  "<b>Decryption Time: <code>" + decryptTime + "</code></b>",
 		MimeType: "audio/mpeg",
 		ReplyMarkup: telegram.NewKeyboard().AddRow(
@@ -330,15 +328,69 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 	return nil
 }
 
-func RepairOGG(inputFile string) (string, error) {
-	// ffmpeg -i song.ogg -c copy fixed_song.ogg
-
-	outputFile := inputFile[:len(inputFile)-len(".ogg")] + "_repaired.ogg"
+func RepairOGG(inputFile string, r SpotifyResponse) (string, error) {
+	cov, err := http.Get(r.Cover)
+	if err != nil {
+		return inputFile, fmt.Errorf("failed to download cover: %w", err)
+	}
+	defer cov.Body.Close()
+	coverData, err := io.ReadAll(cov.Body)
+	if err != nil {
+		return inputFile, fmt.Errorf("failed to read cover: %w", err)
+	}
+	outputFile := fmt.Sprintf("%s.ogg", r.Tc)
 	cmd := exec.Command("ffmpeg", "-i", inputFile, "-c", "copy", outputFile)
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		return inputFile, fmt.Errorf("failed to repair file: %w", err)
 	}
 
-	return outputFile, nil
+	tag, err := id3v2.Open(outputFile, id3v2.Options{Parse: true})
+	tag.SetArtist(r.Aritst)
+	tag.SetTitle(r.Name)
+	tag.SetVersion(4)
+	tag.SetYear(fmt.Sprintf("%d", time.Now().Year()))
+	tag.SetGenre("Spotify, Music, Gogram, Telegram")
+	tag.SetAlbum("Spotify")
+	tag.AddAttachedPicture(id3v2.PictureFrame{
+		Encoding:    id3v2.EncodingUTF8,
+		MimeType:    "image/jpeg",
+		PictureType: id3v2.PTFrontCover,
+		Description: "Front cover",
+		Picture:     coverData,
+	})
+
+	var lyr []id3v2.SyncedText
+	for _, l := range strings.Split(r.Lyrics, "\n") {
+		if l == "" {
+			continue
+		}
+		re := regexp.MustCompile(`\[(\d+):(\d+).(\d+)\](.*)`)
+		matches := re.FindStringSubmatch(l)
+		if len(matches) != 5 {
+			continue
+		}
+
+		minutes, _ := strconv.Atoi(matches[1])
+		seconds, _ := strconv.Atoi(matches[2])
+		millis, _ := strconv.Atoi(matches[3])
+		totalMillis := (minutes*60 + seconds) * 1000
+		totalMillis += millis
+
+		lyr = append(lyr, id3v2.SyncedText{
+			Text:      matches[4],
+			Timestamp: uint32(totalMillis),
+		})
+	}
+
+	tag.AddSynchronisedLyricsFrame(id3v2.SynchronisedLyricsFrame{
+		ContentType:       1,
+		Encoding:          id3v2.EncodingUTF8,
+		TimestampFormat:   2,
+		Language:          "eng",
+		ContentDescriptor: "Musixmatch",
+		SynchronizedTexts: lyr,
+	})
+
+	return outputFile, tag.Save()
 }
