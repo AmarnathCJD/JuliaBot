@@ -26,7 +26,7 @@ func initFunc(c *telegram.Client) {
 
 	if LOAD_MODULES {
 		c.On("message:/mz", modules.YtSongDL)
-		c.On("message:/spot", modules.SpotifyHandler)
+		c.On("message:/spot(:?ify)? (.*)", modules.SpotifySearchHandler)
 		c.On("message:/spots", modules.SpotifySearchHandler)
 		c.On("message:/sh", modules.ShellHandle, telegram.FilterFunc(FilterOwner))
 		c.On("message:/ul", modules.UploadHandle, telegram.FilterFunc(FilterOwnerNoReply))
