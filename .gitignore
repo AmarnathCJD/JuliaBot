@@ -11,7 +11,7 @@ system_rendered.png
 *.py
 *.mkv
 *datu
-krea.go
+cuda.go
 truec.go
 cook.txt
 *.ogg

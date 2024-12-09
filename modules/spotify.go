@@ -302,9 +302,9 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 	}
 
 	force := true
-	if strings.Contains(args, " -s") {
+	if strings.Contains(args, "-s") {
 		force = false
-		args = strings.ReplaceAll(args, " -s", "")
+		args = strings.ReplaceAll(args, "-s", "")
 	}
 
 	if strings.Contains(args, "open.spotify.com") {
@@ -315,7 +315,6 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 		}
 		force = true
 	}
-
 	if !force {
 		req, _ := http.NewRequest("GET", "http://localhost:5000/search_track/"+args, nil)
 		resp, err := http.DefaultClient.Do(req)
