@@ -437,24 +437,24 @@ func SpotifyHandlerCallback(cb *telegram.CallbackQuery) error {
 	req, _ := http.NewRequest("GET", "http://localhost:5000/get_track/"+songId, nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		cb.Answer("Error: " + err.Error())
+		cb.Answer("Error: "+err.Error(), &telegram.CallbackOptions{Alert: true})
 	}
 	defer resp.Body.Close()
 	var response SpotifyResponse
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		cb.Answer("We couldn't find the song. (JSON Decode Error)")
+		cb.Answer("We couldn't find the song. (JSON Decode Error)", &telegram.CallbackOptions{Alert: true})
 		return nil
 	}
 
 	if response.CDNURL == "" || response.Key == "" {
-		cb.Answer("Spotify song not found.")
+		cb.Answer("Spotify song not found.", &telegram.CallbackOptions{Alert: true})
 		return nil
 	}
 
 	rawFile, err := http.Get(response.CDNURL)
 	if err != nil {
-		cb.Answer("Error: " + err.Error())
+		cb.Answer("Error: "+err.Error(), &telegram.CallbackOptions{Alert: true})
 		return nil
 	}
 
