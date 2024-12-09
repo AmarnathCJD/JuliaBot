@@ -285,7 +285,7 @@ func SpotifySearchHandler(m *telegram.NewMessage) error {
 	var b = telegram.Button{}
 	var kb = telegram.NewKeyboard()
 	for _, r := range response.Results {
-		kb.AddRow(b.Data(fmt.Sprintf("%s - %s", r.Name, r.Artist), fmt.Sprintf("spot_%s", r.ID)))
+		kb.AddRow(b.Data(fmt.Sprintf("%s - %s", r.Name, r.Artist), fmt.Sprintf("spot_%s_%d", r.ID, m.SenderID())))
 	}
 	m.Reply("<b>Select a song from below:</b>", telegram.SendOptions{
 		ReplyMarkup: kb.Build(),
@@ -424,6 +424,9 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 
 func SpotifyHandlerCallback(cb *telegram.CallbackQuery) error {
 	payload := strings.Split(cb.DataString(), "_")
+	if len(payload) != 3 {
+		return nil
+	}
 	if !strings.EqualFold(payload[2], fmt.Sprintf("%d", cb.SenderID)) {
 		cb.Answer("Not for you :)", &telegram.CallbackOptions{Alert: true})
 		return nil
