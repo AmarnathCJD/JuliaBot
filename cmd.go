@@ -51,6 +51,8 @@ func initFunc(c *telegram.Client) {
 		c.On("command:ai", modules.AIImageGEN)
 		c.On("command:truec", modules.TruecallerHandle)
 
+		c.On("callback:spot_(.*)", modules.SpotifyHandlerCallback)
+
 		c.On(telegram.OnParticipant, modules.UserJoinHandle)
 
 		modules.Mods.Init(c)
