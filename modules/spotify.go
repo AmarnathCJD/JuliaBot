@@ -256,11 +256,48 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	return nil
 }
 
+func SpotifySearchHandler(m *telegram.NewMessage) error {
+	args := m.Args()
+
+	if args == "" {
+		m.Reply("Usage: /spots &lt;query&gt;")
+		return nil
+	}
+
+	req, _ := http.NewRequest("GET", "http://localhost:5000/search_track/"+args, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	defer resp.Body.Close()
+	var response SpotifySearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	if len(response.Results) == 0 {
+		m.Reply("No songs found for the query")
+	}
+
+	var b = telegram.Button{}
+	var kb = telegram.NewKeyboard()
+	for _, r := range response.Results {
+		kb.AddRow(b.Data(fmt.Sprintf("%s - %s", r.Name, r.Artist), fmt.Sprintf("spot_%s", r.ID)))
+	}
+	m.Reply("<b>Select a song from below:</b>", telegram.SendOptions{
+		ReplyMarkup: kb.Build(),
+	})
+	return nil
+}
+
 func SpotifyHandler(m *telegram.NewMessage) error {
 	args := m.Args()
 
 	if args == "" {
-		m.Reply("Usage: /spot <code><spotify-song-id / query></code>")
+		m.Reply("Usage: /spot <code>&lt;song_id&gt;</code> or <code>&lt;spotify_url&gt;</code>")
 		return nil
 	}
 
@@ -301,7 +338,7 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 		var b = telegram.Button{}
 		var kb = telegram.NewKeyboard()
 		for _, r := range response.Results {
-			kb.AddRow(b.Data(fmt.Sprintf("%s - %s", r.Name, r.Artist), fmt.Sprintf("spot_%s", r.ID)))
+			kb.AddRow(b.Data(fmt.Sprintf("%s - %s", r.Name, r.Artist), fmt.Sprintf("spot_%s_%d", r.ID, m.SenderID())))
 		}
 		m.Reply("<b>Select a song from below:</b>", telegram.SendOptions{
 			ReplyMarkup: kb.Build(),
@@ -386,8 +423,14 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 }
 
 func SpotifyHandlerCallback(cb *telegram.CallbackQuery) error {
+	payload := strings.Split(cb.DataString(), "_")
+	if !strings.EqualFold(payload[2], fmt.Sprintf("%d", cb.SenderID)) {
+		cb.Answer("Not for you :)", &telegram.CallbackOptions{Alert: true})
+		return nil
+	}
 	cb.Answer("Processing...")
-	songId := strings.Split(cb.DataString(), "_")[1]
+	songId := payload[1]
+
 	req, _ := http.NewRequest("GET", "http://localhost:5000/get_track/"+songId, nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
