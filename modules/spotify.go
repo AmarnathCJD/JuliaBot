@@ -535,7 +535,7 @@ func RepairOGG(inputFile string, r SpotifyResponse) (string, []byte, error) {
 		vorbisFi += "TITLE=" + r.Name + "\n"
 		vorbisFi += "GENRE=Spotify, Music, Gogram, RoseLoverX\n"
 		vorbisFi += "DATE=" + fmt.Sprintf("%d", time.Now().Year()) + "\n"
-		vorbisFi += "LYRICS=" + strings.ReplaceAll(r.Lyrics, "\n", " \\n") + "\n"
+		vorbisFi += "LYRICS=" + strings.ReplaceAll(r.Lyrics, "\n", " ") + "\n"
 		os.WriteFile("vorbis.txt", []byte(vorbisFi), 0644)
 		defer os.Remove("vorbis.txt")
 		cmd = exec.Command("vorbiscomment", "-a", outputFile, "-c", "vorbis.txt")
