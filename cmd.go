@@ -45,7 +45,10 @@ func initFunc(c *telegram.Client) {
 		c.On("message:.dl", modules.DownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
 
 		c.On("inline:pin", modules.PinterestInlineHandle)
-		c.On("inline:sp", modules.SpotifyInlineHandler)
+
+		c.AddRawHandler(&telegram.UpdateBotInlineSend{}, modules.SpotifyInlineHandler)
+		//c.AddInlineHandler(telegram.OnInlineQuery, modules.SpotifyInlineSearch)
+		c.On(telegram.OnInline, modules.SpotifyInlineSearch)
 
 		c.On("command:paste", modules.PasteBinHandler)
 

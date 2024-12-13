@@ -26,10 +26,20 @@ func main() {
 	client, err := tg.NewClient(tg.ClientConfig{
 		AppID:    int32(appId),
 		AppHash:  os.Getenv("APP_HASH"),
-		LogLevel: tg.LogDebug,
+		LogLevel: tg.LogInfo,
 		Session:  "session.dat",
 	})
 	client.Log.NoColor()
+
+	// m, _ := client.GetMessageByID("rztodo", 278)
+	// pm := tg.NewProgressManager(3)
+	// pm.Edit(func(totalSize, currentSize int64) {
+	// 	fmt.Println(fmt.Sprintf("%d/%d", currentSize, totalSize))
+	// })
+	// m.Download(&tg.DownloadOptions{
+	// 	ProgressManager: pm,
+	// })
+	// return
 
 	if err != nil {
 		panic(err)

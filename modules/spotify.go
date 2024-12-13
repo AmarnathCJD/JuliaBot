@@ -121,29 +121,34 @@ type SpotifyResponse struct {
 	Lyrics string `json:"lyrics"`
 }
 
+type SpotifyPlaylistResponse struct {
+	Tracks []SpotifyResponse `json:"tracks"`
+}
+
 type SpotifySearchResponse struct {
 	Results []struct {
 		Name   string `json:"name"`
 		Artist string `json:"artist"`
 		ID     string `json:"id"`
 		Year   string `json:"year"`
+		Cover  string `json:"cover"`
 	} `json:"results"`
 }
 
-func SpotifyInlineHandler(i *telegram.InlineQuery) error {
-	if i.Query == "" || strings.Contains(i.Query, "pin") {
+func SpotifyInlineSearch(i *telegram.InlineQuery) error {
+	if strings.Contains(i.Query, "pin") {
 		return nil
 	}
 
 	b := i.Builder()
-	args := i.Args()
+	args := i.Query
 	if args == "" {
 		b.Article("No query", "Please enter a spotify song id or query to search for", "No query")
 		i.Answer(b.Results())
 		return nil
 	}
 
-	req, _ := http.NewRequest("GET", "http://localhost:5000/get_track/"+args, nil)
+	req, _ := http.NewRequest("GET", "http://localhost:5000/search_track/"+args, nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		b.Article("Error", "Failed to search for song", "Error")
@@ -152,7 +157,7 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	}
 
 	defer resp.Body.Close()
-	var response SpotifyResponse
+	var response SpotifySearchResponse
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		b.Article("Error", "Failed to decode response", err.Error())
@@ -160,34 +165,63 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 		return nil
 	}
 
-	if response.CDNURL == "" || response.Key == "" {
+	if len(response.Results) == 0 {
 		b.Article("No song found", "No song found for the query", "No song found")
 		i.Answer(b.Results())
 		return nil
 	}
 
+	var bt = telegram.Button{}
+	for _, r := range response.Results {
+		b.Photo(r.Cover, &telegram.ArticleOptions{
+			ID:          r.ID,
+			Title:       fmt.Sprintf("%s - %s", r.Name, r.Artist),
+			Description: r.Year,
+			ReplyMarkup: telegram.NewKeyboard().AddRow(
+				bt.SwitchInline("Search Again", true, ""),
+			).Build(),
+			Caption: fmt.Sprintf("<b>Spotify Song</b>\n\n<b>Name:</b> %s\n<b>Artist:</b> %s\n<b>Year:</b> %s\n\n<b>Spotify ID:</b> <code>%s</code>", r.Name, r.Artist, r.Year, r.ID),
+		})
+	}
+
+	i.Answer(b.Results())
+	return nil
+}
+
+func SpotifyInlineHandler(u telegram.Update, c *telegram.Client) error {
+	i := u.(*telegram.UpdateBotInlineSend)
+
+	req, _ := http.NewRequest("GET", "http://localhost:5000/get_track/"+i.ID, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil
+	}
+
+	defer resp.Body.Close()
+	var response SpotifyResponse
+
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil
+	}
+
+	if response.CDNURL == "" || response.Key == "" {
+		c.EditMessage(&i.MsgID, 0, "Spotify song not found.")
+		return nil
+	}
+
 	rawFile, err := http.Get(response.CDNURL)
 	if err != nil {
-		b.Article("Error", "Failed to download song", "Error")
-		i.Answer(b.Results())
 		return nil
 	}
 
 	defer rawFile.Body.Close()
-	buffer, err := io.ReadAll(rawFile.Body)
-	if err != nil {
-		b.Article("Error", "Failed to read song", "Error")
-		i.Answer(b.Results())
-		return nil
-	}
+	buffer, _ := io.ReadAll(rawFile.Body)
 
 	os.WriteFile("song.encrypted", buffer, 0644)
 	defer os.Remove("song.encrypted")
 
 	decryptedBuffer, decryptTime, err := decryptAudioFile("song.encrypted", response.Key)
 	if err != nil {
-		b.Article("Error", "Failed to decrypt song", "Error")
-		i.Answer(b.Results())
 		return nil
 	}
 
@@ -195,23 +229,12 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 	defer os.Remove("song.ogg")
 
 	rebuildOgg("song.ogg")
-	fixedFile, _, err := RepairOGG("song.ogg", response)
-	if err != nil {
-		b.Article("Error", "Failed to repair song", "Error")
-		i.Answer(b.Results())
-		return nil
-	}
+	fixedFile, thumb, err := RepairOGG("song.ogg", response)
 
 	defer os.Remove(fixedFile)
-	fi, err := i.Client.UploadFile(fixedFile)
-	if err != nil {
-		b.Article("Error", "Failed to upload song", "Error")
-		i.Answer(b.Results())
-		return nil
-	}
-
-	ul, err := i.Client.MessagesUploadMedia("", &telegram.InputPeerSelf{}, &telegram.InputMediaUploadedDocument{
-		File: fi,
+	c.EditMessage(&i.MsgID, 0, "<b>Decryption Time: <code>"+decryptTime+"</code></b>", &telegram.SendOptions{
+		Media:    fixedFile,
+		MimeType: "audio/mpeg",
 		Attributes: []telegram.DocumentAttribute{
 			&telegram.DocumentAttributeFilename{
 				FileName: "song.ogg",
@@ -221,38 +244,12 @@ func SpotifyInlineHandler(i *telegram.InlineQuery) error {
 				Performer: response.Aritst,
 			},
 		},
-		MimeType: "audio/mpeg",
+		Thumb:   thumb,
+		Spoiler: true,
+		ReplyMarkup: telegram.NewKeyboard().AddRow(
+			telegram.Button{}.URL("Spotify Link", fmt.Sprintf("https://open.spotify.com/track/%s", response.Tc)),
+		).Build(),
 	})
-
-	if err != nil {
-		b.Article("Error", "Failed to upload song", "Error")
-		i.Answer(b.Results())
-		return nil
-	}
-
-	dc := ul.(*telegram.MessageMediaDocument).Document.(*telegram.DocumentObj)
-	bt := telegram.Button{}
-
-	res := &telegram.InputBotInlineResultDocument{
-		ID:   "song_1",
-		Type: "audio",
-		Document: &telegram.InputDocumentObj{
-			ID:            dc.ID,
-			AccessHash:    dc.AccessHash,
-			FileReference: dc.FileReference,
-		},
-		Title:       response.Name,
-		Description: response.Aritst,
-		SendMessage: &telegram.InputBotInlineMessageMediaAuto{
-			Message: "<b>Decryption Time: <code>" + decryptTime + "</code></b>",
-			ReplyMarkup: telegram.NewKeyboard().AddRow(
-				bt.SwitchInline("Search Again", true, "sp"),
-			).Build(),
-		},
-	}
-
-	b.InlineResults = append(b.InlineResults, res)
-	i.Answer(b.Results())
 	return nil
 }
 
@@ -308,6 +305,16 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 	}
 
 	if strings.Contains(args, "open.spotify.com") {
+		if strings.Contains(args, "playlist") || strings.Contains(args, "album") {
+			args = extractPlaylistIdFromURL(args)
+			if args == "" {
+				m.Reply("Invalid Spotify Playlist URL")
+				return nil
+			}
+
+			m.Reply("This feature is not available yet.")
+			return nil
+		}
 		args = extractTrackIdFromURL(args)
 		if args == "" {
 			m.Reply("Invalid Spotify URL")
@@ -608,6 +615,15 @@ func createVorbisImageBlock(imageBytes []byte) string {
 
 func extractTrackIdFromURL(url string) string {
 	re := regexp.MustCompile(`track/(\w+)`)
+	matches := re.FindStringSubmatch(url)
+	if len(matches) != 2 {
+		return ""
+	}
+	return matches[1]
+}
+
+func extractPlaylistIdFromURL(url string) string {
+	re := regexp.MustCompile(`playlist/(\w+)`)
 	matches := re.FindStringSubmatch(url)
 	if len(matches) != 2 {
 		return ""
