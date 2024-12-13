@@ -148,7 +148,7 @@ func SpotifyInlineSearch(i *telegram.InlineQuery) error {
 		return nil
 	}
 
-	req, _ := http.NewRequest("GET", "http://localhost:5000/search_track/"+args, nil)
+	req, _ := http.NewRequest("GET", "http://localhost:5000/search_track/"+args+"?lim=12", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		b.Article("Error", "Failed to search for song", "Error")
@@ -184,7 +184,7 @@ func SpotifyInlineSearch(i *telegram.InlineQuery) error {
 		})
 	}
 
-	i.Answer(b.Results(), telegram.InlineSendOptions{Gallery: true})
+	i.Answer(b.Results())
 	return nil
 }
 
