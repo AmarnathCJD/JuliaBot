@@ -184,7 +184,7 @@ func SpotifyInlineSearch(i *telegram.InlineQuery) error {
 		})
 	}
 
-	i.Answer(b.Results())
+	i.Answer(b.Results(), telegram.InlineSendOptions{Gallery: true})
 	return nil
 }
 
