@@ -173,7 +173,7 @@ func SpotifyInlineSearch(i *telegram.InlineQuery) error {
 
 	var bt = telegram.Button{}
 	for _, r := range response.Results {
-		b.Photo(r.Cover, &telegram.ArticleOptions{
+		b.Document(r.Cover, &telegram.ArticleOptions{
 			ID:          r.ID,
 			Title:       fmt.Sprintf("%s - %s", r.Name, r.Artist),
 			Description: r.Year,
