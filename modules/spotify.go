@@ -127,11 +127,12 @@ type SpotifyPlaylistResponse struct {
 
 type SpotifySearchResponse struct {
 	Results []struct {
-		Name   string `json:"name"`
-		Artist string `json:"artist"`
-		ID     string `json:"id"`
-		Year   string `json:"year"`
-		Cover  string `json:"cover"`
+		Name       string `json:"name"`
+		Artist     string `json:"artist"`
+		ID         string `json:"id"`
+		Year       string `json:"year"`
+		Cover      string `json:"cover"`
+		CoverSmall string `json:"cover_small"`
 	} `json:"results"`
 }
 
@@ -173,14 +174,16 @@ func SpotifyInlineSearch(i *telegram.InlineQuery) error {
 
 	var bt = telegram.Button{}
 	for _, r := range response.Results {
-		b.Document(r.Cover, &telegram.ArticleOptions{
-			ID:          r.ID,
-			Title:       fmt.Sprintf("%s - %s", r.Name, r.Artist),
-			Description: r.Year,
+		b.Article(fmt.Sprintf("%s - %s", r.Name, r.Artist), r.Year, fmt.Sprintf("<b>Spotify Song - Ripping...</b>\n\n<b>Name:</b> %s\n<b>Artist:</b> %s\n<b>Year:</b> %s\n\n<b>Spotify ID:</b> <code>%s</code>", r.Name, r.Artist, r.Year, r.ID), &telegram.ArticleOptions{
+			ID: r.ID,
 			ReplyMarkup: telegram.NewKeyboard().AddRow(
 				bt.SwitchInline("Search Again", true, ""),
 			).Build(),
-			Caption: fmt.Sprintf("<b>Spotify Song</b>\n\n<b>Name:</b> %s\n<b>Artist:</b> %s\n<b>Year:</b> %s\n\n<b>Spotify ID:</b> <code>%s</code>", r.Name, r.Artist, r.Year, r.ID),
+			Thumb: telegram.InputWebDocument{
+				URL:      r.CoverSmall,
+				Size:     1500,
+				MimeType: "image/jpeg",
+			},
 		})
 	}
 
