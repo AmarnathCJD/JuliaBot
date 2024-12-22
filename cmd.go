@@ -51,6 +51,7 @@ func initFunc(c *telegram.Client) {
 		c.On(telegram.OnInline, modules.SpotifyInlineSearch)
 
 		c.On("command:paste", modules.PasteBinHandler)
+		c.On("command:timer", modules.SetTimerHandler)
 
 		c.On("command:ai", modules.AIImageGEN)
 		c.On("command:truec", modules.TruecallerHandle)
