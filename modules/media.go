@@ -88,10 +88,10 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 
 	msg, _ = m.Reply("<code>Downloading...</code>")
 
-	pm := telegram.NewProgressManager(7)
-	pm.Edit(mediaDownloadProgress(msg.File.Name, msg, pm))
+	// pm := telegram.NewProgressManager(7)
+	// pm.Edit(mediaDownloadProgress(msg.File.Name, msg, pm))
 
-	file, err := msg.Download(&telegram.DownloadOptions{FileName: msg.File.Name, ProgressManager: pm})
+	file, err := msg.Download(&telegram.DownloadOptions{FileName: msg.File.Name})
 	if err != nil {
 		m.Reply("Error: " + err.Error())
 		return nil
@@ -111,10 +111,9 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 	}
 
 	_, err = m.RespondMedia(file, telegram.MediaOptions{
-		Caption:         fmt.Sprintf("<b>%s</b>", a),
-		Thumb:           "thumb.jpg",
-		ForceDocument:   true,
-		ProgressManager: pm,
+		Caption:       fmt.Sprintf("<b>%s</b>", a),
+		Thumb:         "thumb.jpg",
+		ForceDocument: true,
 	})
 
 	if err != nil {
