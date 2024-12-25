@@ -96,7 +96,8 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 		msgX.Edit("Error: " + err.Error())
 		return nil
 	}
-	defer os.Remove(file)
+	os.Rename("mirror_"+msg.File.Name, msg.File.Name)
+	file = msg.File.Name
 
 	msgX.Edit("<code>Re-Uploading...</code>")
 	defer msg.Delete()
