@@ -55,7 +55,7 @@ func initFunc(c *telegram.Client) {
 		c.On("command:timer", modules.SetTimerHandler)
 
 		c.On("command:ai", modules.AIImageGEN)
-		c.On("command:truec", modules.TruecallerHandle)
+		//c.On("command:truec", modules.TruecallerHandle)
 		c.On("command:doge", modules.DogeSticker)
 
 		c.On("callback:spot_(.*)_(.*)", modules.SpotifyHandlerCallback)
