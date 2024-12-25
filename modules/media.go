@@ -86,19 +86,19 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 		return nil
 	}
 
-	msg, _ = m.Reply("<code>Downloading...</code>")
+	msgX, _ := m.Reply("<code>Downloading...</code>")
 
 	// pm := telegram.NewProgressManager(7)
 	// pm.Edit(mediaDownloadProgress(msg.File.Name, msg, pm))
 
 	file, err := msg.Download(&telegram.DownloadOptions{FileName: "mirror_" + msg.File.Name})
 	if err != nil {
-		m.Reply("Error: " + err.Error())
+		msgX.Edit("Error: " + err.Error())
 		return nil
 	}
 	defer os.Remove(file)
 
-	msg.Edit("<code>Re-Uploading...</code>")
+	msgX.Edit("<code>Re-Uploading...</code>")
 	defer msg.Delete()
 
 	// thumb, _ := os.Open("thumb.jpg_512.jpg")
