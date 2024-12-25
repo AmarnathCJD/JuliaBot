@@ -9,7 +9,69 @@ import (
 	"strconv"
 
 	"github.com/amarnathcjd/gogram/telegram"
+	"github.com/fogleman/gg"
 )
+
+func DogeSticker(m *telegram.NewMessage) error {
+	Args := m.Args()
+
+	im, err := gg.LoadImage("./assets/IMG_20220227_202434_649_cleanup.jpg")
+	if err != nil {
+		m.Reply("failed to load base image")
+		return err
+	}
+
+	const width, height = 461, 512
+	dc := gg.NewContext(width, height)
+	dc.SetRGB(1, 1, 1)
+	dc.Clear()
+
+	fontPath := "./assets/Inter_28pt-Medium.ttf"
+	if err := dc.LoadFontFace(fontPath, 85); err != nil {
+		m.Reply("failed to load font")
+		return err
+	}
+
+	fontSize := FitTextToBox(dc, Args, width-20, height/3)
+	if err := dc.LoadFontFace(fontPath, fontSize); err != nil {
+		m.Reply("failed to load font")
+		return err
+	}
+
+	lines := WrapText(dc, Args, width-20)
+	dc.DrawImage(im, 0, 0)
+
+	dc.SetRGB(0, 0, 0)
+	y := float64(height / 3 * 2 / 3)
+	lineHeight := fontSize * 1.2
+	for _, line := range lines {
+		dc.DrawStringAnchored(line, width/2, y, 0.5, 0.5)
+		y += lineHeight
+	}
+
+	dc.SavePNG("out.webp")
+	m.RespondMedia("out.webp")
+	return nil
+}
+
+func FitTextToBox(dc *gg.Context, text string, maxWidth, maxHeight int) float64 {
+	fontSize := 85.0
+	for fontSize > 10 {
+		dc.LoadFontFace("./assets/Inter_28pt-Medium.ttf", fontSize)
+		wrapped := WrapText(dc, text, maxWidth)
+		totalHeight := float64(len(wrapped)) * fontSize * 1.2
+		if totalHeight <= float64(maxHeight) {
+			return fontSize
+		}
+		fontSize -= 2
+	}
+	return 10.0
+}
+
+func WrapText(dc *gg.Context, text string, maxWidth int) []string {
+	words := dc.WordWrap(text, float64(maxWidth))
+	return words
+}
 
 func PinterestInlineHandle(i *telegram.InlineQuery) error {
 	b := i.Builder()

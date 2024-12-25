@@ -31,6 +31,22 @@ func main() {
 	})
 	client.Conn()
 
+	//x, _ := client.GetMessageByID("")
+
+	// ud, err := client.MessagesCheckChatInvite("gef1CuB_4z01YTk9")
+	// x := ud.(*tg.ChatInviteAlready).Chat.(*tg.Channel)
+	// msg, _ := client.GetHistory(&tg.InputPeerChannel{ChannelID: x.ID, AccessHash: x.AccessHash}, &tg.HistoryOption{
+	// 	Limit: 600,
+	// })
+	// for _, x := range msg {
+	// 	if !x.IsMedia() {
+	// 		continue
+	// 	}
+	// 	f, _ := x.Download()
+	// 	client.SendMessage("umbiyasanam", f)
+	// }
+	// return
+
 	client.Conn()
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 

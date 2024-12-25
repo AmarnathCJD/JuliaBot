@@ -17,10 +17,9 @@ cook.txt
 *.ogg
 n.go
 *.txt
-*.jpg
 *.mp3
-*.png
 *.lrc
+*.png
 *.wasm
 *.json
 *.exe
