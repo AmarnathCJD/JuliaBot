@@ -14,6 +14,9 @@ import (
 
 func DogeSticker(m *telegram.NewMessage) error {
 	Args := m.Args()
+	if Args == "" {
+		return nil
+	}
 
 	im, err := gg.LoadImage("./assets/IMG_20220227_202434_649_cleanup.jpg")
 	if err != nil {
@@ -26,13 +29,13 @@ func DogeSticker(m *telegram.NewMessage) error {
 	dc.SetRGB(1, 1, 1)
 	dc.Clear()
 
-	fontPath := "./assets/Inter_28pt-Medium.ttf"
+	fontPath := "./assets/" + getRandomFont()
 	if err := dc.LoadFontFace(fontPath, 85); err != nil {
 		m.Reply("failed to load font")
 		return err
 	}
 
-	fontSize := FitTextToBox(dc, Args, width-20, height/3)
+	fontSize := FitTextToBox(dc, Args, width-20, height/3, fontPath)
 	if err := dc.LoadFontFace(fontPath, fontSize); err != nil {
 		m.Reply("failed to load font")
 		return err
@@ -54,7 +57,55 @@ func DogeSticker(m *telegram.NewMessage) error {
 	return nil
 }
 
-func FitTextToBox(dc *gg.Context, text string, maxWidth, maxHeight int) float64 {
+func DogeStickerInline(m *telegram.InlineQuery) error {
+	b := m.Builder()
+	if m.Args() == "" {
+		b.Article("No query", "Please enter a query to generate a doge sticker", "No query")
+		m.Answer(b.Results())
+	}
+
+	im, err := gg.LoadImage("./assets/IMG_20220227_202434_649_cleanup.jpg")
+	if err != nil {
+		return err
+	}
+
+	const width, height = 461, 512
+	dc := gg.NewContext(width, height)
+	dc.SetRGB(1, 1, 1)
+	dc.Clear()
+
+	fontPath := "./assets/" + getRandomFont()
+	if err := dc.LoadFontFace(fontPath, 85); err != nil {
+		return err
+	}
+
+	fontSize := FitTextToBox(dc, m.Args(), width-20, height/3, fontPath)
+	if err := dc.LoadFontFace(fontPath, fontSize); err != nil {
+		return err
+	}
+
+	lines := WrapText(dc, m.Args(), width-20)
+	dc.DrawImage(im, 0, 0)
+
+	dc.SetRGB(0, 0, 0)
+	y := float64(height / 3 * 2 / 3)
+	lineHeight := fontSize * 1.2
+	for _, line := range lines {
+		dc.DrawStringAnchored(line, width/2, y, 0.5, 0.5)
+		y += lineHeight
+	}
+
+	dc.SavePNG("out.webp")
+	b.Document("out.webp", &telegram.ArticleOptions{
+		ID:      "doge",
+		Title:   "Umbyasa Doge Sticker",
+		Caption: m.Args(),
+	})
+	m.Answer(b.Results(), telegram.InlineSendOptions{Gallery: true})
+	return nil
+}
+
+func FitTextToBox(dc *gg.Context, text string, maxWidth, maxHeight int, fontPath string) float64 {
 	fontSize := 85.0
 	for fontSize > 10 {
 		dc.LoadFontFace("./assets/Inter_28pt-Medium.ttf", fontSize)

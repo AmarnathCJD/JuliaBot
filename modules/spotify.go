@@ -137,7 +137,7 @@ type SpotifySearchResponse struct {
 }
 
 func SpotifyInlineSearch(i *telegram.InlineQuery) error {
-	if strings.Contains(i.Query, "pin") {
+	if strings.Contains(i.Query, "pin") || strings.Contains(i.Query, "doge") {
 		return nil
 	}
 
@@ -193,6 +193,9 @@ func SpotifyInlineSearch(i *telegram.InlineQuery) error {
 
 func SpotifyInlineHandler(u telegram.Update, c *telegram.Client) error {
 	i := u.(*telegram.UpdateBotInlineSend)
+	if strings.Contains(i.Query, "pin") || strings.Contains(i.Query, "doge") {
+		return nil
+	}
 
 	req, _ := http.NewRequest("GET", "http://localhost:5000/get_track/"+i.ID, nil)
 	resp, err := http.DefaultClient.Do(req)
