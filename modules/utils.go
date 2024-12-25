@@ -23,7 +23,7 @@ func parseBirthday(dat, month, year int32) string {
 	}
 	result := strconv.Itoa(int(dat)) + ", " + months[month-1]
 	if year != 0 {
-		result += ", " + string(year)
+		result += ", " + strconv.Itoa(int(year))
 	}
 
 	return result + "; is in " + tillDate(dat, month)

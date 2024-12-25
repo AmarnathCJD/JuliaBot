@@ -347,6 +347,61 @@ func JsonHandle(m *telegram.NewMessage) error {
 	return nil
 }
 
+func LsHandler(m *telegram.NewMessage) error {
+	dir := m.Args()
+	if dir == "" {
+		dir = "."
+	}
+	cmd := exec.Command("ls", dir)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	fileTypeEmoji := map[string]string{
+		"file":   "📄",
+		"dir":    "📁",
+		"video":  "🎥",
+		"audio":  "🎵",
+		"image":  "🖼️",
+		"go":     "📜",
+		"python": "🐍",
+		"txt":    "📝",
+	}
+
+	if err != nil {
+		m.Reply("<code>Error:</code> <b>" + err.Error() + "</b>")
+		return nil
+	}
+
+	files := strings.Split(strings.TrimSpace(out.String()), "\n")
+	var resp string
+	for _, file := range files {
+		fileType := "file"
+		if strings.Contains(file, ".") {
+			fileType = strings.Split(file, ".")[1]
+		}
+		switch fileType {
+		case "mp4", "mkv", "webm", "avi", "flv", "mov", "wmv", "3gp":
+			fileType = "video"
+		case "mp3", "wav", "flac", "ogg", "m4a", "wma":
+			fileType = "audio"
+		case "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff":
+			fileType = "image"
+		case "go":
+			fileType = "go"
+		case "py":
+			fileType = "python"
+		case "txt":
+			fileType = "txt"
+		default:
+			fileType = "file"
+		}
+		resp += fileTypeEmoji[fileType] + " " + file + "\n"
+	}
+
+	m.Reply("<pre lang='bash'>" + resp + "</pre>")
+	return nil
+}
+
 func init() {
 	Mods.AddModule("Dev", `<b>Here are the commands available in Dev module:</b>
 

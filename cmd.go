@@ -29,6 +29,8 @@ func initFunc(c *telegram.Client) {
 		c.On("message:/spot(:?ify)? (.*)", modules.SpotifyHandler)
 		c.On("message:/spots", modules.SpotifySearchHandler)
 		c.On("message:/sh", modules.ShellHandle, telegram.FilterFunc(FilterOwner))
+		c.On("message:/bash", modules.ShellHandle, telegram.FilterFunc(FilterOwner))
+		c.On("message:/ls", modules.LsHandler, telegram.FilterFunc(FilterOwner))
 		c.On("message:/ul", modules.UploadHandle, telegram.FilterFunc(FilterOwnerNoReply))
 		c.On("message:/upd", modules.UpdateSourceCodeHandle, telegram.FilterFunc(FilterOwnerNoReply))
 
@@ -61,6 +63,11 @@ func initFunc(c *telegram.Client) {
 		c.On("callback:spot_(.*)_(.*)", modules.SpotifyHandlerCallback)
 
 		c.On(telegram.OnParticipant, modules.UserJoinHandle)
+
+		// media-utils
+
+		c.On("message:/setthumb", modules.SetThumbHandler)
+		c.On("message:/mirror", modules.MirrorFileHandler)
 
 		modules.Mods.Init(c)
 	}

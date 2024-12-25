@@ -132,7 +132,9 @@ func UserHandle(m *telegram.NewMessage) error {
 	if un.Username != "" {
 		userString += "<b>Username:</b> @" + un.Username + "\n"
 	}
-	userString += "<b>About:</b> <code>" + uf.About + "</code>\n"
+	if uf.About != "" {
+		userString += "<b>About:</b> <code>" + uf.About + "</code>\n"
+	}
 	if un.Usernames != nil {
 		userString += "<b>Res. Usernames:</b> [<b>" + func() string {
 			var s string
@@ -144,7 +146,48 @@ func UserHandle(m *telegram.NewMessage) error {
 	}
 	userString += "<b>User Link:</b> <a href=\"tg://user?id=" + strconv.FormatInt(un.ID, 10) + "\">userLink</a>\n<b>ID:</b> <code>" + strconv.FormatInt(un.ID, 10) + "</code>\n"
 	if uf.Birthday != nil {
-		userString += "<b>Birthday:</b> " + parseBirthday(uf.Birthday.Day, uf.Birthday.Month, uf.Birthday.Year)
+		userString += "\n<b>Birthday:</b> " + parseBirthday(uf.Birthday.Day, uf.Birthday.Month, uf.Birthday.Year)
+	}
+
+	var keyb = telegram.NewKeyboard().AddRow(
+		telegram.Button{}.Mention("User Profile", un.ID),
+	).Build()
+
+	if uf.ProfilePhoto == nil {
+		if uf.PersonalPhoto != nil {
+			uf.ProfilePhoto = uf.PersonalPhoto
+		} else if uf.FallbackPhoto != nil {
+			uf.ProfilePhoto = uf.FallbackPhoto
+		}
+	}
+
+	var buisnessSent bool = false
+
+	if uf.BusinessIntro != nil && uf.BusinessIntro.Sticker != nil {
+		stick := uf.BusinessIntro.Sticker.(*telegram.DocumentObj)
+		sty := &telegram.InputMediaDocument{
+			ID: &telegram.InputDocumentObj{
+				ID:            stick.ID,
+				AccessHash:    stick.AccessHash,
+				FileReference: stick.FileReference,
+			},
+		}
+		if _, err := m.ReplyMedia(sty, telegram.MediaOptions{
+			ReplyMarkup: keyb,
+		}); err == nil {
+			buisnessSent = true
+		}
+	}
+
+	mediaOpt := telegram.MediaOptions{
+		Caption: userString,
+	}
+
+	sendOpt := telegram.SendOptions{}
+
+	if !buisnessSent {
+		mediaOpt.ReplyMarkup = keyb
+		sendOpt.ReplyMarkup = keyb
 	}
 
 	if uf.ProfilePhoto != nil {
@@ -160,23 +203,20 @@ func UserHandle(m *telegram.NewMessage) error {
 			},
 			Spoiler: true,
 		}
-		_, err := m.ReplyMedia(inp, telegram.MediaOptions{Caption: userString})
+		_, err := m.ReplyMedia(inp, mediaOpt)
 		if err != nil {
-			m.Reply(userString)
+			m.Reply(userString, sendOpt)
 		}
 	} else {
-		m.Reply(userString)
+		m.Reply(userString, sendOpt)
 	}
 	return nil
 }
 
 func PingHandle(m *telegram.NewMessage) error {
-	msgTime := m.OriginalUpdate.(*telegram.MessageObj).Date
-	since := time.Since(time.Unix(int64(msgTime), 0))
-
-	//startTime := time.Now()
+	startTime := time.Now()
 	sentMessage, _ := m.Reply("Pinging...")
-	_, err := sentMessage.Edit(fmt.Sprintf("<code>Pong!</code> <code>%s</code>", since))
+	_, err := sentMessage.Edit(fmt.Sprintf("<code>Pong!</code> <code>%s</code>", time.Since(startTime).String()))
 	return err
 }
 
