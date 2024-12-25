@@ -91,7 +91,7 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 	// pm := telegram.NewProgressManager(7)
 	// pm.Edit(mediaDownloadProgress(msg.File.Name, msg, pm))
 
-	file, err := msg.Download(&telegram.DownloadOptions{FileName: msg.File.Name})
+	file, err := msg.Download(&telegram.DownloadOptions{FileName: "mirror_" + msg.File.Name})
 	if err != nil {
 		m.Reply("Error: " + err.Error())
 		return nil
