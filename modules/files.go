@@ -125,8 +125,13 @@ func DownloadHandle(m *telegram.NewMessage) error {
 	var pm = telegram.NewProgressManager(5)
 	pm.Edit(mediaDownloadProgress(r.File.Name, msg, pm))
 
+	fn := r.File.Name
+	if m.Args() != "" {
+		fn = m.Args()
+	}
 	if fi, err := r.Download(&telegram.DownloadOptions{
 		ProgressManager: pm,
+		FileName: fn,
 	}); err != nil {
 		msg.Edit("Error: " + err.Error())
 		return nil
