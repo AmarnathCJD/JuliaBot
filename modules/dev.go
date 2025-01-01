@@ -305,6 +305,8 @@ func JsonHandle(m *telegram.NewMessage) error {
 			jsonString, _ = json.MarshalIndent(r.Media(), "", "  ")
 		} else if strings.Contains(m.Args(), "-c") {
 			jsonString, _ = json.MarshalIndent(r.Channel, "", "  ")
+		} else if strings.Contains(m.Args(), "-f") {
+			jsonString, _ = json.MarshalIndent(r.File, "", "  ")
 		} else {
 			jsonString, _ = json.MarshalIndent(r.OriginalUpdate, "", "  ")
 		}
