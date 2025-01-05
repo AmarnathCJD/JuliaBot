@@ -26,39 +26,17 @@ func main() {
 	dotenv.Load()
 	appId, _ := strconv.Atoi(os.Getenv("APP_ID"))
 	ownerId, _ = strconv.ParseInt(os.Getenv("OWNER_ID"), 10, 64)
-	sess, _ := decodeTelethonSessionString("1BJWap1sBuzrkr_HKaCCJpkrCZQJev9gF_rHROVDh0CbvkL5NNIWzneL7WoI_4jPgr6ruE427nTLkPKxEB__XXBONNHXMo2x3Z0RR8Bp4YMOx_Kffi0ScTXP2idt_dA9ZfQCWep_WbCI9dEBWRrF-mvtJZgueMyys50N-Z2ETi2o44mEah7FXjSySrYx9zVynvBNwMZWL4H2nZfDuP28-M4ovisiKZ2dGqgvf6DfLjkJfHl9qNzBoNbd2qwdEVdpZAUW1uj8M53jZpx__EJ3eFeCSEoMA3KyH7FD5vVY9QjKQ8C6YVWUDenm4sL2DSRvvKFLO3tVg9W94QMxjOkaSCtcOCsREU_A=")
 
 	client, err := tg.NewClient(tg.ClientConfig{
 		AppID:   int32(appId),
 		AppHash: os.Getenv("APP_HASH"),
 		Logger:  tg.NewLogger(tg.LogInfo).NoColor(),
-		//Session: "session.datu",
-		StringSession: sess.Encode(),
-		MemorySession: true,
+		Session: "session.dat",
 	})
 
-	fmt.Println(client.JoinChannel("gogrammers"))
-	if err != nil {
-		panic(err)
-	}
 
 	client.Conn()
 	//client.OpenChat(&tg.InputChannelObj{ChannelID: 1232792540, AccessHash: 8856309246363801590})
-	client.On("message", func(m *tg.NewMessage) error {
-		//m.React("👍")
-		//fmt.Println("chat:", m.ChatID(), "accessHash:", m.Channel.AccessHash)
-		fmt.Println("messageLatency", time.Since(time.Unix(int64(m.Date()), 0)).String(), "chatId", m.ChatID(), "messageId", m.ID)
-		return nil
-	})
-	client.On("command:fuck", func(m *tg.NewMessage) error {
-		t := time.Now()
-		y, _ := m.Reply("pong")
-
-		y.Edit(fmt.Sprintf("%s", time.Since(t).String()))
-		return nil
-	})
-	client.Idle()
-	return
 
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 
