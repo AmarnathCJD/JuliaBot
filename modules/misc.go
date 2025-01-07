@@ -73,7 +73,7 @@ func PasteBinHandler(m *telegram.NewMessage) error {
 		url, provider, err = postToSpaceBin(content)
 	}
 	if err != nil {
-		m.Reply("Error posting to spacebin")
+		m.Reply("Error posting to " + provider)
 		return nil
 	}
 
@@ -127,7 +127,7 @@ func postToKatBin(content string) (string, string, error) {
 	var body = `{"paste": {"content": "%s"}}`
 	body = fmt.Sprintf(body, content)
 
-	req, err := http.NewRequest("POST", "https://api.katb.in/api/paste", strings.NewReader(body))
+	req, err := http.NewRequest("POST", "https://katb.in/api/paste", strings.NewReader(body))
 	if err != nil {
 		return "", "", fmt.Errorf("error creating request: %w", err)
 	}
