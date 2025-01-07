@@ -2,10 +2,12 @@ package modules
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"mime/multipart"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/amarnathcjd/gogram/telegram"
 )
@@ -17,6 +19,13 @@ func PasteBinHandler(m *telegram.NewMessage) error {
 	}
 
 	content := m.Args()
+
+	isKatBin := false
+	if strings.Contains(content, "-k") {
+		isKatBin = true
+		content = strings.Replace(content, "-k", "", -1)
+	}
+
 	if m.IsReply() {
 		r, err := m.GetReplyMessage()
 		if err != nil {
@@ -53,7 +62,16 @@ func PasteBinHandler(m *telegram.NewMessage) error {
 		}
 	}
 
-	url, err := postToSpaceBin(content)
+	var (
+		url      string
+		provider string
+		err      error
+	)
+	if isKatBin {
+		url, provider, err = postToKatBin(content)
+	} else {
+		url, provider, err = postToSpaceBin(content)
+	}
 	if err != nil {
 		m.Reply("Error posting to spacebin")
 		return nil
@@ -61,7 +79,7 @@ func PasteBinHandler(m *telegram.NewMessage) error {
 
 	b := telegram.Button{}
 
-	m.Reply(fmt.Sprintf("<b>Pasted to <a href='%s'>SpaceBin</a></b>", url), telegram.SendOptions{
+	m.Reply(fmt.Sprintf("<b>Pasted to <a href='%s'>%s</a></b>", url, provider), telegram.SendOptions{
 		ReplyMarkup: telegram.NewKeyboard().AddRow(
 			b.URL("View Paste", url),
 		).Build(),
@@ -70,18 +88,18 @@ func PasteBinHandler(m *telegram.NewMessage) error {
 	return nil
 }
 
-func postToSpaceBin(content string) (string, error) {
+func postToSpaceBin(content string) (string, string, error) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 
 	if err := writer.WriteField("content", content); err != nil {
-		return "", fmt.Errorf("error writing field: %w", err)
+		return "", "", fmt.Errorf("error writing field: %w", err)
 	}
 
 	writer.Close()
 	req, err := http.NewRequest("POST", "https://spaceb.in/", &body)
 	if err != nil {
-		return "", fmt.Errorf("error creating request: %w", err)
+		return "", "", fmt.Errorf("error creating request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -93,14 +111,49 @@ func postToSpaceBin(content string) (string, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("error making request: %w", err)
+		return "", "", fmt.Errorf("error making request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	location := resp.Header.Get("Location")
 	if location == "" {
-		return "", fmt.Errorf("location header not found")
+		return "", "", fmt.Errorf("location header not found")
 	}
 
-	return "https://spaceb.in" + location, nil
+	return "https://spaceb.in" + location, "SpaceBin", nil
+}
+
+func postToKatBin(content string) (string, string, error) {
+	var body = `{"paste": {"content": "%s"}}`
+	body = fmt.Sprintf(body, content)
+
+	req, err := http.NewRequest("POST", "https://api.katb.in/api/paste", strings.NewReader(body))
+	if err != nil {
+		return "", "", fmt.Errorf("error creating request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", fmt.Errorf("error making request: %w", err)
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", "", fmt.Errorf("status code not 200")
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", "", fmt.Errorf("error decoding response: %w", err)
+	}
+
+	if result["id"] == nil {
+		return "", "", fmt.Errorf("id not found in response")
+	}
+
+	return fmt.Sprintf("https://katb.in/%s", result["id"]), "Katb.in", nil
 }

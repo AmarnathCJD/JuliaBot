@@ -34,7 +34,6 @@ func main() {
 		Session: "session.dat",
 	})
 
-
 	client.Conn()
 	//client.OpenChat(&tg.InputChannelObj{ChannelID: 1232792540, AccessHash: 8856309246363801590})
 
