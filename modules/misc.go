@@ -2,8 +2,10 @@ package modules
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -133,21 +135,33 @@ func postToKatBin(content string) (string, string, error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept-Encoding", "deflate, gzip")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+	req.Header.Set("Host", "katb.in")
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", "", fmt.Errorf("error making request: %w", err)
 	}
-
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return "", "", fmt.Errorf("status code not 200")
+	if resp.StatusCode != 201 {
+		return "", "", fmt.Errorf("status code not 200: %d", resp.StatusCode)
+	}
+
+	var bodyReader io.ReadCloser = resp.Body
+	if resp.Header.Get("Content-Encoding") == "gzip" {
+		bodyReader, err = gzip.NewReader(resp.Body)
+		if err != nil {
+			return "", "", fmt.Errorf("error creating gzip reader: %w", err)
+		}
+		defer bodyReader.Close()
 	}
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(bodyReader).Decode(&result); err != nil {
 		return "", "", fmt.Errorf("error decoding response: %w", err)
 	}
 
