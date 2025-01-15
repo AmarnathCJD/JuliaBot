@@ -150,7 +150,7 @@ func UserHandle(m *telegram.NewMessage) error {
 	}
 
 	var keyb = telegram.NewKeyboard().AddRow(
-		telegram.Button{}.Mention("User Profile", un.ID),
+		telegram.Button.URL("User Profile", "tg://user?id="+strconv.Itoa(int(uf.ID))),
 	).Build()
 
 	if uf.ProfilePhoto == nil {
@@ -216,6 +216,7 @@ func UserHandle(m *telegram.NewMessage) error {
 func PingHandle(m *telegram.NewMessage) error {
 	startTime := time.Now()
 	sentMessage, _ := m.Reply("Pinging...")
+	fmt.Println("Pong!")
 	_, err := sentMessage.Edit(fmt.Sprintf("<code>Pong!</code> <code>%s</code>", time.Since(startTime).String()))
 	return err
 }

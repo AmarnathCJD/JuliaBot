@@ -166,7 +166,7 @@ func InlineSpotify(m *telegram.InlineQuery) error {
 	if svg.StatusCode != 200 {
 		b.Article("Error", "Failed to fetch data", "Failed to fetch data", &telegram.ArticleOptions{
 			ReplyMarkup: telegram.NewKeyboard().AddRow(
-				telegram.Button{}.SwitchInline("Retry", true, "sp"),
+				telegram.Button.SwitchInline("Retry", true, "sp"),
 			).Build(),
 		})
 		m.Answer(b.Results())
@@ -193,7 +193,7 @@ func InlineSpotify(m *telegram.InlineQuery) error {
 		caption = "<i>🚫 No song is currently playing</i>"
 	}
 
-	btn := telegram.Button{}
+	btn := telegram.Button
 
 	if s.Image != "" {
 		b.Document(s.Image, &telegram.ArticleOptions{

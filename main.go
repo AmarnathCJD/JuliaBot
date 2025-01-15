@@ -35,8 +35,6 @@ func main() {
 	})
 
 	client.Conn()
-	//client.OpenChat(&tg.InputChannelObj{ChannelID: 1232792540, AccessHash: 8856309246363801590})
-
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 
 	initFunc(client)
@@ -46,7 +44,7 @@ func main() {
 		panic(err)
 	}
 
-	client.Logger.Info(fmt.Sprintf("Authenticated as @%s, in %s.", me.Username, time.Since(time.Unix(startTimeStamp, 0)).String()))
+	client.Logger.Info(fmt.Sprintf("Authenticated as -> @%s, in %s.", me.Username, time.Since(time.Unix(startTimeStamp, 0)).String()))
 	client.Idle()
 }
 

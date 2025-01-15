@@ -126,7 +126,7 @@ func WrapText(dc *gg.Context, text string, maxWidth int) []string {
 
 func PinterestInlineHandle(i *telegram.InlineQuery) error {
 	b := i.Builder()
-	button := telegram.Button{}
+	button := telegram.Button
 	if i.Args() == "" {
 		b.Article("No query", "Please enter a query to search for", "No query", &telegram.ArticleOptions{
 			ReplyMarkup: button.Keyboard(

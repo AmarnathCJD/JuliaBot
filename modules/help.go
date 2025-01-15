@@ -40,7 +40,7 @@ func (m *Modules) Init(c *telegram.Client) {
 var Mods = Modules{}
 
 func HelpHandle(m *telegram.NewMessage) error {
-	var b = telegram.Button{}
+	var b = telegram.Button
 
 	if !m.IsPrivate() {
 		m.Reply("DM me for help!",

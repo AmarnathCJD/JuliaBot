@@ -172,7 +172,7 @@ func SpotifyInlineSearch(i *telegram.InlineQuery) error {
 		return nil
 	}
 
-	var bt = telegram.Button{}
+	var bt = telegram.Button
 	for _, r := range response.Results {
 		b.Article(fmt.Sprintf("%s - %s", r.Name, r.Artist), r.Year, fmt.Sprintf("<b>Spotify Song - Ripping...</b>\n\n<b>Name:</b> %s\n<b>Artist:</b> %s\n<b>Year:</b> %s\n\n<b>Spotify ID:</b> <code>%s</code>", r.Name, r.Artist, r.Year, r.ID), &telegram.ArticleOptions{
 			ID: r.ID,
@@ -253,7 +253,7 @@ func SpotifyInlineHandler(u telegram.Update, c *telegram.Client) error {
 		Thumb:   thumb,
 		Spoiler: true,
 		ReplyMarkup: telegram.NewKeyboard().AddRow(
-			telegram.Button{}.URL("Spotify Link", fmt.Sprintf("https://open.spotify.com/track/%s", response.Tc)),
+			telegram.Button.URL("Spotify Link", fmt.Sprintf("https://open.spotify.com/track/%s", response.Tc)),
 		).Build(),
 	})
 	return nil
@@ -285,7 +285,7 @@ func SpotifySearchHandler(m *telegram.NewMessage) error {
 		m.Reply("No songs found for the query")
 	}
 
-	var b = telegram.Button{}
+	var b = telegram.Button
 	var kb = telegram.NewKeyboard()
 	for _, r := range response.Results {
 		kb.AddRow(b.Data(fmt.Sprintf("%s - %s", r.Name, r.Artist), fmt.Sprintf("spot_%s_%d", r.ID, m.SenderID())))
@@ -347,7 +347,7 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 			m.Reply("No songs found for the query")
 		}
 
-		var b = telegram.Button{}
+		var b = telegram.Button
 		var kb = telegram.NewKeyboard()
 		for _, r := range response.Results {
 			kb.AddRow(b.Data(fmt.Sprintf("%s - %s", r.Name, r.Artist), fmt.Sprintf("spot_%s_%d", r.ID, m.SenderID())))
@@ -409,7 +409,7 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 		return nil
 	}
 
-	b := telegram.Button{}
+	b := telegram.Button
 
 	defer os.Remove(fixedFile)
 	m.ReplyMedia(fixedFile, telegram.MediaOptions{
@@ -496,7 +496,7 @@ func SpotifyHandlerCallback(cb *telegram.CallbackQuery) error {
 		return nil
 	}
 
-	b := telegram.Button{}
+	b := telegram.Button
 
 	defer os.Remove(fixedFile)
 	cb.Edit("<b>Decryption Time: <code>"+decryptTime+"</code></b>", &telegram.SendOptions{
