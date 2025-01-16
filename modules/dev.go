@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/amarnathcjd/gogram/telegram"
@@ -401,6 +402,60 @@ func LsHandler(m *telegram.NewMessage) error {
 	}
 
 	m.Reply("<pre lang='bash'>" + resp + "</pre>")
+	return nil
+}
+
+func GenStringSessionHandler(m *telegram.NewMessage) error {
+	if !m.IsPrivate() {
+		m.Reply("This command can only be used in private chat")
+		return nil
+	}
+
+	var appId = os.Getenv("APP_ID")
+	appIdInt, _ := strconv.Atoi(appId)
+
+	client, _ := telegram.NewClient(telegram.ClientConfig{
+		AppID:         int32(appIdInt),
+		AppHash:       os.Getenv("APP_HASH"),
+		LogLevel:      telegram.LogDisable,
+		MemorySession: true,
+	})
+	defer client.Terminate()
+
+	phoneNum, err := m.Ask("Please enter your phone number")
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	if ok, err := client.Login(phoneNum.Text(), &telegram.LoginOptions{
+		CodeCallback: func() (string, error) {
+			code, err := m.Ask("Please enter the code")
+			if err != nil {
+				m.Reply("Error: " + err.Error())
+				return "", err
+			}
+			return code.Text(), nil
+		},
+		PasswordCallback: func() (string, error) {
+			password, err := m.Ask("Please enter the @FA password")
+			if err != nil {
+				m.Reply("Error: " + err.Error())
+				return "", err
+			}
+			return password.Text(), nil
+		},
+	}); !ok {
+		if _, err := client.GetMe(); err == nil {
+			m.Respond("Your string session is: <code>" + client.ExportSession() + "</code>")
+			return nil
+		}
+
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	m.Respond("Your string session is: <code>" + client.ExportSession() + "</code>")
 	return nil
 }
 

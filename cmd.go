@@ -42,6 +42,8 @@ func initFunc(c *telegram.Client) {
 		c.On("message:.ping", modules.PingHandle)
 		c.On("command:eval", modules.EvalHandle, telegram.FilterFunc(FilterOwnerNoReply))
 
+		c.On("message:/sessgen", modules.GenStringSessionHandler)
+
 		c.On("message:/file", modules.SendFileByIDHandle)
 		c.On("message:/fid", modules.GetFileIDHandle)
 		c.On("message:.dl", modules.DownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
