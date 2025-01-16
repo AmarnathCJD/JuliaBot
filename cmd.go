@@ -33,6 +33,7 @@ func initFunc(c *telegram.Client) {
 		c.On("message:/ls", modules.LsHandler, telegram.FilterFunc(FilterOwner))
 		c.On("message:/ul", modules.UploadHandle, telegram.FilterFunc(FilterOwnerNoReply))
 		c.On("message:/upd", modules.UpdateSourceCodeHandle, telegram.FilterFunc(FilterOwnerNoReply))
+		c.On("message:/gban", modules.GbanMeme, telegram.FilterFunc(FilterOwner))
 
 		c.On("message:/start", modules.StartHandle)
 		c.On("message:/help", modules.HelpHandle)

@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
 )
@@ -170,4 +172,20 @@ func postToKatBin(content string) (string, string, error) {
 	}
 
 	return fmt.Sprintf("https://katb.in/%s", result["id"]), "Katb.in", nil
+}
+
+func GbanMeme(m *telegram.NewMessage) error {
+	randTime := rand.Intn(100)
+	randChatCount := rand.Intn(1000)
+
+	m.Reply(fmt.Sprintf("Enforcing Global Ban on %d chats", randChatCount), telegram.SendOptions{
+		ReplyMarkup: telegram.NewKeyboard().AddRow(
+			telegram.Button.Data("Cancel", "cancel_gban"),
+		).Build(),
+	})
+
+	time.Sleep(time.Duration(randTime) * time.Second)
+
+	m.Reply(fmt.Sprintf("Global Ban enforced on %d chats", randChatCount))
+	return nil
 }
