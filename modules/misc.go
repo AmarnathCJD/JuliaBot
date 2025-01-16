@@ -178,14 +178,10 @@ func GbanMeme(m *telegram.NewMessage) error {
 	randTime := rand.Intn(100)
 	randChatCount := rand.Intn(1000)
 
-	m.Reply(fmt.Sprintf("Enforcing Global Ban on %d chats", randChatCount), telegram.SendOptions{
-		ReplyMarkup: telegram.NewKeyboard().AddRow(
-			telegram.Button.Data("Cancel", "cancel_gban"),
-		).Build(),
-	})
+	msg, _ := m.Reply(fmt.Sprintf("⚡ Enforcing Global Ban on %d chats", randChatCount))
 
 	time.Sleep(time.Duration(randTime) * time.Second)
 
-	m.Reply(fmt.Sprintf("Global Ban enforced on %d chats", randChatCount))
+	msg.Reply(fmt.Sprintf("⚒️ Global Ban enforced on %d chats", randChatCount))
 	return nil
 }
