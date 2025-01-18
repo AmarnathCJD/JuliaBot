@@ -1,9 +1,5 @@
-github.com/amarnathcjd/gogram v1.5.0 h1:Gbfa5zx9JjGTfpijkmghraRszsiNCj0rBKoEmQzh/vU=
-github.com/amarnathcjd/gogram v1.5.0/go.mod h1:kxOCYC/wJqoGhwdQVXv9PcNTkDcjyfq6AguAkCkgs74=
-github.com/amarnathcjd/gogram v1.5.1-0.20250107025409-4a02ac9f8764 h1:kp9n7iO8MF67mOuK0Cg5pS3SraqfPn7UxfLbpHdknnA=
-github.com/amarnathcjd/gogram v1.5.1-0.20250107025409-4a02ac9f8764/go.mod h1:kxOCYC/wJqoGhwdQVXv9PcNTkDcjyfq6AguAkCkgs74=
-github.com/amarnathcjd/gogram v1.5.3 h1:kBewpo6l16dJJLiiqifsZx0ywD7oucLCF1pHv/fVQJU=
-github.com/amarnathcjd/gogram v1.5.3/go.mod h1:kxOCYC/wJqoGhwdQVXv9PcNTkDcjyfq6AguAkCkgs74=
+github.com/amarnathcjd/gogram v1.5.4-0.20250118064143-7138951ee534 h1:x8TVfqMW/y77o1xcWrhR+X8Uqy0mjDLlPHiboHo+S3I=
+github.com/amarnathcjd/gogram v1.5.4-0.20250118064143-7138951ee534/go.mod h1:kxOCYC/wJqoGhwdQVXv9PcNTkDcjyfq6AguAkCkgs74=
 github.com/bogem/id3v2 v1.2.0 h1:hKDF+F1gOgQ5r1QmBCEZUk4MveJbKxCeIDSBU7CQ4oI=
 github.com/bogem/id3v2 v1.2.0/go.mod h1:t78PK5AQ56Q47kizpYiV6gtjj3jfxlz87oFpty8DYs8=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
