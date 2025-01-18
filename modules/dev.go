@@ -263,7 +263,9 @@ func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, 
 			return "tmp/eval_out.txt", true
 		}
 
-		return fmt.Sprintf("<b>#EVALOut:</b> <code>%s</code>", stdOut.String()), false
+		strDou := strings.Split(stdOut.String(), "output-start")
+
+		return fmt.Sprintf("<b>#EVALOut:</b> <code>%s</code>", strings.TrimSpace(strDou[1])), false
 	}
 
 	if stdErr.String() != "" {
