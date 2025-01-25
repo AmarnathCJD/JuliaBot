@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"main/modules"
 	"net"
 	"os"
 	"strconv"
@@ -43,6 +44,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	client.On("message:/media", modules.MediaInfoHandler)
 
 	client.Logger.Info(fmt.Sprintf("Authenticated as -> @%s, in %s.", me.Username, time.Since(time.Unix(startTimeStamp, 0)).String()))
 	client.Idle()

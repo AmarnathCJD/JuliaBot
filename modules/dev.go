@@ -352,6 +352,67 @@ func JsonHandle(m *telegram.NewMessage) error {
 	return nil
 }
 
+func MediaInfoHandler(m *telegram.NewMessage) error {
+	if !m.IsReply() {
+		m.Reply("Reply to a message to get media info")
+		return nil
+	}
+
+	r, err := m.GetReplyMessage()
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	if !r.IsMedia() {
+		m.Reply("This message is not a media")
+		return nil
+	}
+
+	msg, _ := m.Reply("<code>Gathering media info...</code>")
+
+	var downloadedFileName string
+	if r.File.Size > 20*1024*1024 { // 20MB
+		// download first 20MB of the file
+
+		bytes, _, err := m.Client.DownloadChunk(r.Media(), 0, 20*1024*1024, 512*1024)
+		if err != nil {
+			m.Reply("Error: " + err.Error())
+			return nil
+		}
+
+		os.WriteFile("tmp/media", bytes, 0644)
+		downloadedFileName = "tmp/media"
+	} else {
+		fi, err := m.Client.DownloadMedia(r.Media())
+		if err != nil {
+			m.Reply("Error: " + err.Error())
+			return nil
+		}
+
+		downloadedFileName = fi
+	}
+	defer os.Remove(downloadedFileName)
+
+	cmd := exec.Command("mediainfo", downloadedFileName)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err = cmd.Run()
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	url, _, err := postToSpaceBin(strings.Trim(out.String(), "\n"))
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	msg.Edit("<b><a href='" + url + "'>Media Info Pasted</a></b>")
+	return nil
+}
+
 func LsHandler(m *telegram.NewMessage) error {
 	dir := m.Args()
 	if dir == "" {
