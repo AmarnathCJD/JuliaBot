@@ -64,6 +64,8 @@ func parseTime(timeStr string) (int, error) {
 		"s": 1,
 		"m": 60,
 		"h": 3600,
+		"d": 24 * 3600,
+		"w": 7 * 24 * 3600,
 	}
 
 	timeParts := strings.FieldsFunc(timeStr, func(r rune) bool {
