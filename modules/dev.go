@@ -440,6 +440,8 @@ func LsHandler(m *telegram.NewMessage) error {
 	}
 
 	files := strings.Split(strings.TrimSpace(out.String()), "\n")
+	var sizeTotal int64
+
 	var resp string
 	for _, file := range files {
 		fileType := "file"
@@ -463,8 +465,12 @@ func LsHandler(m *telegram.NewMessage) error {
 		default:
 			fileType = "file"
 		}
-		resp += fileTypeEmoji[fileType] + " " + file + " " + "(" + fmt.Sprintf("%s", sizeToHuman(calcFileOrDirSize(filepath.Join(dir, file)))) + ")" + "\n"
+		size := calcFileOrDirSize(filepath.Join(dir, file))
+		sizeTotal += size
+		resp += fileTypeEmoji[fileType] + " " + file + " " + "(" + fmt.Sprintf("%s", sizeToHuman(size)) + ")" + "\n"
 	}
+
+	resp += "\nTotal: " + fmt.Sprintf("%s", sizeToHuman(sizeTotal))
 
 	m.Reply("<pre lang='bash'>" + resp + "</pre>")
 	return nil
