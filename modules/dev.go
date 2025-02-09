@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -443,7 +444,8 @@ func LsHandler(m *telegram.NewMessage) error {
 	for _, file := range files {
 		fileType := "file"
 		if strings.Contains(file, ".") {
-			fileType = strings.Split(file, ".")[1]
+			fp := strings.Split(file, ".")
+			fileType = fp[len(fp)-1]
 		}
 		switch fileType {
 		case "mp4", "mkv", "webm", "avi", "flv", "mov", "wmv", "3gp":
@@ -461,11 +463,58 @@ func LsHandler(m *telegram.NewMessage) error {
 		default:
 			fileType = "file"
 		}
-		resp += fileTypeEmoji[fileType] + " " + file + "\n"
+		resp += fileTypeEmoji[fileType] + " " + file + " " + "(" + fmt.Sprintf("%s", sizeToHuman(calcFileOrDirSize(filepath.Join(dir, file)))) + ")" + "\n"
 	}
 
 	m.Reply("<pre lang='bash'>" + resp + "</pre>")
 	return nil
+}
+
+func sizeToHuman(size int64) string {
+	if size < 1024 {
+		return fmt.Sprintf("%d B", size)
+	}
+	if size < 1024*1024 {
+		return fmt.Sprintf("%.2f KB", float64(size)/1024)
+	}
+	if size < 1024*1024*1024 {
+		return fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
+	}
+	return fmt.Sprintf("%.2f GB", float64(size)/(1024*1024*1024))
+}
+
+func calcFileOrDirSize(path string) int64 {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+
+	if !fi.IsDir() {
+		return fi.Size()
+	}
+
+	var size int64
+	walker := func(path string, info os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			fi, err := info.Info()
+			if err != nil {
+				return err
+			}
+			size += fi.Size()
+		}
+		return nil
+	}
+
+	err = filepath.WalkDir(path, walker)
+	if err != nil {
+		return 0
+	}
+
+	return size
 }
 
 func GenStringSessionHandler(m *telegram.NewMessage) error {
