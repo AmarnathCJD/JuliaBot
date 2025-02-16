@@ -1,16 +1,12 @@
 package main
 
 import (
-	"encoding/base64"
-	"encoding/binary"
 	"fmt"
 	"main/modules"
-	"net"
 	"os"
 	"strconv"
 	"time"
 
-	"github.com/amarnathcjd/gogram/telegram"
 	tg "github.com/amarnathcjd/gogram/telegram"
 	dotenv "github.com/joho/godotenv"
 
@@ -31,7 +27,6 @@ func main() {
 	client, err := tg.NewClient(tg.ClientConfig{
 		AppID:   int32(appId),
 		AppHash: os.Getenv("APP_HASH"),
-		Logger:  tg.NewLogger(tg.LogInfo).NoColor(),
 		Session: "session.dat",
 	})
 
@@ -49,43 +44,4 @@ func main() {
 
 	client.Logger.Info(fmt.Sprintf("Authenticated as -> @%s, in %s.", me.Username, time.Since(time.Unix(startTimeStamp, 0)).String()))
 	client.Idle()
-}
-
-func decodeTelethonSessionString(sessionString string) (*telegram.Session, error) {
-	data, err := base64.URLEncoding.DecodeString(sessionString[1:])
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode base64: %v", err)
-	}
-
-	ipLen := 4
-	if len(data) == 352 {
-		ipLen = 16
-	}
-
-	expectedLen := 1 + ipLen + 2 + 256
-	if len(data) != expectedLen {
-		return nil, fmt.Errorf("invalid session string length")
-	}
-
-	// ">B{}sH256s"
-	offset := 1
-
-	// IP Address (4 or 16 bytes based on IPv4 or IPv6)
-	ipData := data[offset : offset+ipLen]
-	ip := net.IP(ipData)
-	ipAddress := ip.String()
-	offset += ipLen
-
-	// Port (2 bytes, Big Endian)
-	port := binary.BigEndian.Uint16(data[offset : offset+2])
-	offset += 2
-
-	// Auth Key (256 bytes)
-	var authKey [256]byte
-	copy(authKey[:], data[offset:offset+256])
-
-	return &tg.Session{
-		Hostname: ipAddress + ":" + fmt.Sprint(port),
-		Key:      authKey[:],
-	}, nil
 }
