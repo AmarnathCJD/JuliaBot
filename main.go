@@ -41,6 +41,8 @@ func main() {
 	}
 
 	client.On("message:/media", modules.MediaInfoHandler)
+	client.On("message:/imdb", modules.ImdbHandler)
+	client.On("callback:imdb_(.*)_(.*)", modules.ImdbCallbackHandler)
 
 	client.Logger.Info(fmt.Sprintf("Authenticated as -> @%s, in %s.", me.Username, time.Since(time.Unix(startTimeStamp, 0)).String()))
 	client.Idle()

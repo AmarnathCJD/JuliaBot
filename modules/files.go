@@ -85,6 +85,8 @@ func DownloadHandle(m *telegram.NewMessage) error {
 		return nil
 	}
 
+	fn := m.Args()
+
 	var r, msg *telegram.NewMessage
 	if m.IsReply() {
 		reply, err := m.GetReplyMessage()
@@ -98,26 +100,52 @@ func DownloadHandle(m *telegram.NewMessage) error {
 	} else {
 		reg := regexp.MustCompile(`t.me/(\w+)/(\d+)`)
 		match := reg.FindStringSubmatch(m.Args())
-		if len(match) != 3 {
-			m.Reply("Invalid link")
-			return nil
-		}
+		if len(match) != 3 || match[1] == "c" {
+			// https://t.me/c/2183493392/8
+			reg = regexp.MustCompile(`t.me/c/(\d+)/(\d+)`)
+			match = reg.FindStringSubmatch(m.Args())
+			if len(match) != 3 {
+				m.Reply("Invalid link")
+				return nil
+			}
 
-		username := match[1]
-		id, err := strconv.Atoi(match[2])
-		if err != nil {
-			m.Reply("Invalid link")
-			return nil
-		}
+			id, err := strconv.Atoi(match[2])
+			if err != nil {
+				m.Reply("Invalid link: " + err.Error())
+				return nil
+			}
 
-		msg, err := m.Client.GetMessageByID(username, int32(id))
-		if err != nil {
-			m.Reply("Error: " + err.Error())
-			return nil
-		}
+			chatID, err := strconv.Atoi(match[1])
+			if err != nil {
+				m.Reply("Invalid link: " + err.Error())
+				return nil
+			}
 
-		r = msg
-		msg, _ = m.Reply("Downloading... (from " + username + " " + strconv.Itoa(id) + ")")
+			msgX, err := m.Client.GetMessageByID(chatID, int32(id))
+			if err != nil {
+				m.Reply("Error: " + err.Error())
+				return nil
+			}
+			r = msgX
+			fn = r.File.Name
+			msg, _ = m.Reply("Downloading... (from c " + strconv.Itoa(id) + ")")
+		} else {
+			username := match[1]
+			id, err := strconv.Atoi(match[2])
+			if err != nil {
+				m.Reply("Invalid link")
+				return nil
+			}
+
+			msgX, err := m.Client.GetMessageByID(username, int32(id))
+			if err != nil {
+				m.Reply("Error: " + err.Error())
+				return nil
+			}
+			r = msgX
+			fn = r.File.Name
+			msg, _ = m.Reply("Downloading... (from " + username + " " + strconv.Itoa(id) + ")")
+		}
 	}
 
 	uploadStartTimestamp := time.Now()
@@ -125,13 +153,9 @@ func DownloadHandle(m *telegram.NewMessage) error {
 	var pm = telegram.NewProgressManager(5)
 	pm.Edit(mediaDownloadProgress(r.File.Name, msg, pm))
 
-	fn := r.File.Name
-	if m.Args() != "" {
-		fn = m.Args()
-	}
 	if fi, err := r.Download(&telegram.DownloadOptions{
 		ProgressManager: pm,
-		FileName: fn,
+		FileName:        fn,
 	}); err != nil {
 		msg.Edit("Error: " + err.Error())
 		return nil
