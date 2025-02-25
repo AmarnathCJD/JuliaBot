@@ -65,7 +65,8 @@ func AFKHandler(m *tg.NewMessage) error {
 							if afk.Message != "" {
 								msg += "\nReason: " + afk.Message
 							}
-							m.ReplyMedia(afk.Media, tg.MediaOptions{
+							media, _ := tg.ResolveBotFileID(afk.Media)
+							m.ReplyMedia(media, tg.MediaOptions{
 								Caption: msg,
 							})
 						} else {
@@ -91,7 +92,8 @@ func AFKHandler(m *tg.NewMessage) error {
 									if afk.Message != "" {
 										msg += "\nReason: " + afk.Message
 									}
-									m.ReplyMedia(afk.Media, tg.MediaOptions{
+									media, _ := tg.ResolveBotFileID(afk.Media)
+									m.ReplyMedia(media, tg.MediaOptions{
 										Caption: msg,
 									})
 								} else {
@@ -118,7 +120,8 @@ func AFKHandler(m *tg.NewMessage) error {
 										if afk.Message != "" {
 											msg += "\nReason: " + afk.Message
 										}
-										m.ReplyMedia(afk.Media, tg.MediaOptions{
+										media, _ := tg.ResolveBotFileID(afk.Media)
+										m.ReplyMedia(media, tg.MediaOptions{
 											Caption: msg,
 										})
 									} else {
@@ -143,7 +146,8 @@ func AFKHandler(m *tg.NewMessage) error {
 										if afk.Message != "" {
 											msg += "\nReason: " + afk.Message
 										}
-										m.ReplyMedia(afk.Media, tg.MediaOptions{
+										media, _ := tg.ResolveBotFileID(afk.Media)
+										m.ReplyMedia(media, tg.MediaOptions{
 											Caption: msg,
 										})
 									} else {
