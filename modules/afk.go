@@ -66,9 +66,14 @@ func AFKHandler(m *tg.NewMessage) error {
 								msg += "\nReason: " + afk.Message
 							}
 							media, _ := tg.ResolveBotFileID(afk.Media)
-							m.ReplyMedia(media, tg.MediaOptions{
-								Caption: msg,
-							})
+							if IsSticker(media) {
+								m.ReplyMedia(media)
+								m.Respond(msg)
+							} else {
+								m.ReplyMedia(media, tg.MediaOptions{
+									Caption: msg,
+								})
+							}
 						} else {
 							var msg = fmt.Sprintf(msg, afk.Name, duration)
 							if afk.Message != "" {
@@ -93,9 +98,14 @@ func AFKHandler(m *tg.NewMessage) error {
 										msg += "\nReason: " + afk.Message
 									}
 									media, _ := tg.ResolveBotFileID(afk.Media)
-									m.ReplyMedia(media, tg.MediaOptions{
-										Caption: msg,
-									})
+									if IsSticker(media) {
+										m.ReplyMedia(media)
+										m.Respond(msg)
+									} else {
+										m.ReplyMedia(media, tg.MediaOptions{
+											Caption: msg,
+										})
+									}
 								} else {
 									var msg = fmt.Sprintf(msg, afk.Name, duration)
 									if afk.Message != "" {
@@ -121,9 +131,14 @@ func AFKHandler(m *tg.NewMessage) error {
 											msg += "\nReason: " + afk.Message
 										}
 										media, _ := tg.ResolveBotFileID(afk.Media)
-										m.ReplyMedia(media, tg.MediaOptions{
-											Caption: msg,
-										})
+										if IsSticker(media) {
+											m.ReplyMedia(media)
+											m.Respond(msg)
+										} else {
+											m.ReplyMedia(media, tg.MediaOptions{
+												Caption: msg,
+											})
+										}
 									} else {
 										var msg = fmt.Sprintf(msg, afk.Name, duration)
 										if afk.Message != "" {
@@ -147,9 +162,14 @@ func AFKHandler(m *tg.NewMessage) error {
 											msg += "\nReason: " + afk.Message
 										}
 										media, _ := tg.ResolveBotFileID(afk.Media)
-										m.ReplyMedia(media, tg.MediaOptions{
-											Caption: msg,
-										})
+										if IsSticker(media) {
+											m.ReplyMedia(media)
+											m.Respond(msg)
+										} else {
+											m.ReplyMedia(media, tg.MediaOptions{
+												Caption: msg,
+											})
+										}
 									} else {
 										var msg = fmt.Sprintf(msg, afk.Name, duration)
 										if afk.Message != "" {
@@ -168,4 +188,18 @@ func AFKHandler(m *tg.NewMessage) error {
 	}
 
 	return nil
+}
+
+func IsSticker(m tg.MessageMedia) bool {
+	switch m := m.(type) {
+	case *tg.MessageMediaDocument:
+		attrs := m.Document.(*tg.DocumentObj).Attributes
+		for _, attr := range attrs {
+			if _, ok := attr.(*tg.DocumentAttributeSticker); ok {
+				return true
+			}
+		}
+	}
+
+	return false
 }
