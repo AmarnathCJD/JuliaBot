@@ -30,9 +30,13 @@ func main() {
 		Session: "session.dat",
 	})
 
+	if err != nil {
+		panic(err)
+	}
+
 	client.Conn()
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
-
+	client.Logger.Info("Bot is running...")
 	initFunc(client)
 	me, err := client.GetMe()
 
