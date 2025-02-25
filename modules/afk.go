@@ -103,6 +103,59 @@ func AFKHandler(m *tg.NewMessage) error {
 									m.Reply(msg)
 								}
 							}
+						case *tg.MessageEntityMention:
+							ent := m.Message.Entities[0].(*tg.MessageEntityMention)
+							offset := ent.Offset
+							length := ent.Length
+
+							username := m.Text()[offset : offset+length]
+							for _, afk := range afkList {
+								if afk.Name == username {
+									duration := time.Since(time.Unix(afk.Time, 0)).String()
+									msg := randomAFKMessages[rand.Intn(len(randomAFKMessages))]
+									if afk.Media != "" {
+										var msg = fmt.Sprintf(msg, afk.Name, duration)
+										if afk.Message != "" {
+											msg += "\nReason: " + afk.Message
+										}
+										m.ReplyMedia(afk.Media, tg.MediaOptions{
+											Caption: msg,
+										})
+									} else {
+										var msg = fmt.Sprintf(msg, afk.Name, duration)
+										if afk.Message != "" {
+											msg += "\nReason: " + afk.Message
+										}
+
+										m.Reply(msg)
+									}
+								}
+							}
+
+							user, err := m.Client.ResolvePeer(username)
+							if err == nil {
+								peerId := m.Client.GetPeerID(user)
+								if afk, ok := afkList[peerId]; ok {
+									duration := time.Since(time.Unix(afk.Time, 0)).String()
+									msg := randomAFKMessages[rand.Intn(len(randomAFKMessages))]
+									if afk.Media != "" {
+										var msg = fmt.Sprintf(msg, afk.Name, duration)
+										if afk.Message != "" {
+											msg += "\nReason: " + afk.Message
+										}
+										m.ReplyMedia(afk.Media, tg.MediaOptions{
+											Caption: msg,
+										})
+									} else {
+										var msg = fmt.Sprintf(msg, afk.Name, duration)
+										if afk.Message != "" {
+											msg += "\nReason: " + afk.Message
+										}
+
+										m.Reply(msg)
+									}
+								}
+							}
 						}
 					}
 				}
