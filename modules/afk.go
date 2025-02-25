@@ -19,13 +19,12 @@ type AFK struct {
 var afkList = make(map[int64]AFK)
 
 var randomAFKMessages = []string{
-	"%s is AFK since %s.",
-	"%s is not here since %s.",
-	"%s is away since %s.",
-	"%s is not available since %s.",
-	"%s is not around since %s.",
-	"%s is not present since %s.",
-	"%s is not here since %s.",
+	"<b>%s</b> is AFK since <b>%s</b>.",
+	"<b>%s</b> is AFK for <b>%s</b>.",
+	"Mr. <b>%s</b> is AFK for <b>%s</b>.",
+	"<b>%s</b> has been AFK since <b>%s</b>.",
+	"<b>%s</b> stepped away and is AFK for <b>%s</b>.",
+	"<b>%s</b> is currently AFK for <b>%s</b>.",
 }
 
 func AFKHandler(m *tg.NewMessage) error {
@@ -52,7 +51,7 @@ func AFKHandler(m *tg.NewMessage) error {
 		if afk, ok := afkList[m.SenderID()]; ok {
 			delete(afkList, m.SenderID())
 			duration := time.Since(time.Unix(afk.Time, 0)).String()
-			m.Reply(fmt.Sprintf("Welcome back %s! You were AFK for %s.", afk.Name, duration))
+			m.Reply(fmt.Sprintf("Welcome back <b>%s</b>! You were AFK for %s.", afk.Name, duration))
 		} else {
 			if m.IsReply() {
 				r, err := m.GetReplyMessage()
