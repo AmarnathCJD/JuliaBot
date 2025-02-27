@@ -532,7 +532,7 @@ func RepairOGG(inputFile string, r SpotifyResponse) (string, []byte, error) {
 		return inputFile, nil, fmt.Errorf("failed to read cover: %w", err)
 	}
 	outputFile := fmt.Sprintf("%s.ogg", r.Tc)
-	cmd := exec.Command("ffmpeg", "-i", inputFile, "-c", "copy", "-metadata", "lyrics=", r.Lyrics, outputFile)
+	cmd := exec.Command("ffmpeg", "-i", inputFile, "-c", "copy", "-metadata", fmt.Sprintf("lyrics=%s", r.Lyrics), outputFile)
 
 	err = cmd.Run()
 	if err != nil {
