@@ -185,3 +185,41 @@ func GbanMeme(m *telegram.NewMessage) error {
 	msg.Reply(fmt.Sprintf("⚒️ Global Ban enforced on %d chats", randChatCount))
 	return nil
 }
+
+func mathQuery(query string) (string, error) {
+	c := &http.Client{}
+	url := "https://evaluate-expression.p.rapidapi.com"
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Add("x-rapidapi-host", "evaluate-expression.p.rapidapi.com")
+	req.Header.Add("x-rapidapi-key", "cf9e67ea99mshecc7e1ddb8e93d1p1b9e04jsn3f1bb9103c3f")
+	_query := req.URL.Query()
+	_query.Add("expression", query)
+	req.URL.RawQuery = _query.Encode()
+	resp, _ := c.Do(req)
+
+	defer resp.Body.Close()
+	var b interface{}
+	json.NewDecoder(resp.Body).Decode(&b)
+	if b == nil {
+		return "", fmt.Errorf("invalid mathematical expression")
+	}
+
+	return fmt.Sprint(b), nil
+}
+
+func MathHandler(m *telegram.NewMessage) error {
+	q := m.Args()
+	if q == "" {
+		m.Reply("Please provide a mathematical expression")
+		return nil
+	}
+
+	result, err := mathQuery(q)
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	m.Reply(fmt.Sprintf("Evaluated: <code>%s</code>", result))
+	return nil
+}
