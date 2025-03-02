@@ -9,6 +9,9 @@ import (
 var GREET_ENABLED = false
 
 func UserJoinHandle(m *telegram.ParticipantUpdate) error {
+	if m.IsBanned() {
+		m.Client.SendMessage(m.ChannelID(), "User Boom Banned.")
+	}
 	if (m.IsJoined() || m.IsAdded()) && GREET_ENABLED {
 		fmt.Println(m.Client.SendMessage(m.ChannelID(), "Welcome to the group <b>"+m.User.FirstName+"!</b>"))
 	}
