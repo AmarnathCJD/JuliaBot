@@ -115,7 +115,7 @@ func AFKHandler(m *tg.NewMessage) error {
 								}
 							}
 						case *tg.MessageEntityMention:
-							ent := m.Message.Entities[0].(*tg.MessageEntityMention)
+							ent := entity.(*tg.MessageEntityMention)
 							offset := ent.Offset
 							length := ent.Length
 

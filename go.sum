@@ -8,6 +8,8 @@ github.com/amarnathcjd/gogram v1.5.9-0.20250228022515-3ffba004d212 h1:Cb6t3GimZh
 github.com/amarnathcjd/gogram v1.5.9-0.20250228022515-3ffba004d212/go.mod h1:kxOCYC/wJqoGhwdQVXv9PcNTkDcjyfq6AguAkCkgs74=
 github.com/amarnathcjd/gogram v1.5.9-0.20250301125229-b9c394941ba3 h1:dqstYoQHe8lD1UNAjz94cvhd9iqNMIu1f0xv1pN5RKg=
 github.com/amarnathcjd/gogram v1.5.9-0.20250301125229-b9c394941ba3/go.mod h1:kxOCYC/wJqoGhwdQVXv9PcNTkDcjyfq6AguAkCkgs74=
+github.com/amarnathcjd/gogram v1.5.9-0.20250301150617-f7bb0ec12cf2 h1:Qo1IaisHEnlVXEss5p1G8LNH02YYpQmP8wfPUfmY+24=
+github.com/amarnathcjd/gogram v1.5.9-0.20250301150617-f7bb0ec12cf2/go.mod h1:kxOCYC/wJqoGhwdQVXv9PcNTkDcjyfq6AguAkCkgs74=
 github.com/andybalholm/cascadia v1.3.3 h1:AG2YHrzJIm4BZ19iwJ/DAua6Btl3IwJX+VI4kktS1LM=
 github.com/andybalholm/cascadia v1.3.3/go.mod h1:xNd9bqTn98Ln4DwST8/nG+H0yuB8Hmgu1YHNnWw0GeA=
 github.com/bogem/id3v2 v1.2.0 h1:hKDF+F1gOgQ5r1QmBCEZUk4MveJbKxCeIDSBU7CQ4oI=
