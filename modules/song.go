@@ -10,6 +10,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
 	yt "github.com/lrstanley/go-ytdlp"
@@ -28,9 +29,45 @@ func YtVideoDL(m *telegram.NewMessage) error {
 
 	dl := yt.New().
 		FormatSort("res,ext:mp4:m4a").
+		Format("best").
 		RecodeVideo("mp4").
 		Output("yt-video.mp4").
-		NoProgress().
+		ProgressFunc(time.Second*5, func(update yt.ProgressUpdate) {
+			text := " ~ Uploading Youtube Video ~\n\n"
+			text += "<b>📄 Name:</b> <code>%s</code>\n"
+			text += "<b>💾 File Size:</b> <code>%.2f MiB</code>\n"
+			text += "<b>⌛️ ETA:</b> <code>%s</code>\n"
+			text += "<b>⏱ Speed:</b> <code>%s</code>\n"
+			text += "<b>⚙️ Progress:</b> %s <code>%.2f%%</code>"
+
+			size := float64(update.TotalBytes) / 1024 / 1024
+			eta := func() string {
+				elapsed := time.Now().Unix() - update.Started.Unix()
+				remaining := float64(update.TotalBytes-update.DownloadedBytes) / float64(update.DownloadedBytes) * float64(elapsed)
+				return (time.Second * time.Duration(remaining)).String()
+			}()
+
+			speed := func() string {
+				elapsedTime := time.Since(time.Unix(update.Started.Unix(), 0))
+				if int(elapsedTime.Seconds()) == 0 {
+					return "0 B/s"
+				}
+				speedBps := float64(update.TotalBytes) / elapsedTime.Seconds()
+				if speedBps < 1024 {
+					return fmt.Sprintf("%.2f B/s", speedBps)
+				} else if speedBps < 1024*1024 {
+					return fmt.Sprintf("%.2f KB/s", speedBps/1024)
+				} else {
+					return fmt.Sprintf("%.2f MB/s", speedBps/1024/1024)
+				}
+			}()
+			percent := float64(update.DownloadedBytes) / float64(update.TotalBytes) * 100
+
+			progressbar := strings.Repeat("■", int(percent/10)) + strings.Repeat("□", 10-int(percent/10))
+
+			message := fmt.Sprintf(text, *update.Info.Filename, size, eta, speed, progressbar, percent)
+			msg.Edit(message)
+		}).
 		Proxy("http://127.0.0.1:25345").
 		NoWarnings()
 
@@ -40,7 +77,6 @@ func YtVideoDL(m *telegram.NewMessage) error {
 		return nil
 	}
 
-	msg.Edit("Uploading video...")
 	defer os.Remove("yt-video.mp4")
 	defer msg.Delete()
 
