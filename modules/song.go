@@ -32,8 +32,8 @@ func YtVideoDL(m *telegram.NewMessage) error {
 		Format("bv+ba").
 		RecodeVideo("mp4").
 		Output("yt-video.mp4").
-		ProgressFunc(time.Second*5, func(update yt.ProgressUpdate) {
-			text := " ~ Uploading Youtube Video ~\n\n"
+		ProgressFunc(time.Second*7, func(update yt.ProgressUpdate) {
+			text := "<b>~ Downloading Youtube Video ~</b>\n\n"
 			text += "<b>📄 Name:</b> <code>%s</code>\n"
 			text += "<b>💾 File Size:</b> <code>%.2f MiB</code>\n"
 			text += "<b>⌛️ ETA:</b> <code>%s</code>\n"
@@ -65,7 +65,7 @@ func YtVideoDL(m *telegram.NewMessage) error {
 
 			progressbar := strings.Repeat("■", int(percent/10)) + strings.Repeat("□", 10-int(percent/10))
 
-			message := fmt.Sprintf(text, *update.Info.Filename, size, eta, speed, progressbar, percent)
+			message := fmt.Sprintf(text, *update.Info.Title, size, eta, speed, progressbar, percent)
 			msg.Edit(message)
 		}).
 		Proxy("http://127.0.0.1:25345").
