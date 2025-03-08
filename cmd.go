@@ -34,7 +34,7 @@ func initFunc(c *telegram.Client) {
 		c.On("message:/ul", modules.UploadHandle, telegram.FilterFunc(FilterOwnerNoReply))
 		c.On("message:/upd", modules.UpdateSourceCodeHandle, telegram.FilterFunc(FilterOwnerNoReply))
 		c.On("message:/gban", modules.GbanMeme, telegram.FilterFunc(FilterOwner))
-c.On("message:/greet", modules.ModifyGreetStatus)
+		c.On("message:/greet", modules.ModifyGreetStatus)
 		c.On("message:/start", modules.StartHandle)
 		c.On("message:/help", modules.HelpHandle)
 		c.On("message:/sys", modules.GatherSystemInfo)
@@ -69,6 +69,8 @@ c.On("message:/greet", modules.ModifyGreetStatus)
 		c.On("command:doge", modules.DogeSticker)
 
 		c.On("callback:spot_(.*)_(.*)", modules.SpotifyHandlerCallback)
+		c.On("message:/midj", modules.MidjHandler)
+		c.On("message:/vid", modules.YtVideoDL)
 
 		c.On(telegram.OnParticipant, modules.UserJoinHandle)
 

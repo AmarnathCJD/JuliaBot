@@ -2,6 +2,7 @@ package modules
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,7 +12,47 @@ import (
 	"strings"
 
 	"github.com/amarnathcjd/gogram/telegram"
+	yt "github.com/lrstanley/go-ytdlp"
 )
+
+func YtVideoDL(m *telegram.NewMessage) error {
+	yt.MustInstall(context.TODO(), nil)
+
+	args := m.Args()
+	if args == "" {
+		m.Reply("Provide video url~")
+		return nil
+	}
+
+	msg, _ := m.Reply("Downloading video...")
+
+	dl := yt.New().
+		FormatSort("res,ext:mp4:m4a").
+		RecodeVideo("mp4").
+		Output("yt-video.mp4").
+		NoProgress().
+		Proxy("http://127.0.0.1:25345").
+		NoWarnings()
+
+	_, err := dl.Run(context.TODO(), args)
+	if err != nil {
+		m.Reply("<code>video not found.</code>")
+		return nil
+	}
+
+	msg.Edit("Uploading video...")
+	defer os.Remove("yt-video.mp4")
+	defer msg.Delete()
+
+	m.ReplyMedia("yt-video.mp4", telegram.MediaOptions{
+		Attributes: []telegram.DocumentAttribute{
+			&telegram.DocumentAttributeFilename{
+				FileName: "yt-video.mp4",
+			},
+		},
+	})
+	return nil
+}
 
 func YtSongDL(m *telegram.NewMessage) error {
 	args := m.Args()
