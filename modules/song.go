@@ -50,6 +50,7 @@ func YtVideoDL(m *telegram.NewMessage) error {
 				FileName: "yt-video.mp4",
 			},
 		},
+		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
 	})
 	return nil
 }
