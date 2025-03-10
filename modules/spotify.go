@@ -250,8 +250,9 @@ func SpotifyInlineHandler(u telegram.Update, c *telegram.Client) error {
 				Performer: response.Aritst,
 			},
 		},
-		Thumb:   thumb,
-		Spoiler: true,
+		ProgressManager: telegram.NewProgressManager(3).SetInlineMessage(c, &i.MsgID),
+		Thumb:           thumb,
+		Spoiler:         true,
 		ReplyMarkup: telegram.NewKeyboard().AddRow(
 			telegram.Button.URL("Spotify Link", fmt.Sprintf("https://open.spotify.com/track/%s", response.Tc)),
 		).Build(),
