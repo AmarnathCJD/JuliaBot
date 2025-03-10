@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
@@ -63,6 +64,14 @@ func GatherSystemInfo(m *telegram.NewMessage) error {
 		msg.Edit(info)
 	}
 	return err
+}
+
+var dcLocationMap = map[int]string{
+	1: "Miami, US",
+	2: "Amsterdam, NL",
+	3: "Miami, US",
+	4: "Amsterdam, NL",
+	5: "Singapore, SG",
 }
 
 func UserHandle(m *telegram.NewMessage) error {
@@ -129,11 +138,13 @@ func UserHandle(m *telegram.NewMessage) error {
 	if un.LastName != "" {
 		userString += "<b>Last Name:</b> " + un.LastName + "\n"
 	}
+	userString += "<b>Is Bot:</b> " + fmt.Sprintf("%t", un.Bot) + "\n"
+	userString += "<b>Data Center:</b> {{dcId}}\n"
 	if un.Username != "" {
 		userString += "<b>Username:</b> @" + un.Username + "\n"
 	}
 	if uf.About != "" {
-		userString += "<b>About:</b> <code>" + uf.About + "</code>\n"
+		userString += "\n<i>" + uf.About + "</i>\n\n"
 	}
 	if un.Usernames != nil {
 		userString += "<b>Res. Usernames:</b> [<b>" + func() string {
@@ -144,16 +155,24 @@ func UserHandle(m *telegram.NewMessage) error {
 			return s
 		}() + "</b>]\n"
 	}
-	userString += "<b>User Link:</b> <a href=\"tg://user?id=" + strconv.FormatInt(un.ID, 10) + "\">userLink</a>\n<b>ID:</b> <code>" + strconv.FormatInt(un.ID, 10) + "</code>\n"
+	userString += "<b>User Link:</b> <a href=\"tg://user?id=" + strconv.FormatInt(un.ID, 10) + "\">userLink</a>\n<b>User-ID:</b> <code>" + strconv.FormatInt(un.ID, 10) + "</code>\n"
 	if uf.Birthday != nil {
 		userString += "\n<b>Birthday:</b> " + parseBirthday(uf.Birthday.Day, uf.Birthday.Month, uf.Birthday.Year)
 	}
 
+	var keyb = telegram.NewKeyboard()
 	sendableUser, err := m.Client.GetSendableUser(un)
+	if err == nil {
+		keyb.AddRow(
+			telegram.Button.Mention("Go >> User Profile", sendableUser),
+		)
+	} else {
+		keyb.AddRow(
+			telegram.Button.URL("Go >> User Profile", "tg://user?id="+strconv.FormatInt(un.ID, 10)),
+		)
+	}
 
-	var keyb = telegram.NewKeyboard().AddRow(
-		telegram.Button.Mention("User Profile", sendableUser),
-	).Build()
+	var dcId = 0
 
 	if uf.ProfilePhoto == nil {
 		if uf.PersonalPhoto != nil {
@@ -167,6 +186,7 @@ func UserHandle(m *telegram.NewMessage) error {
 
 	if uf.BusinessIntro != nil && uf.BusinessIntro.Sticker != nil {
 		stick := uf.BusinessIntro.Sticker.(*telegram.DocumentObj)
+		dcId = int(stick.DcID)
 		sty := &telegram.InputMediaDocument{
 			ID: &telegram.InputDocumentObj{
 				ID:            stick.ID,
@@ -175,7 +195,7 @@ func UserHandle(m *telegram.NewMessage) error {
 			},
 		}
 		if _, err := m.ReplyMedia(sty, telegram.MediaOptions{
-			ReplyMarkup: keyb,
+			ReplyMarkup: keyb.Build(),
 		}); err == nil {
 			buisnessSent = true
 		}
@@ -188,8 +208,8 @@ func UserHandle(m *telegram.NewMessage) error {
 	sendOpt := telegram.SendOptions{}
 
 	if !buisnessSent {
-		mediaOpt.ReplyMarkup = keyb
-		sendOpt.ReplyMarkup = keyb
+		mediaOpt.ReplyMarkup = keyb.Build()
+		sendOpt.ReplyMarkup = keyb.Build()
 	}
 
 	if uf.ProfilePhoto != nil {
@@ -197,7 +217,9 @@ func UserHandle(m *telegram.NewMessage) error {
 		if uf.PersonalPhoto != nil {
 			p = uf.PersonalPhoto.(*telegram.PhotoObj)
 		}
-		inp := &telegram.InputMediaPhoto{
+		dcId = int(p.DcID)
+		var inp telegram.InputMedia
+		inp = &telegram.InputMediaPhoto{
 			ID: &telegram.InputPhotoObj{
 				ID:            p.ID,
 				AccessHash:    p.AccessHash,
@@ -205,11 +227,30 @@ func UserHandle(m *telegram.NewMessage) error {
 			},
 			Spoiler: true,
 		}
+		if len(p.VideoSizes) > 0 {
+			dled, err := m.Client.DownloadMedia(p, &telegram.DownloadOptions{
+				IsVideo: true,
+			})
+			if err == nil {
+				ul, err := m.Client.UploadFile(dled)
+				if err == nil {
+					inp = &telegram.InputMediaUploadedDocument{
+						File:         ul,
+						NosoundVideo: true,
+						Spoiler:      true,
+						MimeType:     "video/mp4",
+					}
+				}
+			}
+		}
+
+		mediaOpt.Caption = strings.ReplaceAll(userString, "{{dcId}}", fmt.Sprintf("<b>%d - %s</b>", dcId, dcLocationMap[dcId]))
 		_, err := m.ReplyMedia(inp, mediaOpt)
 		if err != nil {
 			m.Reply(userString, sendOpt)
 		}
 	} else {
+		userString = strings.ReplaceAll(userString, "{{dcId}}", fmt.Sprintf("<b>%d</b> - <b>%s</b>", dcId, dcLocationMap[dcId]))
 		m.Reply(userString, sendOpt)
 	}
 	return nil
