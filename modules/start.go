@@ -12,7 +12,7 @@ import (
 var startTime = time.Now()
 
 func StartHandle(m *telegram.NewMessage) error {
-	m.Reply("Hellow! :)")
+	m.Reply("Hellov! :)")
 	m.React(getRandomEmoticon())
 	return nil
 }
@@ -149,8 +149,10 @@ func UserHandle(m *telegram.NewMessage) error {
 		userString += "\n<b>Birthday:</b> " + parseBirthday(uf.Birthday.Day, uf.Birthday.Month, uf.Birthday.Year)
 	}
 
+	sendableUser, err := m.Client.GetSendableUser(un)
+
 	var keyb = telegram.NewKeyboard().AddRow(
-		telegram.Button.URL("User Profile", "tg://user?id="+strconv.Itoa(int(uf.ID))),
+		telegram.Button.Mention("User Profile", sendableUser),
 	).Build()
 
 	if uf.ProfilePhoto == nil {
