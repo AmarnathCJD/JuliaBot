@@ -79,6 +79,8 @@ func initFunc(c *telegram.Client) {
 		c.On("message:/setthumb", modules.SetThumbHandler)
 		c.On("message:/mirror", modules.MirrorFileHandler)
 
+		c.On("message:/setpfp", modules.SetBotPfpHandler, telegram.FilterFunc(FilterOwner))
+
 		c.On(telegram.OnNewMessage, modules.AFKHandler)
 
 		modules.Mods.Init(c)

@@ -577,6 +577,49 @@ func GenStringSessionHandler(m *telegram.NewMessage) error {
 	return nil
 }
 
+func SetBotPfpHandler(m *telegram.NewMessage) error {
+	if !m.IsReply() {
+		m.Reply("Reply to a photo to set it as bot profile picture")
+		return nil
+	}
+
+	r, err := m.GetReplyMessage()
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	if !r.IsMedia() {
+		m.Reply("This message is not a media")
+		return nil
+	}
+
+	fi, err := m.Client.DownloadMedia(r.Media())
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	defer os.Remove(fi)
+	fiup, err := m.Client.UploadFile(fi)
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	_, err = m.Client.PhotosUploadProfilePhoto(&telegram.PhotosUploadProfilePhotoParams{
+		File: fiup,
+	})
+
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	m.Reply("Profile picture updated")
+	return nil
+}
+
 func init() {
 	Mods.AddModule("Dev", `<b>Here are the commands available in Dev module:</b>
 
