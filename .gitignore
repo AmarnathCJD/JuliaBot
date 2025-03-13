@@ -26,3 +26,4 @@ n.go
 *.exe
 *.session
 vendor/*
+*.log

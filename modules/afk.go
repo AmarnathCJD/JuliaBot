@@ -125,7 +125,7 @@ func AFKHandler(m *tg.NewMessage) error {
 									duration := time.Since(time.Unix(afk.Time, 0)).String()
 									msg := randomAFKMessages[rand.Intn(len(randomAFKMessages))]
 									if afk.Media != "" {
-										var msg = fmt.Sprintf(msg, afk.Name, duration)
+										var msg = fmt.Sprintf(msg, afk.Name, trimDecimal(duration))
 										if afk.Message != "" {
 											msg += "\nReason: " + afk.Message
 										}
@@ -139,7 +139,7 @@ func AFKHandler(m *tg.NewMessage) error {
 											})
 										}
 									} else {
-										var msg = fmt.Sprintf(msg, afk.Name, duration)
+										var msg = fmt.Sprintf(msg, afk.Name, trimDecimal(duration))
 										if afk.Message != "" {
 											msg += "\nReason: " + afk.Message
 										}
@@ -156,7 +156,7 @@ func AFKHandler(m *tg.NewMessage) error {
 									duration := time.Since(time.Unix(afk.Time, 0)).String()
 									msg := randomAFKMessages[rand.Intn(len(randomAFKMessages))]
 									if afk.Media != "" {
-										var msg = fmt.Sprintf(msg, afk.Name, duration)
+										var msg = fmt.Sprintf(msg, afk.Name, trimDecimal(duration))
 										if afk.Message != "" {
 											msg += "\nReason: " + afk.Message
 										}
@@ -170,7 +170,7 @@ func AFKHandler(m *tg.NewMessage) error {
 											})
 										}
 									} else {
-										var msg = fmt.Sprintf(msg, afk.Name, duration)
+										var msg = fmt.Sprintf(msg, afk.Name, trimDecimal(duration))
 										if afk.Message != "" {
 											msg += "\nReason: " + afk.Message
 										}
@@ -187,6 +187,13 @@ func AFKHandler(m *tg.NewMessage) error {
 	}
 
 	return nil
+}
+
+func trimDecimal(s string) string {
+	if strings.Contains(s, ".") {
+		return strings.TrimRight(strings.TrimRight(s, "0"), ".")
+	}
+	return s
 }
 
 func IsSticker(m tg.MessageMedia) bool {

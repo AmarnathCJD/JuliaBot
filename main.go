@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"main/modules"
 	"os"
 	"strconv"
@@ -20,6 +22,11 @@ var startTimeStamp = time.Now().Unix()
 var ownerId int64 = 0
 
 func main() {
+	logZap, _ := os.Create(fmt.Sprintf("log_%d.log", startTimeStamp))
+	defer logZap.Close()
+	wr := io.MultiWriter(os.Stdout, logZap)
+	log.SetOutput(wr)
+
 	dotenv.Load()
 	appId, _ := strconv.Atoi(os.Getenv("APP_ID"))
 	ownerId, _ = strconv.ParseInt(os.Getenv("OWNER_ID"), 10, 64)
@@ -27,7 +34,10 @@ func main() {
 	client, err := tg.NewClient(tg.ClientConfig{
 		AppID:   int32(appId),
 		AppHash: os.Getenv("APP_HASH"),
-		Session: "session.dat",
+		Session: "user.session",
+		Logger: tg.NewLogger(
+			tg.LogInfo,
+		).NoColor(),
 	})
 
 	if err != nil {
