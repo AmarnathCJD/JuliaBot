@@ -104,7 +104,7 @@ func GetIMDBTitle(titleID string) (*IMDBTitle, error) {
 	}
 
 	jsonMeta := doc.Find("script[type='application/ld+json']").First().Text()
-	var jsonObj map[string]interface{}
+	var jsonObj map[string]any
 	if err := json.Unmarshal([]byte(jsonMeta), &jsonObj); err != nil {
 		return nil, err
 	}
@@ -112,11 +112,14 @@ func GetIMDBTitle(titleID string) (*IMDBTitle, error) {
 	title := doc.Find("h1[data-testid=hero__pageTitle]").First().Text()
 	poster, _ := jsonObj["image"].(string)
 	description := jsonObj["description"].(string)
-	rating := jsonObj["aggregateRating"].(map[string]interface{})["ratingValue"].(float64)
+	var rating = 0.0
+	if jsonObj["aggregateRating"] != nil {
+		rating = jsonObj["aggregateRating"].(map[string]any)["ratingValue"].(float64)
+	}
 	viewerClass, isViewerClass := jsonObj["contentRating"].(string)
 	duration := doc.Find("li[data-testid=title-techspec_runtime] div").Text()
 	genres := []string{}
-	if genresArr, isGenres := jsonObj["genre"].([]interface{}); isGenres {
+	if genresArr, isGenres := jsonObj["genre"].([]any); isGenres {
 		for _, genre := range genresArr {
 			genres = append(genres, genre.(string))
 		}
@@ -127,7 +130,7 @@ func GetIMDBTitle(titleID string) (*IMDBTitle, error) {
 		actors = append(actors, s.Text())
 	})
 	trailer := ""
-	if trailerObj, isTrailer := jsonObj["trailer"].(map[string]interface{}); isTrailer {
+	if trailerObj, isTrailer := jsonObj["trailer"].(map[string]any); isTrailer {
 		trailer = trailerObj["embedUrl"].(string)
 	}
 	countryOfOrigin := ""

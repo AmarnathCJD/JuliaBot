@@ -47,7 +47,7 @@ func initFunc(c *telegram.Client) {
 
 		c.On("message:/file", modules.SendFileByIDHandle)
 		c.On("message:/fid", modules.GetFileIDHandle)
-		c.On("message:/dow", modules.DownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
+		c.On("message:/ldl", modules.DownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
 
 		c.On("inline:pin", modules.PinterestInlineHandle)
 		c.On("inline:doge", modules.DogeStickerInline)
