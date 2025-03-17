@@ -139,7 +139,7 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 		}
 	}
 
-	fi, err := r.Download(&telegram.DownloadOptions{Threads: 14, FileName: fn, ProgressManager: telegram.NewProgressManager(5).SetMessage(msg)})
+	fi, err := r.Download(&telegram.DownloadOptions{FileName: fn, ProgressManager: telegram.NewProgressManager(5).SetMessage(msg)})
 	if err != nil {
 		msg.Edit("Error: " + err.Error())
 		return nil
@@ -149,7 +149,6 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 		ForceDocument:   true,
 		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
 		Spoiler:         true,
-		UploadThreads:   14,
 	}
 
 	if _, err := os.Stat("thumb.jpg"); err == nil {
