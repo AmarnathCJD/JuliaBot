@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -70,57 +71,91 @@ func SetThumbHandler(m *telegram.NewMessage) error {
 }
 
 func MirrorFileHandler(m *telegram.NewMessage) error {
-	if !m.IsReply() {
-		m.Reply("Error: Reply to a media message to mirror")
+	if !m.IsReply() && m.Args() == "" {
+		m.Reply("Reply to a file to download it")
 		return nil
 	}
 
-	msg, err := m.GetReplyMessage()
+	fn := m.Args()
+
+	var r, msg *telegram.NewMessage
+	if m.IsReply() {
+		reply, err := m.GetReplyMessage()
+		if err != nil {
+			m.Reply("Error: " + err.Error())
+			return nil
+		}
+
+		r = reply
+		msg, _ = m.Reply("Downloading...")
+	} else {
+		reg := regexp.MustCompile(`t.me/(\w+)/(\d+)`)
+		match := reg.FindStringSubmatch(m.Args())
+		if len(match) != 3 || match[1] == "c" {
+			// https://t.me/c/2183493392/8
+			reg = regexp.MustCompile(`t.me/c/(\d+)/(\d+)`)
+			match = reg.FindStringSubmatch(m.Args())
+			if len(match) != 3 {
+				m.Reply("Invalid link")
+				return nil
+			}
+
+			id, err := strconv.Atoi(match[2])
+			if err != nil {
+				m.Reply("Invalid link: " + err.Error())
+				return nil
+			}
+
+			chatID, err := strconv.Atoi(match[1])
+			if err != nil {
+				m.Reply("Invalid link: " + err.Error())
+				return nil
+			}
+
+			msgX, err := m.Client.GetMessageByID(chatID, int32(id))
+			if err != nil {
+				m.Reply("Error: " + err.Error())
+				return nil
+			}
+			r = msgX
+			fn = r.File.Name
+			msg, _ = m.Reply("Downloading... (from c " + strconv.Itoa(id) + ")")
+		} else {
+			username := match[1]
+			id, err := strconv.Atoi(match[2])
+			if err != nil {
+				m.Reply("Invalid link")
+				return nil
+			}
+
+			msgX, err := m.Client.GetMessageByID(username, int32(id))
+			if err != nil {
+				m.Reply("Error: " + err.Error())
+				return nil
+			}
+			r = msgX
+			fn = r.File.Name
+			msg, _ = m.Reply("Downloading... (from " + username + " " + strconv.Itoa(id) + ")")
+		}
+	}
+
+	fi, err := r.Download(&telegram.DownloadOptions{Threads: 14, FileName: fn, ProgressManager: telegram.NewProgressManager(5).SetMessage(msg)})
 	if err != nil {
-		m.Reply("Error: " + err.Error())
+		msg.Edit("Error: " + err.Error())
 		return nil
 	}
 
-	if !msg.IsMedia() {
-		m.Reply("Error: Not a media message")
-		return nil
+	var opt = telegram.MediaOptions{
+		ForceDocument:   true,
+		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+		Spoiler:         true,
+		UploadThreads:   14,
 	}
 
-	msgX, _ := m.Reply("<code>Downloading...</code>")
-
-	// pm := telegram.NewProgressManager(7)
-	// pm.Edit(mediaDownloadProgress(msg.File.Name, msg, pm))
-
-	file, err := msg.Download(&telegram.DownloadOptions{FileName: "mirror_" + msg.File.Name})
-	if err != nil {
-		msgX.Edit("Error: " + err.Error())
-		return nil
-	}
-	os.Rename("mirror_"+msg.File.Name, msg.File.Name)
-	file = msg.File.Name
-
-	msgX.Edit("<code>Re-Uploading...</code>")
-	defer msg.Delete()
-
-	// thumb, _ := os.Open("thumb.jpg_512.jpg")
-	// defer thumb.Close()
-
-	// fthumb_bytes, _ := io.ReadAll(thumb)
-	a := m.Args()
-	if strings.Contains(a, "-f") {
-		a = msg.File.Name
+	if _, err := os.Stat("thumb.jpg"); err == nil {
+		opt.Thumb = "thumb.jpg"
 	}
 
-	_, err = m.RespondMedia(file, telegram.MediaOptions{
-		Caption:       fmt.Sprintf("<b>%s</b>", a),
-		Thumb:         "thumb.jpg",
-		ForceDocument: true,
-	})
-
-	if err != nil {
-		m.Reply("Error: " + err.Error())
-		return nil
-	}
-
+	m.RespondMedia(fi, opt)
 	return nil
 }

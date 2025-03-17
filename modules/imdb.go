@@ -58,6 +58,48 @@ func SearchIMDB(query string) ([]SearchResult, error) {
 	return results, nil
 }
 
+// https://v3.sg.media-imdb.com/suggestion/x/avatar.json?includeVideos=1
+func quickSearchImdb(query string) ([]SearchResult, error) {
+	url := fmt.Sprintf("https://v3.sg.media-imdb.com/suggestion/x/%s.json?includeVideos=1", query)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var results struct {
+		D []struct {
+			ID string `json:"id"`
+			L  string `json:"l"`
+			Y  int    `json:"y"`
+			I  struct {
+				URL string `json:"imageUrl"`
+			}
+		} `json:"d"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
+		return nil, err
+	}
+
+	var searchResults []SearchResult
+	for _, result := range results.D {
+		searchResults = append(searchResults, SearchResult{
+			IMDBID: result.ID,
+			Title:  result.L,
+			Year:   fmt.Sprintf("%d", result.Y),
+			Poster: result.I.URL,
+		})
+	}
+
+	return searchResults, nil
+}
+
 type IMDBTitle struct {
 	ID                  string              `json:"id"`
 	Title               string              `json:"title"`
@@ -117,7 +159,7 @@ func GetIMDBTitle(titleID string) (*IMDBTitle, error) {
 
 	title := doc.Find("h1[data-testid=hero__pageTitle]").First().Text()
 	poster, _ := jsonObj["image"].(string)
-	description := jsonObj["description"].(string)
+	description := getObjValue(jsonObj, "description")
 	var rating = 0.0
 	if jsonObj["aggregateRating"] != nil {
 		rating = jsonObj["aggregateRating"].(map[string]any)["ratingValue"].(float64)
@@ -208,6 +250,13 @@ func GetIMDBTitle(titleID string) (*IMDBTitle, error) {
 	}
 
 	return tt, nil
+}
+
+func getObjValue(obj map[string]any, key string) string {
+	if val, exists := obj[key]; exists {
+		return val.(string)
+	}
+	return ""
 }
 
 func FormatIMDBDataToHTML(data *IMDBTitle) string {
@@ -303,7 +352,7 @@ func ImDBInlineSearchHandler(m *tg.InlineQuery) error {
 		return nil
 	}
 
-	results, err := SearchIMDB(m.Args())
+	results, err := quickSearchImdb(m.Args())
 	if err != nil {
 		b.Article("Error", "Failed to fetch IMDb search results", "Error", &tg.ArticleOptions{
 			ReplyMarkup: tg.Button.Keyboard(
@@ -329,7 +378,7 @@ func ImDBInlineSearchHandler(m *tg.InlineQuery) error {
 	}
 
 	for i, result := range results {
-		if i >= 5 {
+		if i >= 10 {
 			break
 		}
 		b.Photo(result.Poster, &tg.ArticleOptions{
@@ -351,7 +400,11 @@ func ImDBInlineSearchHandler(m *tg.InlineQuery) error {
 
 func ImdbHandler(m *tg.NewMessage) error {
 	if m.Args() == "" {
-		m.Reply("Please provide a search query.")
+		m.Reply("Please provide a search query.", tg.SendOptions{
+			ReplyMarkup: tg.NewKeyboard().AddRow(
+				tg.Button.SwitchInline("Go >> Search IMDb", true, "imdb "),
+			).Build(),
+		})
 		return nil
 	}
 
@@ -420,12 +473,16 @@ func ImdbInlineOnSendHandler(u *tg.InlineSend) error {
 			Spoiler: true,
 			ReplyMarkup: tg.NewKeyboard().AddRow(
 				tg.Button.URL("🔗 IMDb Link", fmt.Sprintf("https://www.imdb.com/title/%s/", titleId)),
+			).AddRow(
+				tg.Button.SwitchInline("Search again", true, "imdb "),
 			).Build(),
 		})
 	} else {
 		u.Edit(FormatIMDBDataToHTML(data), &tg.SendOptions{
 			ReplyMarkup: tg.NewKeyboard().AddRow(
 				tg.Button.URL("🔗 IMDb Link", fmt.Sprintf("https://www.imdb.com/title/%s/", titleId)),
+			).AddRow(
+				tg.Button.SwitchInline("Search again", true, "imdb "),
 			).Build(),
 		})
 	}
