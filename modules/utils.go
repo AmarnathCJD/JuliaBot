@@ -66,11 +66,7 @@ func IsImageDepsInstalled() bool {
 	}
 
 	_, err = exec.LookPath("ffmpeg")
-	if err != nil {
-		return false
-	}
-
-	return true
+	return err == nil
 }
 
 func gatherSystemInfo() (*SystemInfo, error) {

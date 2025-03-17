@@ -260,7 +260,7 @@ func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, 
 
 	if stdOut.String() != "" {
 		if len(stdOut.String()) > 4095 {
-			os.WriteFile("tmp/eval_out.txt", []byte(stdOut.String()), 0644)
+			os.WriteFile("tmp/eval_out.txt", stdOut.Bytes(), 0644)
 			return "tmp/eval_out.txt", true
 		}
 
@@ -373,10 +373,10 @@ func MediaInfoHandler(m *telegram.NewMessage) error {
 	msg, _ := m.Reply("<code>Gathering media info...</code>")
 
 	var downloadedFileName string
-	if r.File.Size > 20*1024*1024 { // 20MB
-		// download first 20MB of the file
+	if r.File.Size > 40*1024*1024 { // 20MB
+		// download first 40MB of the file
 
-		bytes, _, err := m.Client.DownloadChunk(r.Media(), 0, 20*1024*1024, 512*1024)
+		bytes, _, err := m.Client.DownloadChunk(r.Media(), 0, 40*1024*1024, 512*1024)
 		if err != nil {
 			m.Reply("Error: " + err.Error())
 			return nil
@@ -410,7 +410,11 @@ func MediaInfoHandler(m *telegram.NewMessage) error {
 		return nil
 	}
 
-	msg.Edit("<b><a href='" + url + "'>Media Info Pasted</a></b>")
+	msg.Edit("<b><a href='"+url+"'>Media Info Pasted</a></b>", telegram.SendOptions{
+		ReplyMarkup: telegram.NewKeyboard().AddRow(
+			telegram.Button.URL("View", url),
+		).Build(),
+	})
 	return nil
 }
 
@@ -467,10 +471,10 @@ func LsHandler(m *telegram.NewMessage) error {
 		}
 		size := calcFileOrDirSize(filepath.Join(dir, file))
 		sizeTotal += size
-		resp += fileTypeEmoji[fileType] + " " + file + " " + "(" + fmt.Sprintf("%s", sizeToHuman(size)) + ")" + "\n"
+		resp += fileTypeEmoji[fileType] + " " + file + " " + "(" + sizeToHuman(size) + ")" + "\n"
 	}
 
-	resp += "\nTotal: " + fmt.Sprintf("%s", sizeToHuman(sizeTotal))
+	resp += "\nTotal: " + sizeToHuman(sizeTotal)
 
 	m.Reply("<pre lang='bash'>" + resp + "</pre>")
 	return nil

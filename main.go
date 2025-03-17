@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"main/modules"
 	"os"
 	"strconv"
 	"time"
@@ -43,7 +42,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
 	client.Conn()
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 	client.Logger.Info("Bot is running...")
@@ -53,10 +51,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
-	client.On("message:/media", modules.MediaInfoHandler)
-	client.On("message:/imdb", modules.ImdbHandler)
-	client.On("callback:imdb_(.*)_(.*)", modules.ImdbCallbackHandler)
 
 	client.Logger.Info(fmt.Sprintf("Authenticated as -> @%s, in %s.", me.Username, time.Since(time.Unix(startTimeStamp, 0)).String()))
 	client.Idle()

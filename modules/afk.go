@@ -86,9 +86,9 @@ func AFKHandler(m *tg.NewMessage) error {
 			} else {
 				if len(m.Message.Entities) > 0 {
 					for _, entity := range m.Message.Entities {
-						switch entity.(type) {
+						switch e := entity.(type) {
 						case *tg.MessageEntityMentionName:
-							if afk, ok := afkList[m.Message.Entities[0].(*tg.MessageEntityMentionName).UserID]; ok {
+							if afk, ok := afkList[e.UserID]; ok {
 								duration := time.Since(time.Unix(afk.Time, 0)).String()
 								msg := randomAFKMessages[rand.Intn(len(randomAFKMessages))]
 								if afk.Media != "" {
@@ -115,9 +115,8 @@ func AFKHandler(m *tg.NewMessage) error {
 								}
 							}
 						case *tg.MessageEntityMention:
-							ent := entity.(*tg.MessageEntityMention)
-							offset := ent.Offset
-							length := ent.Length
+							offset := e.Offset
+							length := e.Length
 
 							username := m.Text()[offset : offset+length]
 							for _, afk := range afkList {

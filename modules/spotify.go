@@ -137,7 +137,7 @@ type SpotifySearchResponse struct {
 }
 
 func SpotifyInlineSearch(i *telegram.InlineQuery) error {
-	if strings.Contains(i.Query, "pin") || strings.Contains(i.Query, "doge") {
+	if strings.Contains(i.Query, "pin") || strings.Contains(i.Query, "doge") || strings.Contains(i.Query, "imdb") {
 		return nil
 	}
 
@@ -191,13 +191,16 @@ func SpotifyInlineSearch(i *telegram.InlineQuery) error {
 	return nil
 }
 
-func SpotifyInlineHandler(u telegram.Update, c *telegram.Client) error {
-	i := u.(*telegram.UpdateBotInlineSend)
-	if strings.Contains(i.Query, "pin") || strings.Contains(i.Query, "doge") {
+func SpotifyInlineHandler(u *telegram.InlineSend) error {
+	if strings.Contains(u.OriginalUpdate.Query, "pin") || strings.Contains(u.OriginalUpdate.Query, "doge") {
+		return nil
+	}
+	if strings.Contains(u.OriginalUpdate.Query, "imdb") {
+		ImdbInlineOnSendHandler(u)
 		return nil
 	}
 
-	req, _ := http.NewRequest("GET", "http://localhost:5000/get_track/"+i.ID, nil)
+	req, _ := http.NewRequest("GET", "http://localhost:5000/get_track/"+u.ID, nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil
@@ -211,7 +214,7 @@ func SpotifyInlineHandler(u telegram.Update, c *telegram.Client) error {
 	}
 
 	if response.CDNURL == "" || response.Key == "" {
-		c.EditMessage(&i.MsgID, 0, "Spotify song not found.")
+		u.Edit("Spotify song not found.")
 		return nil
 	}
 
@@ -236,9 +239,12 @@ func SpotifyInlineHandler(u telegram.Update, c *telegram.Client) error {
 
 	rebuildOgg("song.ogg")
 	fixedFile, thumb, err := RepairOGG("song.ogg", response)
+	if err != nil {
+		return nil
+	}
 
 	defer os.Remove(fixedFile)
-	c.EditMessage(&i.MsgID, 0, "<b>Decryption Time: <code>"+decryptTime+"</code></b>", &telegram.SendOptions{
+	u.Edit("<b>Decryption Time: <code>"+decryptTime+"</code></b>", &telegram.SendOptions{
 		Media:    fixedFile,
 		MimeType: "audio/mpeg",
 		Attributes: []telegram.DocumentAttribute{
@@ -250,7 +256,7 @@ func SpotifyInlineHandler(u telegram.Update, c *telegram.Client) error {
 				Performer: response.Aritst,
 			},
 		},
-		ProgressManager: telegram.NewProgressManager(3).SetInlineMessage(c, &i.MsgID),
+		ProgressManager: telegram.NewProgressManager(3).SetInlineMessage(u.Client, &u.MsgID),
 		Thumb:           thumb,
 		Spoiler:         true,
 		ReplyMarkup: telegram.NewKeyboard().AddRow(

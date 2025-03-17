@@ -14,6 +14,7 @@ type SearchResult struct {
 	IMDBID string `json:"imdb_id"`
 	Title  string `json:"title"`
 	Year   string `json:"year"`
+	Poster string `json:"poster"`
 }
 
 func SearchIMDB(query string) ([]SearchResult, error) {
@@ -42,11 +43,16 @@ func SearchIMDB(query string) ([]SearchResult, error) {
 		imdbID = strings.Split(strings.TrimPrefix(imdbID, "/title/"), "/")[0]
 		title := s.Find("h3.ipc-title__text").Text()
 		meta := s.Find("span.dli-title-metadata-item")
+
+		posters := s.Find("img.ipc-image").AttrOr("src", "")
+		if posters != "" {
+			posters = strings.Split(posters, "@._V")[0] + "@._V1_.jpg"
+		}
 		if meta.Length() == 0 {
 			return
 		}
 		year := meta.First().Text()
-		results = append(results, SearchResult{IMDBID: imdbID, Title: title, Year: year})
+		results = append(results, SearchResult{IMDBID: imdbID, Title: title, Year: year, Poster: posters})
 	})
 
 	return results, nil
@@ -283,6 +289,66 @@ func FormatIMDBDataToHTML(data *IMDBTitle) string {
 	return sb.String()
 }
 
+func ImDBInlineSearchHandler(m *tg.InlineQuery) error {
+	b := m.Builder()
+	if m.Args() == "" {
+		b.Article("No query", "Please enter a query to search for", "No query", &tg.ArticleOptions{
+			ReplyMarkup: tg.Button.Keyboard(
+				tg.Button.Row(
+					tg.Button.SwitchInline("Search!!!", true, "imdb "),
+				),
+			),
+		})
+		m.Answer(b.Results())
+		return nil
+	}
+
+	results, err := SearchIMDB(m.Args())
+	if err != nil {
+		b.Article("Error", "Failed to fetch IMDb search results", "Error", &tg.ArticleOptions{
+			ReplyMarkup: tg.Button.Keyboard(
+				tg.Button.Row(
+					tg.Button.SwitchInline("Search again", true, "imdb "),
+				),
+			),
+		})
+		m.Answer(b.Results())
+		return err
+	}
+
+	if len(results) == 0 {
+		b.Article("No results found", "No results found for the query", "No results found", &tg.ArticleOptions{
+			ReplyMarkup: tg.Button.Keyboard(
+				tg.Button.Row(
+					tg.Button.SwitchInline("Search again", true, "imdb "),
+				),
+			),
+		})
+		m.Answer(b.Results())
+		return nil
+	}
+
+	for i, result := range results {
+		if i >= 5 {
+			break
+		}
+		b.Photo(result.Poster, &tg.ArticleOptions{
+			Title: fmt.Sprintf("%s (%s)", result.Title, result.Year),
+			ID:    result.IMDBID,
+			ReplyMarkup: tg.Button.Keyboard(
+				tg.Button.Row(
+					tg.Button.SwitchInline("Search again", true, "imdb "),
+				),
+			),
+		})
+	}
+
+	m.Answer(b.Results(), tg.InlineSendOptions{
+		Gallery: true,
+	})
+	return nil
+}
+
 func ImdbHandler(m *tg.NewMessage) error {
 	if m.Args() == "" {
 		m.Reply("Please provide a search query.")
@@ -336,6 +402,32 @@ func ImdbHandler(m *tg.NewMessage) error {
 			ReplyMarkup: kyb.Build(),
 		})
 		return nil
+	}
+
+	return nil
+}
+
+func ImdbInlineOnSendHandler(u *tg.InlineSend) error {
+	titleId := u.ID
+	data, err := GetIMDBTitle(titleId)
+	if err != nil {
+		return err
+	}
+
+	if data.Poster != "" {
+		u.Edit(FormatIMDBDataToHTML(data), &tg.SendOptions{
+			Media:   data.Poster,
+			Spoiler: true,
+			ReplyMarkup: tg.NewKeyboard().AddRow(
+				tg.Button.URL("🔗 IMDb Link", fmt.Sprintf("https://www.imdb.com/title/%s/", titleId)),
+			).Build(),
+		})
+	} else {
+		u.Edit(FormatIMDBDataToHTML(data), &tg.SendOptions{
+			ReplyMarkup: tg.NewKeyboard().AddRow(
+				tg.Button.URL("🔗 IMDb Link", fmt.Sprintf("https://www.imdb.com/title/%s/", titleId)),
+			).Build(),
+		})
 	}
 
 	return nil

@@ -15,10 +15,7 @@ func FilterOwner(m *telegram.NewMessage) bool {
 }
 
 func FilterOwnerNoReply(m *telegram.NewMessage) bool {
-	if m.SenderID() == ownerId {
-		return true
-	}
-	return false
+	return m.SenderID() == ownerId
 }
 
 func initFunc(c *telegram.Client) {
@@ -54,9 +51,9 @@ func initFunc(c *telegram.Client) {
 
 		c.On("message:/stream", modules.StreamHandler)
 
-		c.AddRawHandler(&telegram.UpdateBotInlineSend{}, modules.SpotifyInlineHandler)
-		//c.AddInlineHandler(telegram.OnInlineQuery, modules.SpotifyInlineSearch)
+		//c.AddRawHandler(&telegram.UpdateBotInlineSend{}, modules.SpotifyInlineHandler)
 		c.On(telegram.OnInline, modules.SpotifyInlineSearch)
+		c.On(telegram.OnChoosenInline, modules.SpotifyInlineHandler)
 
 		c.On("command:paste", modules.PasteBinHandler)
 		c.On("command:timer", modules.SetTimerHandler)
@@ -80,6 +77,11 @@ func initFunc(c *telegram.Client) {
 		c.On("message:/mirror", modules.MirrorFileHandler)
 
 		c.On("message:/setpfp", modules.SetBotPfpHandler, telegram.FilterFunc(FilterOwner))
+
+		c.On("message:/media", modules.MediaInfoHandler)
+		c.On("message:/imdb", modules.ImdbHandler)
+		c.On("inline:imdb", modules.ImDBInlineSearchHandler)
+		c.On("callback:imdb_(.*)_(.*)", modules.ImdbCallbackHandler)
 
 		c.On(telegram.OnNewMessage, modules.AFKHandler)
 

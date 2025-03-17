@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/amarnathcjd/gogram/telegram"
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
@@ -41,8 +40,7 @@ func StreamHandler(m *tg.NewMessage) error {
 	return nil
 }
 
-func Stream(m *telegram.NewMessage) {
-	fmt.Println("Starting real-time streaming...")
+func Stream(m *tg.NewMessage) {
 	var chunkSize int64 = 1024 * 1024
 	fileSize := m.File.Size
 
