@@ -156,5 +156,7 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 	}
 
 	m.RespondMedia(fi, opt)
+	defer os.Remove(fn)
+	defer msg.Delete()
 	return nil
 }
