@@ -395,7 +395,7 @@ func ImDBInlineSearchHandler(m *tg.InlineQuery) error {
 	}
 
 	m.Answer(b.Results(), tg.InlineSendOptions{
-		Gallery: true,
+		Gallery: false,
 	})
 	return nil
 }
