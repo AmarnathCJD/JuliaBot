@@ -381,16 +381,25 @@ func ImDBInlineSearchHandler(m *tg.InlineQuery) error {
 		if i >= 10 {
 			break
 		}
-		b.Document(result.Poster, &tg.ArticleOptions{
-			Title: fmt.Sprintf("%d. %s", i, result.Title),
-			Description: result.Year,
-			ID:    result.IMDBID,
+		b.Article(fmt.Sprintf("%d. %s", i, result.Title), result.Year, result.IMDBID, &tg.ArticleOptions{
+			ID:            result.IMDBID,
 			ForceDocument: true,
 			ReplyMarkup: tg.Button.Keyboard(
 				tg.Button.Row(
 					tg.Button.SwitchInline("Search again", true, "imdb "),
 				),
 			),
+			Thumb: tg.InputWebDocument{
+				URL: result.Poster,
+				Attributes: []tg.DocumentAttribute{
+					&tg.DocumentAttributeImageSize{
+						W: 100,
+						H: 100,
+					},
+				},
+				Size:     100,
+				MimeType: "image/jpeg",
+			},
 		})
 	}
 

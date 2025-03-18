@@ -242,9 +242,9 @@ func ColorizeHandler(m *telegram.NewMessage) error {
 	}
 
 	msg, _ := m.Reply("Colorizing...")
-	defer msg.Delete()
 
 	fi, err := r.Download()
+	defer os.Remove(fi)
 	if err != nil {
 		m.Reply("Error: " + err.Error())
 		return nil
@@ -271,6 +271,300 @@ func ColorizeHandler(m *telegram.NewMessage) error {
 	part, _ := writer.CreateFormFile("image", fi)
 	file, _ := os.Open(fi)
 	io.Copy(part, file)
+	writer.Close()
+
+	req, _ := http.NewRequest("POST", url, body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Api-Key", os.Getenv("DEEP_AI_API_KEY"))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	defer resp.Body.Close()
+	var b struct {
+		OutputURL string `json:"output_url"`
+	}
+
+	json.NewDecoder(resp.Body).Decode(&b)
+	if b.OutputURL == "" {
+		m.Reply("Error: Failed to colorize image")
+		return nil
+	}
+
+	if ogEXT != "jpg" && ogEXT != "jpeg" {
+		resp, err := http.Get(b.OutputURL)
+		if err != nil {
+			m.Reply("Error: " + err.Error())
+			return nil
+		}
+
+		defer resp.Body.Close()
+		// convert back to original format
+		out := fmt.Sprintf("colorize_%d.%s", time.Now().Unix(), ogEXT)
+		f, _ := os.Create(out)
+		io.Copy(f, resp.Body)
+		defer f.Close()
+
+		defer os.Remove(out)
+		msg.Edit("", telegram.SendOptions{
+			Media: out,
+		})
+	} else {
+		if _, err := msg.Edit("", telegram.SendOptions{Media: b.OutputURL}); err != nil {
+			msg.Edit("Colorized image: " + b.OutputURL)
+		}
+	}
+	return nil
+}
+
+func UpscaleHandler(m *telegram.NewMessage) error {
+	if !m.IsReply() {
+		m.Reply("Reply to a message to upscale it")
+		return nil
+	}
+
+	r, err := m.GetReplyMessage()
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+	if !r.IsMedia() {
+		m.Reply("Reply to an image to upscale it")
+		return nil
+	}
+
+	url := "https://api.deepai.org/api/torch-srgan"
+	ms := "Upscaling..."
+	if strings.Contains(m.Args(), "-c") {
+		url = "https://api.deepai.org/api/creative-upscale"
+		ms = "Creative Upscaling..."
+	}
+
+	msg, _ := m.Reply(ms)
+	defer msg.Delete()
+
+	fi, err := r.Download()
+	defer os.Remove(fi)
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	ogEXT := strings.ToLower(fi[strings.LastIndex(fi, ".")+1:])
+	if ogEXT != "jpg" && ogEXT != "jpeg" {
+		out := fmt.Sprintf("colorize_%d.jpg", time.Now().Unix())
+		cmd := exec.Command("ffmpeg", "-i", fi, out)
+		if err := cmd.Run(); err != nil {
+			m.Reply("Error: " + err.Error())
+			return nil
+		}
+		defer os.Remove(out)
+		fi = out
+	}
+
+	defer os.Remove(fi)
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("image", fi)
+	file, _ := os.Open(fi)
+	io.Copy(part, file)
+	writer.Close()
+
+	req, _ := http.NewRequest("POST", url, body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Api-Key", os.Getenv("DEEP_AI_API_KEY"))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	defer resp.Body.Close()
+	var b struct {
+		OutputURL string `json:"output_url"`
+	}
+
+	json.NewDecoder(resp.Body).Decode(&b)
+	if b.OutputURL == "" {
+		m.Reply("Error: Failed to upscale image")
+		return nil
+	}
+
+	if ogEXT != "jpg" && ogEXT != "jpeg" {
+		resp, err := http.Get(b.OutputURL)
+		if err != nil {
+			m.Reply("Error: " + err.Error())
+			return nil
+		}
+
+		defer resp.Body.Close()
+		// convert back to original format
+		out := fmt.Sprintf("colorize_%d.%s", time.Now().Unix(), ogEXT)
+		f, _ := os.Create(out)
+		io.Copy(f, resp.Body)
+		defer f.Close()
+
+		defer os.Remove(out)
+		m.ReplyMedia(out)
+	} else {
+		if _, err := m.ReplyMedia(b.OutputURL); err != nil {
+			m.Reply("Upscaled image: " + b.OutputURL)
+		}
+	}
+	return nil
+}
+
+func ExpandHandler(m *telegram.NewMessage) error {
+	if !m.IsReply() {
+		m.Reply("Reply to a message to expand it")
+		return nil
+	}
+
+	r, err := m.GetReplyMessage()
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+	if !r.IsMedia() {
+		m.Reply("Reply to an image to expand it")
+		return nil
+	}
+
+	msg, _ := m.Reply("Expanding...")
+	defer msg.Delete()
+
+	fi, err := r.Download()
+	defer os.Remove(fi)
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	ogEXT := strings.ToLower(fi[strings.LastIndex(fi, ".")+1:])
+	if ogEXT != "jpg" && ogEXT != "jpeg" {
+		out := fmt.Sprintf("colorize_%d.jpg", time.Now().Unix())
+		cmd := exec.Command("ffmpeg", "-i", fi, out)
+		if err := cmd.Run(); err != nil {
+			m.Reply("Error: " + err.Error())
+			return nil
+		}
+		defer os.Remove(out)
+		fi = out
+	}
+
+	defer os.Remove(fi)
+
+	url := "https://api.deepai.org/api/zoom-out"
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("image", fi)
+	file, _ := os.Open(fi)
+	io.Copy(part, file)
+	writer.Close()
+
+	req, _ := http.NewRequest("POST", url, body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Api-Key", os.Getenv("DEEP_AI_API_KEY"))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	defer resp.Body.Close()
+	var b struct {
+		OutputURL string `json:"output_url"`
+	}
+
+	json.NewDecoder(resp.Body).Decode(&b)
+	if b.OutputURL == "" {
+		m.Reply("Error: Failed to expand image")
+		return nil
+	}
+
+	if ogEXT != "jpg" && ogEXT != "jpeg" {
+		resp, err := http.Get(b.OutputURL)
+		if err != nil {
+			m.Reply("Error: " + err.Error())
+			return nil
+		}
+
+		defer resp.Body.Close()
+		// convert back to original format
+		out := fmt.Sprintf("colorize_%d.%s", time.Now().Unix(), ogEXT)
+		f, _ := os.Create(out)
+		io.Copy(f, resp.Body)
+		defer f.Close()
+
+		defer os.Remove(out)
+		m.ReplyMedia(out)
+	} else {
+		if _, err := m.ReplyMedia(b.OutputURL); err != nil {
+			m.Reply("Expanded image: " + b.OutputURL)
+		}
+	}
+	return nil
+}
+
+func ReplaceHandler(m *telegram.NewMessage) error {
+	if !m.IsReply() {
+		m.Reply("Reply to a message to expand it")
+		return nil
+	}
+
+	r, err := m.GetReplyMessage()
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+	if !r.IsMedia() {
+		m.Reply("Reply to an image to expand it")
+		return nil
+	}
+
+	msg, _ := m.Reply("Expanding...")
+	defer msg.Delete()
+
+	fi, err := r.Download()
+	defer os.Remove(fi)
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	ogEXT := strings.ToLower(fi[strings.LastIndex(fi, ".")+1:])
+	if ogEXT != "jpg" && ogEXT != "jpeg" {
+		out := fmt.Sprintf("colorize_%d.jpg", time.Now().Unix())
+		cmd := exec.Command("ffmpeg", "-i", fi, out)
+		if err := cmd.Run(); err != nil {
+			m.Reply("Error: " + err.Error())
+			return nil
+		}
+		defer os.Remove(out)
+		fi = out
+	}
+
+	defer os.Remove(fi)
+
+	url := "https://api.deepai.org/api/image-editor"
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("image", fi)
+	file, _ := os.Open(fi)
+	io.Copy(part, file)
+	txt, _ := writer.CreateFormField("text")
+	txt.Write([]byte(m.Args()))
 	writer.Close()
 
 	req, _ := http.NewRequest("POST", url, body)
