@@ -83,6 +83,8 @@ func initFunc(c *telegram.Client) {
 		c.On("inline:imdb", modules.ImDBInlineSearchHandler)
 		c.On("callback:imdb_(.*)_(.*)", modules.ImdbCallbackHandler)
 
+		c.On("message:/color", modules.ColorizeHandler)
+
 		c.On(telegram.OnNewMessage, modules.AFKHandler)
 
 		modules.Mods.Init(c)

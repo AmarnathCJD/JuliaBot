@@ -9,7 +9,9 @@ import (
 	"math/rand"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -188,23 +190,22 @@ func GbanMeme(m *telegram.NewMessage) error {
 
 func mathQuery(query string) (string, error) {
 	c := &http.Client{}
-	url := "https://evaluate-expression.p.rapidapi.com"
+	url := "https://evaluate-expression.p.rapidapi.com/?expression=" + url.QueryEscape(query)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Add("x-rapidapi-host", "evaluate-expression.p.rapidapi.com")
 	req.Header.Add("x-rapidapi-key", "cf9e67ea99mshecc7e1ddb8e93d1p1b9e04jsn3f1bb9103c3f")
-	_query := req.URL.Query()
-	_query.Add("expression", query)
-	req.URL.RawQuery = _query.Encode()
-	resp, _ := c.Do(req)
-
-	defer resp.Body.Close()
-	var b interface{}
-	json.NewDecoder(resp.Body).Decode(&b)
-	if b == nil {
-		return "", fmt.Errorf("invalid mathematical expression")
+	resp, err := c.Do(req)
+	if err != nil {
+		return "", err
 	}
 
-	return fmt.Sprint(b), nil
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) == "" {
+		return "", fmt.Errorf("Invalid Math Expression")
+	}
+
+	return string(body), nil
 }
 
 func MathHandler(m *telegram.NewMessage) error {
@@ -221,5 +222,99 @@ func MathHandler(m *telegram.NewMessage) error {
 	}
 
 	m.Reply(fmt.Sprintf("Evaluated: <code>%s</code>", result))
+	return nil
+}
+
+func ColorizeHandler(m *telegram.NewMessage) error {
+	if !m.IsReply() {
+		m.Reply("Reply to a message to colorize it")
+		return nil
+	}
+
+	r, err := m.GetReplyMessage()
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+	if !r.IsMedia() {
+		m.Reply("Reply to an image to colorize it")
+		return nil
+	}
+
+	msg, _ := m.Reply("Colorizing...")
+	defer msg.Delete()
+
+	fi, err := r.Download()
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	ogEXT := strings.ToLower(fi[strings.LastIndex(fi, ".")+1:])
+	if ogEXT != "jpg" && ogEXT != "jpeg" {
+		out := fmt.Sprintf("colorize_%d.jpg", time.Now().Unix())
+		cmd := exec.Command("ffmpeg", "-i", fi, out)
+		if err := cmd.Run(); err != nil {
+			m.Reply("Error: " + err.Error())
+			return nil
+		}
+		defer os.Remove(out)
+		fi = out
+	}
+
+	defer os.Remove(fi)
+
+	url := "https://api.deepai.org/api/colorizer"
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("image", fi)
+	file, _ := os.Open(fi)
+	io.Copy(part, file)
+	writer.Close()
+
+	req, _ := http.NewRequest("POST", url, body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Api-Key", os.Getenv("DEEP_AI_API_KEY"))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	defer resp.Body.Close()
+	var b struct {
+		OutputURL string `json:"output_url"`
+	}
+
+	json.NewDecoder(resp.Body).Decode(&b)
+	if b.OutputURL == "" {
+		m.Reply("Error: Failed to colorize image")
+		return nil
+	}
+
+	if ogEXT != "jpg" && ogEXT != "jpeg" {
+		resp, err := http.Get(b.OutputURL)
+		if err != nil {
+			m.Reply("Error: " + err.Error())
+			return nil
+		}
+
+		defer resp.Body.Close()
+		// convert back to original format
+		out := fmt.Sprintf("colorize_%d.%s", time.Now().Unix(), ogEXT)
+		f, _ := os.Create(out)
+		io.Copy(f, resp.Body)
+		defer f.Close()
+
+		defer os.Remove(out)
+		m.ReplyMedia(out)
+	} else {
+		if _, err := m.ReplyMedia(b.OutputURL); err != nil {
+			m.Reply("Colorized image: " + b.OutputURL)
+		}
+	}
 	return nil
 }
