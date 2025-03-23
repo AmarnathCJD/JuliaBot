@@ -387,6 +387,8 @@ func UpscaleHandler(m *telegram.NewMessage) error {
 	}
 
 	defer resp.Body.Close()
+	bx, _ := io.ReadAll(resp.Body)
+	fmt.Println(string(bx))
 	var b struct {
 		OutputURL string `json:"output_url"`
 	}
@@ -482,13 +484,14 @@ func ExpandHandler(m *telegram.NewMessage) error {
 	}
 
 	defer resp.Body.Close()
+
 	var b struct {
 		OutputURL string `json:"output_url"`
 	}
 
 	json.NewDecoder(resp.Body).Decode(&b)
 	if b.OutputURL == "" {
-		m.Reply("Error: Failed to expand image")
+		m.Reply("Nuhuh: Emror")
 		return nil
 	}
 
@@ -610,5 +613,33 @@ func ReplaceHandler(m *telegram.NewMessage) error {
 			m.Reply("Colorized image: " + b.OutputURL)
 		}
 	}
+	return nil
+}
+
+func AIHandler(m *telegram.NewMessage) error {
+	args := m.Text()
+	if args == "" || strings.HasPrefix(args, "/") {
+		return nil
+	}
+	r, err := m.GetReplyMessage()
+	if err != nil {
+		return nil
+	}
+
+	if r.Sender.ID != m.Client.Me().ID {
+		return nil
+	}
+
+	action, _ := m.SendAction("typing")
+	defer action.Cancel()
+
+	resp, err := http.Get("http://localhost:5000/chat?text=" + url.QueryEscape(args))
+	if err != nil {
+		return nil
+	}
+
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	m.Reply(string(body))
 	return nil
 }

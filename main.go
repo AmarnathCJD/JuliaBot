@@ -33,7 +33,7 @@ func main() {
 	client, err := tg.NewClient(tg.ClientConfig{
 		AppID:   int32(appId),
 		AppHash: os.Getenv("APP_HASH"),
-		Session: "user.session",
+		Session: "rusty.dat",
 		Logger: tg.NewLogger(
 			tg.LogInfo,
 		).NoColor(),
