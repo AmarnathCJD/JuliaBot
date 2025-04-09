@@ -140,7 +140,7 @@ func UserHandle(m *telegram.NewMessage) error {
 	}
 	userString += "<b>Is Bot:</b> " + fmt.Sprintf("%t", un.Bot) + "\n"
 	if un.Verified {
-		userString += "<b>Is Verified:</b> ✅"
+		userString += "<b>Is Verified:</b> ✅\n"
 	}
 	userString += "<b>Data Center:</b> {{dcId}}\n"
 	if un.Username != "" {
