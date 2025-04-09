@@ -139,6 +139,9 @@ func UserHandle(m *telegram.NewMessage) error {
 		userString += "<b>Last Name:</b> " + un.LastName + "\n"
 	}
 	userString += "<b>Is Bot:</b> " + fmt.Sprintf("%t", un.Bot) + "\n"
+	if un.Verified {
+		userString += "<b>Is Verified:</b> ✅"
+	}
 	userString += "<b>Data Center:</b> {{dcId}}\n"
 	if un.Username != "" {
 		userString += "<b>Username:</b> @" + un.Username + "\n"
@@ -155,6 +158,7 @@ func UserHandle(m *telegram.NewMessage) error {
 			return s
 		}() + "</b>]\n"
 	}
+	
 	userString += "<b>User Link:</b> <a href=\"tg://user?id=" + strconv.FormatInt(un.ID, 10) + "\">userLink</a>\n<b>User-ID:</b> <code>" + strconv.FormatInt(un.ID, 10) + "</code>\n"
 	if uf.Birthday != nil {
 		userString += "\n<b>Birthday:</b> " + parseBirthday(uf.Birthday.Day, uf.Birthday.Month, uf.Birthday.Year)
