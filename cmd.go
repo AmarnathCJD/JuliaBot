@@ -88,7 +88,7 @@ func initFunc(c *telegram.Client) {
 		// c.On("message:/expand", modules.ExpandHandler)
 		// c.On("message:/edit", modules.ReplaceHandler)
 
-		c.On(telegram.OnNewMessage, modules.AIHandler)
+		//c.On(telegram.OnNewMessage, modules.AIHandler)
 
 		c.On(telegram.OnNewMessage, modules.AFKHandler)
 
