@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -21,7 +20,7 @@ var startTimeStamp = time.Now().Unix()
 var ownerId int64 = 0
 
 func main() {
-	logZap, _ := os.Create(fmt.Sprintf("log_%d.log", startTimeStamp))
+	logZap, _ := os.Create("log.log")
 	defer logZap.Close()
 	wr := io.MultiWriter(os.Stdout, logZap)
 	log.SetOutput(wr)
@@ -46,12 +45,12 @@ func main() {
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 	client.Logger.Info("Bot is running...")
 	initFunc(client)
-	me, err := client.GetMe()
+	//me, err := client.GetMe()
 
 	if err != nil {
 		panic(err)
 	}
 
-	client.Logger.Info(fmt.Sprintf("Authenticated as -> @%s, in %s.", me.Username, time.Since(time.Unix(startTimeStamp, 0)).String()))
+	//client.Logger.Info(fmt.Sprintf("Authenticated as -> @%s, in %s.", me.Username, time.Since(time.Unix(startTimeStamp, 0)).String()))
 	client.Idle()
 }

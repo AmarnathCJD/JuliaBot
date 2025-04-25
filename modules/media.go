@@ -49,6 +49,8 @@ func SetThumbHandler(m *telegram.NewMessage) error {
 		return nil
 	}
 
+	m.Reply("Thumbnail set successfully!!")
+
 	if m.Args() != "" {
 		width := m.Args()
 		wid, _ := strconv.Atoi(width)
@@ -65,8 +67,6 @@ func SetThumbHandler(m *telegram.NewMessage) error {
 		os.Remove("thumb.jpg")
 		os.Rename(thumb, "thumb.jpg")
 	}
-
-	m.Reply("Thumbnail set successfully")
 	return nil
 }
 
