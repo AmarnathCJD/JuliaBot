@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"time"
 
 	tg "github.com/amarnathcjd/gogram/telegram"
 	dotenv "github.com/joho/godotenv"
@@ -14,43 +13,46 @@ import (
 	_ "net/http/pprof"
 )
 
-const LOAD_MODULES = true
+func init() {
+	dotenv.Load()
+}
 
-var startTimeStamp = time.Now().Unix()
 var ownerId int64 = 0
+var LOAD_MODULES = os.Getenv("ENV") != "development"
 
 func main() {
-	logZap, _ := os.Create("log.log")
+	// ;logging setup
+	logZap, err := os.OpenFile("log.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	defer logZap.Close()
 	wr := io.MultiWriter(os.Stdout, logZap)
 	log.SetOutput(wr)
 
-	dotenv.Load()
 	appId, _ := strconv.Atoi(os.Getenv("APP_ID"))
 	ownerId, _ = strconv.ParseInt(os.Getenv("OWNER_ID"), 10, 64)
+	var sessionName = "rusty.dat"
+	if os.Getenv("SESSION_NAME") != "" {
+		sessionName = os.Getenv("SESSION_NAME")
+	}
 
-	client, err := tg.NewClient(tg.ClientConfig{
-		AppID:   int32(appId),
-		AppHash: os.Getenv("APP_HASH"),
-		Session: "rusty.dat",
-		Logger: tg.NewLogger(
-			tg.LogInfo,
-		).NoColor(),
-	})
+	cfg := tg.NewClientConfigBuilder(int32(appId), os.Getenv("APP_HASH")).
+		WithSession(sessionName).
+		WithLogger(tg.NewLogger(tg.LogInfo).NoColor()).
+		Build()
+
+	client, err := tg.NewClient(cfg)
 
 	if err != nil {
 		panic(err)
 	}
 	client.Conn()
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
-	client.Logger.Info("Bot is running...")
+	client.Logger.Info("Bot is running..., Press Ctrl+C to stop it.")
+
 	initFunc(client)
-	//me, err := client.GetMe()
 
-	if err != nil {
-		panic(err)
-	}
-
-	//client.Logger.Info(fmt.Sprintf("Authenticated as -> @%s, in %s.", me.Username, time.Since(time.Unix(startTimeStamp, 0)).String()))
 	client.Idle()
 }

@@ -22,6 +22,12 @@ func initFunc(c *telegram.Client) {
 	c.UpdatesGetState()
 
 	if LOAD_MODULES {
+		// adminCMD
+		c.On("message:/rspot", modules.RestartSpotify, telegram.FilterFunc(FilterOwner))
+		c.On("message:/rproxy", modules.RestartProxy, telegram.FilterFunc(FilterOwner))
+		c.On("message:/promote", modules.PromoteUserHandle)
+		c.On("message:/restart", modules.RestartHandle, telegram.FilterFunc(FilterOwner))
+
 		c.On("message:/mz", modules.YtSongDL)
 		c.On("message:/spot(:?ify)? (.*)", modules.SpotifyHandler)
 		c.On("message:/spots", modules.SpotifySearchHandler)

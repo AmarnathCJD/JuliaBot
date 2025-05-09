@@ -158,7 +158,7 @@ func UserHandle(m *telegram.NewMessage) error {
 			return s
 		}() + "</b>]\n"
 	}
-	
+
 	userString += "<b>User Link:</b> <a href=\"tg://user?id=" + strconv.FormatInt(un.ID, 10) + "\">userLink</a>\n<b>User-ID:</b> <code>" + strconv.FormatInt(un.ID, 10) + "</code>\n"
 	if uf.Birthday != nil {
 		userString += "\n<b>Birthday:</b> " + parseBirthday(uf.Birthday.Day, uf.Birthday.Month, uf.Birthday.Year)
@@ -263,7 +263,7 @@ func UserHandle(m *telegram.NewMessage) error {
 func PingHandle(m *telegram.NewMessage) error {
 	startTime := time.Now()
 	sentMessage, _ := m.Reply("Pinging...")
-	_, err := sentMessage.Edit(fmt.Sprintf("<code>Pong!</code> <code>%s</code>", time.Since(startTime).String()))
+	_, err := sentMessage.Edit(fmt.Sprintf("<code>Pong!</code> <code>%s</code>\n<code>Uptime ⚡ </code><b>%s</b>", time.Since(startTime).String(), time.Since(startTime).String()))
 	return err
 }
 

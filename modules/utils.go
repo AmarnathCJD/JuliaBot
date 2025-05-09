@@ -49,11 +49,9 @@ func UpdateSourceCodeHandle(m *telegram.NewMessage) error {
 	msg, _ := m.Reply("<code>Updating source code...</code>")
 	defer msg.Delete()
 
-	processID := os.Getpid()
 	exec.Command("git", "pull").Run()
-	exec.Command("setsid", "go", "run", ".").Start()
+	exec.Command("bash", "-c", selfRestartCMD).Run()
 	msg.Edit("<code>Restarted successfully.</code>")
-	exec.Command("kill", "-9", strconv.Itoa(processID)).Run()
 
 	return nil
 }
@@ -87,6 +85,9 @@ func gatherSystemInfo() (*SystemInfo, error) {
 	}
 
 	cpuInfo, err := cpu.Info()
+	if err != nil {
+		return nil, err
+	}
 
 	processMemory := HumanBytes(memr.RSS)
 	cpuPercentStr := strconv.FormatFloat(cpuPercent[0], 'f', 2, 64) + "%"
@@ -100,6 +101,9 @@ func gatherSystemInfo() (*SystemInfo, error) {
 	memTotal := HumanBytes(memInfo.Total)
 
 	diskInfo, err := disk.Usage("/")
+	if err != nil {
+		return nil, err
+	}
 
 	return &SystemInfo{
 		NumGoroutines: runtime.NumGoroutine(),

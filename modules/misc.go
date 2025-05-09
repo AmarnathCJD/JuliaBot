@@ -71,7 +71,7 @@ func PasteBinHandler(m *telegram.NewMessage) error {
 	var (
 		url      string
 		provider string
-		//err      error
+		err      error
 	)
 	if isKatBin {
 		url, provider, err = postToKatBin(content)

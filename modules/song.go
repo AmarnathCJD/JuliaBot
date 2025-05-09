@@ -68,7 +68,7 @@ func YtVideoDL(m *telegram.NewMessage) error {
 			message := fmt.Sprintf(text, *update.Info.Title, size, eta, speed, progressbar, percent)
 			msg.Edit(message)
 		}).
-		Proxy("http://127.0.0.1:8001").
+		Proxy("http://rose:0000@127.0.0.1:8001").
 		NoWarnings()
 
 	_, err := dl.Run(context.TODO(), args)
