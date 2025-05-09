@@ -260,10 +260,12 @@ func UserHandle(m *telegram.NewMessage) error {
 	return nil
 }
 
+var st = time.Now()
+
 func PingHandle(m *telegram.NewMessage) error {
 	startTime := time.Now()
 	sentMessage, _ := m.Reply("Pinging...")
-	_, err := sentMessage.Edit(fmt.Sprintf("<code>Pong!</code> <code>%s</code>\n<code>Uptime ⚡ </code><b>%s</b>", time.Since(startTime).String(), time.Since(startTime).String()))
+	_, err := sentMessage.Edit(fmt.Sprintf("<code>Pong!</code> <code>%s</code>\n<code>Uptime ⚡ </code><b>%s</b>", time.Since(startTime).String(), time.Since(st).String()))
 	return err
 }
 
