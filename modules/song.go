@@ -28,8 +28,8 @@ func YtVideoDL(m *telegram.NewMessage) error {
 	msg, _ := m.Reply("Downloading video...")
 
 	dl := yt.New().
-		FormatSort("res,ext:mp4:m4a").
-		Format("(bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a])/best").
+		FormatSort("res:1080,tbr").
+		Format("bv+ba/b").
 		NoWarnings().
 		RecodeVideo("mp4").
 		Output("yt-video.mp4").
