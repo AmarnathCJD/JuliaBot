@@ -33,6 +33,8 @@ func YtVideoDL(m *telegram.NewMessage) error {
 		NoWarnings().
 		RecodeVideo("mp4").
 		Output("yt-video.mp4").
+		Downloader("aria2c").
+		DownloaderArgs("--console-log-level=warn --max-connection-per-server=16 --split=16 --min-split-size=1M").
 		ProgressFunc(time.Second*7, func(update yt.ProgressUpdate) {
 			text := "<b>~ Downloading Youtube Video ~</b>\n\n"
 			text += "<b>📄 Name:</b> <code>%s</code>\n"
@@ -63,6 +65,10 @@ func YtVideoDL(m *telegram.NewMessage) error {
 				}
 			}()
 			percent := float64(update.DownloadedBytes) / float64(update.TotalBytes) * 100
+			if percent == 0 {
+				msg.Edit("Starting download...")
+				return
+			}
 
 			progressbar := strings.Repeat("■", int(percent/10)) + strings.Repeat("□", 10-int(percent/10))
 
