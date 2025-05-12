@@ -50,6 +50,7 @@ func initFunc(c *telegram.Client) {
 		c.On("message:/rproxy", modules.RestartProxy, telegram.FilterFunc(FilterOwnerAndAuth))
 		c.On("message:/promote", modules.PromoteUserHandle)
 		c.On("message:/restart", modules.RestartHandle, telegram.FilterFunc(FilterOwner))
+		c.On("message:/id", modules.IDHandle)
 
 		c.On("message:/mz", modules.YtSongDL)
 		c.On("message:/spot(:?ify)? (.*)", modules.SpotifyHandler)
