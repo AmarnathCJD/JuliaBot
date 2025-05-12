@@ -8,7 +8,7 @@ import (
 )
 
 func PromoteUserHandle(m *tg.NewMessage) error {
-	m.Reply("Umbikko Myre >>")
+	m.Reply("Umbikko Myre >> 1")
 	return nil
 }
 
