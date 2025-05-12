@@ -2,6 +2,9 @@ package main
 
 import (
 	"main/modules"
+	"os"
+	"strconv"
+	"strings"
 
 	"github.com/amarnathcjd/gogram/telegram"
 )
@@ -10,6 +13,26 @@ func FilterOwner(m *telegram.NewMessage) bool {
 	if m.SenderID() == ownerId {
 		return true
 	}
+	m.Reply("You are not allowed to use this command")
+	return false
+}
+
+func FilterOwnerAndAuth(m *telegram.NewMessage) bool {
+	auths := os.Getenv("AUTH_USERS")
+	if auths == "" {
+		return FilterOwner(m)
+	} else {
+		if m.SenderID() == ownerId {
+			return true
+		}
+		au := strings.Split(auths, ",")
+		for _, user := range au {
+			if strings.TrimSpace(user) == strconv.Itoa(int(m.SenderID())) {
+				return true
+			}
+		}
+	}
+
 	m.Reply("You are not allowed to use this command")
 	return false
 }
@@ -24,7 +47,7 @@ func initFunc(c *telegram.Client) {
 	if LOAD_MODULES {
 		// adminCMD
 		c.On("message:/rspot", modules.RestartSpotify, telegram.FilterFunc(FilterOwner))
-		c.On("message:/rproxy", modules.RestartProxy, telegram.FilterFunc(FilterOwner))
+		c.On("message:/rproxy", modules.RestartProxy, telegram.FilterFunc(FilterOwnerAndAuth))
 		c.On("message:/promote", modules.PromoteUserHandle)
 		c.On("message:/restart", modules.RestartHandle, telegram.FilterFunc(FilterOwner))
 

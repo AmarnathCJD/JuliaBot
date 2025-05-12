@@ -47,11 +47,11 @@ func tillDate(dat, month int32) string {
 
 func UpdateSourceCodeHandle(m *telegram.NewMessage) error {
 	msg, _ := m.Reply("<code>Updating source code...</code>")
-	defer msg.Delete()
+	defer msg.Edit("<code>Updated, restarting...</code>")
 
 	exec.Command("git", "pull").Run()
+	msg.Edit("<code>Synced with remote repo.</code>")
 	exec.Command("bash", "-c", selfRestartCMD).Run()
-	msg.Edit("<code>Restarted successfully.</code>")
 
 	return nil
 }
