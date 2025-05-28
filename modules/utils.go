@@ -50,8 +50,17 @@ func UpdateSourceCodeHandle(m *telegram.NewMessage) error {
 	defer msg.Edit("<code>Updated, restarting...</code>")
 
 	exec.Command("git", "pull").Run()
+
 	msg.Edit("<code>Synced with remote repo.</code>")
-	exec.Command("bash", "-c", selfRestartCMD).Run()
+	exec.Command("bash", "-c", selfRestartCMD).Start()
+	// get current pid and kill it
+	pid := os.Getpid()
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		msg.Edit("<code>Error while restarting: " + err.Error() + "</code>")
+		return err
+	}
+	process.Kill()
 
 	return nil
 }
