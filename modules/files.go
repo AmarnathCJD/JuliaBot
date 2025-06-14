@@ -66,7 +66,7 @@ func UploadHandle(m *telegram.NewMessage) error {
 	if _, err := m.RespondMedia(filename, telegram.MediaOptions{
 		Spoiler:         spoiler,
 		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
-		ForceDocument:   true,
+		ForceDocument:   strings.Contains(filename, "--doc"),
 	}); err != nil {
 		msg.Edit("Error: " + err.Error())
 		return nil
