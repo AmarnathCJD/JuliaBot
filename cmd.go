@@ -44,7 +44,7 @@ func FilterOwnerNoReply(m *telegram.NewMessage) bool {
 func initFunc(c *telegram.Client) {
 	c.UpdatesGetState()
 
-	if LOAD_MODULES {
+	if LoadModules {
 		// adminCMD
 		c.On("message:/rspot", modules.RestartSpotify, telegram.FilterFunc(FilterOwner))
 		c.On("message:/rproxy", modules.RestartProxy, telegram.FilterFunc(FilterOwnerAndAuth))

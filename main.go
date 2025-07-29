@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -18,10 +19,11 @@ func init() {
 }
 
 var ownerId int64 = 0
-var LOAD_MODULES = os.Getenv("ENV") != "development"
+var LoadModules = os.Getenv("ENV") != "development"
 
 func main() {
 	// ;logging setup
+	fmt.Println("Starting JuliaBot...")
 	logZap, err := os.OpenFile("log.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatal(err)
@@ -38,16 +40,35 @@ func main() {
 		sessionName = os.Getenv("SESSION_NAME")
 	}
 
+	fmt.Println("Session Name:", sessionName)
+
 	cfg := tg.NewClientConfigBuilder(int32(appId), os.Getenv("APP_HASH")).
 		WithSession(sessionName).
 		WithLogger(tg.NewLogger(tg.LogInfo).NoColor()).
 		Build()
 
 	client, err := tg.NewClient(cfg)
+	client.Start()
 
+	fmt.Println("Connecting to Telegram...")
+	fmt.Println(client.GetMe())
+	tk, err := client.AccountInitTakeoutSession(&tg.AccountInitTakeoutSessionParams{
+		MessageChats: true,
+	})
 	if err != nil {
 		panic(err)
 	}
+
+	req := &tg.ChannelsGetLeftChannelsParams{
+		Offset: 0,
+	}
+
+	resp, err := client.InvokeWithTakeout(int(tk.ID), req)
+
+	if err != nil {
+		panic("Error invoking with takeout: " + err.Error())
+	}
+	fmt.Println("Left Channels:", client.JSON(resp))
 	client.Conn()
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 	client.Logger.Info("Bot is running..., Press Ctrl+C to stop it.")
