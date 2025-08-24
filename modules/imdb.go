@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -191,7 +192,7 @@ func GetIMDBTitle(titleID string) (*IMDBTitle, error) {
 		languages += s.Text() + ", "
 	})
 	languages = strings.TrimSuffix(languages, ", ")
-	alsoKnownAs := doc.Find("li[data-testid=title-details-akas] a").Text()
+	alsoKnownAs := doc.Find("li[data-testid=title-details-akas] div").First().Text()
 	filmingLocations := ""
 	doc.Find("li[data-testid=title-details-filminglocations] a").Each(func(i int, s *goquery.Selection) {
 		filmingLocations += s.Text() + ", "
@@ -260,9 +261,22 @@ func getObjValue(obj map[string]any, key string) string {
 }
 
 func FormatIMDBDataToHTML(data *IMDBTitle) string {
+	parseYearFromString := func(s string) string {
+		re := regexp.MustCompile(`\((\d{4})\)`)
+		matches := re.FindStringSubmatch(s)
+		if len(matches) > 1 {
+			return matches[1]
+		}
+		return ""
+	}
+
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b><b>%s (%s)</b><br><br>", data.Title, data.ReleaseDate))
+	sb.WriteString(fmt.Sprintf("<b><b>%s (%s)</b><br><br>", data.Title, parseYearFromString(data.ReleaseDate)))
 	sb.WriteString("\n")
+	if data.ReleaseDate != "" {
+		sb.WriteString(fmt.Sprintf("📅 <b>Release Date:</b> %s<br>", data.ReleaseDate))
+		sb.WriteString("\n")
+	}
 	if data.MetaScore != "" {
 		sb.WriteString(fmt.Sprintf("🏆 <b>Metascore:</b> %s | Trailer: <a href='%s'>Trailer</a> | %s Rated", data.MetaScore, data.Trailer, data.ViewerClass))
 		sb.WriteString("\n")
@@ -312,7 +326,7 @@ func FormatIMDBDataToHTML(data *IMDBTitle) string {
 		sb.WriteString("\n")
 	}
 	if data.AlsoKnownAs != "" {
-		sb.WriteString(fmt.Sprintf("AKA: %s<br>", data.AlsoKnownAs))
+		sb.WriteString(fmt.Sprintf("©️ AKA: %s<br>", data.AlsoKnownAs))
 		sb.WriteString("\n")
 	}
 	if data.CountryOfOrigin != "" {

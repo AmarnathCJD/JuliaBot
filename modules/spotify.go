@@ -137,6 +137,7 @@ type SpotifySearchResponse struct {
 }
 
 func SpotifyInlineSearch(i *telegram.InlineQuery) error {
+	return nil // removed for now.
 	if strings.Contains(i.Query, "pin") || strings.Contains(i.Query, "doge") || strings.Contains(i.Query, "imdb") {
 		return nil
 	}
@@ -267,6 +268,8 @@ func SpotifyInlineHandler(u *telegram.InlineSend) error {
 }
 
 func SpotifySearchHandler(m *telegram.NewMessage) error {
+	m.Reply("<code>Disallowed, until further notice</code>")
+	return nil
 	args := m.Args()
 
 	if args == "" {

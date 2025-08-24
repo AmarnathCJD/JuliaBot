@@ -13,7 +13,7 @@ require (
 
 require (
 	github.com/ProtonMail/go-crypto v1.3.0 // indirect
-	github.com/amarnathcjd/gogram v1.6.2 // indirect
+	github.com/amarnathcjd/gogram v1.6.3-0.20250805174903-4e6de7f64a55 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/bogem/id3v2 v1.2.0 // indirect
 	github.com/cloudflare/circl v1.6.1 // indirect

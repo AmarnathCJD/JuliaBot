@@ -6,6 +6,12 @@ github.com/amarnathcjd/gogram v1.6.1 h1:7BQRoMM3tHDce1adYM0H7KkHbLj3B27/IFh39N6q
 github.com/amarnathcjd/gogram v1.6.1/go.mod h1:vZURSYiNYNPnZ70msOgmRmcVuku1P6ol2zIAHMM1CFY=
 github.com/amarnathcjd/gogram v1.6.2 h1:B6iV4HzdfXSWXG/+t3DGy0mpew+/ewuUhAuqjDk1WlU=
 github.com/amarnathcjd/gogram v1.6.2/go.mod h1:vZURSYiNYNPnZ70msOgmRmcVuku1P6ol2zIAHMM1CFY=
+github.com/amarnathcjd/gogram v1.6.3-0.20250804192054-56dcdc50771f h1:ioQwNB1SO4AiQsM8KNskWrAp4iSAGzbbiO1CDIIyLhA=
+github.com/amarnathcjd/gogram v1.6.3-0.20250804192054-56dcdc50771f/go.mod h1:vZURSYiNYNPnZ70msOgmRmcVuku1P6ol2zIAHMM1CFY=
+github.com/amarnathcjd/gogram v1.6.3-0.20250804195218-4dbef944a034 h1:/mYT6xHWzs4wSqLjHwTXXrSlV+hXi4aGNmjiFk9S+9c=
+github.com/amarnathcjd/gogram v1.6.3-0.20250804195218-4dbef944a034/go.mod h1:vZURSYiNYNPnZ70msOgmRmcVuku1P6ol2zIAHMM1CFY=
+github.com/amarnathcjd/gogram v1.6.3-0.20250805174903-4e6de7f64a55 h1:/0MH2hpsoAA02/sPeXuPPyIonmhf4D5jduA597S95pM=
+github.com/amarnathcjd/gogram v1.6.3-0.20250805174903-4e6de7f64a55/go.mod h1:vZURSYiNYNPnZ70msOgmRmcVuku1P6ol2zIAHMM1CFY=
 github.com/andybalholm/cascadia v1.3.3 h1:AG2YHrzJIm4BZ19iwJ/DAua6Btl3IwJX+VI4kktS1LM=
 github.com/andybalholm/cascadia v1.3.3/go.mod h1:xNd9bqTn98Ln4DwST8/nG+H0yuB8Hmgu1YHNnWw0GeA=
 github.com/bogem/id3v2 v1.2.0 h1:hKDF+F1gOgQ5r1QmBCEZUk4MveJbKxCeIDSBU7CQ4oI=

@@ -27,3 +27,5 @@ n.go
 *.session
 vendor/*
 *.log
+*.xml
+*.iml
