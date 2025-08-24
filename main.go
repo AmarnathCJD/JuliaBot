@@ -51,24 +51,7 @@ func main() {
 	client.Start()
 
 	fmt.Println("Connecting to Telegram...")
-	fmt.Println(client.GetMe())
-	tk, err := client.AccountInitTakeoutSession(&tg.AccountInitTakeoutSessionParams{
-		MessageChats: true,
-	})
-	if err != nil {
-		panic(err)
-	}
 
-	req := &tg.ChannelsGetLeftChannelsParams{
-		Offset: 0,
-	}
-
-	resp, err := client.InvokeWithTakeout(int(tk.ID), req)
-
-	if err != nil {
-		panic("Error invoking with takeout: " + err.Error())
-	}
-	fmt.Println("Left Channels:", client.JSON(resp))
 	client.Conn()
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 	client.Logger.Info("Bot is running..., Press Ctrl+C to stop it.")
