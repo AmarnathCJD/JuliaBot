@@ -46,40 +46,41 @@ func initFunc(c *telegram.Client) {
 
 	if LoadModules {
 		// adminCMD
-		c.On("message:/rspot", modules.RestartSpotify, telegram.FilterFunc(FilterOwner))
-		c.On("message:/rproxy", modules.RestartProxy, telegram.FilterFunc(FilterOwnerAndAuth))
-		c.On("message:/promote", modules.PromoteUserHandle)
-		c.On("message:/restart", modules.RestartHandle, telegram.FilterFunc(FilterOwner))
-		c.On("message:/id", modules.IDHandle)
+		c.On("command:rspot", modules.RestartSpotify, telegram.FilterFunc(FilterOwner))
+		c.On("command:rproxy", modules.RestartProxy, telegram.FilterFunc(FilterOwnerAndAuth))
+		c.On("command:promote", modules.PromoteUserHandle)
+		c.On("command:restart", modules.RestartHandle, telegram.FilterFunc(FilterOwner))
+		c.On("command:id", modules.IDHandle)
 
-		c.On("message:/mz", modules.YtSongDL)
-		c.On("message:/spot(:?ify)? (.*)", modules.SpotifyHandler)
-		c.On("message:/spots", modules.SpotifySearchHandler)
-		c.On("message:/sh", modules.ShellHandle, telegram.FilterFunc(FilterOwner))
-		c.On("message:/bash", modules.ShellHandle, telegram.FilterFunc(FilterOwner))
-		c.On("message:/ls", modules.LsHandler, telegram.FilterFunc(FilterOwner))
-		c.On("message:/ul", modules.UploadHandle, telegram.FilterFunc(FilterOwnerNoReply))
-		c.On("message:/upd", modules.UpdateSourceCodeHandle, telegram.FilterFunc(FilterOwnerNoReply))
-		c.On("message:/gban", modules.GbanMeme, telegram.FilterFunc(FilterOwner))
-		c.On("message:/greet", modules.ModifyGreetStatus)
-		c.On("message:/start", modules.StartHandle)
-		c.On("message:/help", modules.HelpHandle)
-		c.On("message:/sys", modules.GatherSystemInfo)
-		c.On("message:/info", modules.UserHandle)
-		c.On("message:/json", modules.JsonHandle)
-		c.On("message:.ping", modules.PingHandle)
+		c.On("command:mz", modules.YtSongDL)
+		c.On("command:spotify", modules.SpotifyHandler)
+		c.On("command:spot", modules.SpotifyHandler)
+		c.On("command:spots", modules.SpotifySearchHandler)
+		c.On("command:sh", modules.ShellHandle, telegram.FilterFunc(FilterOwner))
+		c.On("command:bash", modules.ShellHandle, telegram.FilterFunc(FilterOwner))
+		c.On("command:ls", modules.LsHandler, telegram.FilterFunc(FilterOwner))
+		c.On("command:ul", modules.UploadHandle, telegram.FilterFunc(FilterOwnerNoReply))
+		c.On("command:upd", modules.UpdateSourceCodeHandle, telegram.FilterFunc(FilterOwnerNoReply))
+		c.On("command:gban", modules.GbanMeme, telegram.FilterFunc(FilterOwner))
+		c.On("command:greet", modules.ModifyGreetStatus)
+		c.On("command:start", modules.StartHandle)
+		c.On("command:help", modules.HelpHandle)
+		c.On("command:sys", modules.GatherSystemInfo)
+		c.On("command:info", modules.UserHandle)
+		c.On("command:json", modules.JsonHandle)
+		c.On("command:ping", modules.PingHandle)
 		c.On("command:eval", modules.EvalHandle, telegram.FilterFunc(FilterOwnerNoReply))
 
-		c.On("message:/sessgen", modules.GenStringSessionHandler)
+		c.On("command:sessgen", modules.GenStringSessionHandler)
 
-		c.On("message:/file", modules.SendFileByIDHandle)
-		c.On("message:/fid", modules.GetFileIDHandle)
-		c.On("message:/ldl", modules.DownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
+		c.On("command:file", modules.SendFileByIDHandle)
+		c.On("command:fid", modules.GetFileIDHandle)
+		c.On("command:ldl", modules.DownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
 
 		c.On("inline:pin", modules.PinterestInlineHandle)
 		c.On("inline:doge", modules.DogeStickerInline)
 
-		c.On("message:/stream", modules.StreamHandler)
+		c.On("command:stream", modules.StreamHandler)
 
 		//c.AddRawHandler(&telegram.UpdateBotInlineSend{}, modules.SpotifyInlineHandler)
 		c.On(telegram.OnInline, modules.SpotifyInlineSearch)
@@ -96,20 +97,20 @@ func initFunc(c *telegram.Client) {
 		c.On("command:doge", modules.DogeSticker)
 
 		c.On("callback:spot_(.*)_(.*)", modules.SpotifyHandlerCallback)
-		c.On("message:/midj", modules.MidjHandler)
-		c.On("message:/vid", modules.YtVideoDL)
+		c.On("command:midj", modules.MidjHandler)
+		c.On("command:vid", modules.YtVideoDL)
 
 		c.On(telegram.OnParticipant, modules.UserJoinHandle)
 
 		// media-utils
 
-		c.On("message:/setthumb", modules.SetThumbHandler)
-		c.On("message:/mirror", modules.MirrorFileHandler)
+		c.On("command:setthumb", modules.SetThumbHandler)
+		c.On("command:mirror", modules.MirrorFileHandler)
 
-		c.On("message:/setpfp", modules.SetBotPfpHandler, telegram.FilterFunc(FilterOwner))
+		c.On("command:setpfp", modules.SetBotPfpHandler, telegram.FilterFunc(FilterOwner))
 
-		c.On("message:/media", modules.MediaInfoHandler)
-		c.On("message:/imdb", modules.ImdbHandler)
+		c.On("command:media", modules.MediaInfoHandler)
+		c.On("command:imdb", modules.ImdbHandler)
 		c.On("inline:imdb", modules.ImDBInlineSearchHandler)
 		c.On("callback:imdb_(.*)_(.*)", modules.ImdbCallbackHandler)
 
