@@ -8,13 +8,26 @@ import (
 	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
+	"github.com/shirou/gopsutil/host"
+	"github.com/shirou/gopsutil/load"
 )
 
 var startTime = time.Now()
 
 func StartHandle(m *telegram.NewMessage) error {
-	m.Reply("Hellov! :)")
-	m.React(getRandomEmoticon())
+	greeting := "✨ <b>Hello there!</b> ✨\n\n"
+	greeting += "I'm <b>Julia</b>, your friendly bot companion! 🤖💙\n\n"
+	greeting += "Here's what I can help you with:\n"
+	greeting += "➜ 🎬 <b>Media Magic:</b> Search movies, download videos, convert files\n"
+	greeting += "➜ 🎵 <b>Music Vibes:</b> Get songs, Spotify info, and more\n"
+	greeting += "➜ 👤 <b>User Info:</b> Discover details about Telegram users\n"
+	greeting += "➜ 🔧 <b>System Stats:</b> Check bot performance and health\n"
+	greeting += "➜ 🎨 <b>Fun Stuff:</b> Memes, inline queries, and surprises!\n\n"
+	greeting += "Type <code>/help</code> to see all my commands! 💫\n\n"
+	greeting += "<i>Let's make something awesome together!</i> ✨"
+
+	m.Reply(greeting)
+	m.React("❤")
 	return nil
 }
 
@@ -45,20 +58,51 @@ func GatherSystemInfo(m *telegram.NewMessage) error {
 		return err
 	}
 
-	info := "<b>💻 System Info:</b>\n\n"
-	info += fmt.Sprintf("🖥️ <b>CPU:</b> %.2f%%\n", system.CPUPerc)
-	info += fmt.Sprintf("📊 <b>Process Mem:</b> %s\n", system.ProcessMemory)
-	info += fmt.Sprintf("⏱️ <b>Uptime:</b> %s\n", system.Uptime)
-	info += fmt.Sprintf("🧑‍💻 <b>OS:</b> %s | <b>Arch:</b> %s\n", runtime.GOOS, runtime.GOARCH)
-	info += fmt.Sprintf("🚀 <b>CPUs:</b> %d | <b>Goroutines:</b> %d\n", runtime.NumCPU(), runtime.NumGoroutine())
-	info += fmt.Sprintf("🆔 <b>PID:</b> %d\n", system.ProcessID)
-	info += fmt.Sprintf("💾 <b>Memory:</b> %s / %s (%.2f%%)\n", system.MemUsed, system.MemTotal, system.MemPerc)
-	info += fmt.Sprintf("💽 <b>Disk:</b> %s / %s (%.2f%%)\n", system.DiskUsed, system.DiskTotal, system.DiskPerc)
-	f, _ := telegram.ResolveBotFileID("AgAABZq_MRv8XKlV4gk2goxvC_A")
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+
+	// Get additional system info
+	hostInfo, _ := host.Info()
+	loadAvg, _ := load.Avg()
+
+	info := "╭─ <b>System Information</b>\n\n"
+
+	// Highlighted metrics at top
+	info += fmt.Sprintf("⚡ <b>Goroutines:</b> <code>%d</code> | <b>Process Memory:</b> <code>%s</code>\n\n", runtime.NumGoroutine(), system.ProcessMemory)
+
+	// Performance Metrics
+	info += "➜ <b><i>Performance</i></b>\n"
+	info += fmt.Sprintf("   ├ <b>CPU Usage:</b> <code>%.2f%%</code>\n", system.CPUPerc)
+	if loadAvg != nil {
+		info += fmt.Sprintf("   ├ <b>Load Average:</b> <code>%.2f, %.2f, %.2f</code>\n", loadAvg.Load1, loadAvg.Load5, loadAvg.Load15)
+	}
+	info += fmt.Sprintf("   ├ <b>Heap Allocated:</b> <code>%s</code>\n", HumanBytes(memStats.Alloc))
+	info += fmt.Sprintf("   ├ <b>Heap System:</b> <code>%s</code>\n", HumanBytes(memStats.Sys))
+	info += fmt.Sprintf("   └ <b>Uptime:</b> <i>%s</i>\n\n", system.Uptime)
+
+	// System Resources
+	info += "➜ <b><i>Hardware</i></b>\n"
+	info += fmt.Sprintf("   ├ <b>CPU:</b> <i>%s</i>\n", system.CPUName)
+	info += fmt.Sprintf("   ├ <b>Cores:</b> <code>%d</code>\n", runtime.NumCPU())
+	info += fmt.Sprintf("   ├ <b>Memory:</b> <code>%s</code> / <code>%s</code> <i>(%.1f%%)</i>\n", system.MemUsed, system.MemTotal, system.MemPerc)
+	info += fmt.Sprintf("   └ <b>Disk:</b> <code>%s</code> / <code>%s</code> <i>(%.1f%%)</i>\n\n", system.DiskUsed, system.DiskTotal, system.DiskPerc)
+
+	// Runtime Information
+	info += "➜ <b><i>Runtime</i></b>\n"
+	info += fmt.Sprintf("   ├ <b>Go Version:</b> <code>%s</code>\n", runtime.Version())
+	info += fmt.Sprintf("   ├ <b>Platform:</b> <code>%s/%s</code>\n", runtime.GOOS, runtime.GOARCH)
+	if hostInfo != nil {
+		info += fmt.Sprintf("   ├ <b>Hostname:</b> <code>%s</code>\n", hostInfo.Hostname)
+		info += fmt.Sprintf("   ├ <b>Boot Time:</b> <i>%s</i>\n", time.Unix(int64(hostInfo.BootTime), 0).Format("2006-01-02 15:04:05"))
+	}
+	info += fmt.Sprintf("   ├ <b>GC Cycles:</b> <code>%d</code> | <b>Pauses:</b> <code>%s</code>\n", memStats.NumGC, time.Duration(memStats.PauseTotalNs).Round(time.Millisecond))
+	info += fmt.Sprintf("   └ <b>PID:</b> <code>%d</code>\n\n", system.ProcessID)
+
+	info += "╰─────────────────"
 
 	_, err = msg.Edit(
 		"",
-		telegram.SendOptions{Caption: info, Media: f},
+		telegram.SendOptions{Caption: info},
 	)
 	if err != nil {
 		msg.Edit(info)
@@ -131,48 +175,110 @@ func UserHandle(m *telegram.NewMessage) error {
 	un := user.Users[0].(*telegram.UserObj)
 
 	var userString string
-	userString += "<b>User Info:</b>\n"
-	if un.FirstName != "" {
-		userString += "<b>First Name:</b> " + un.FirstName + "\n"
-	}
+
+	// Header with name
+	name := un.FirstName
 	if un.LastName != "" {
-		userString += "<b>Last Name:</b> " + un.LastName + "\n"
+		name += " " + un.LastName
 	}
-	userString += "<b>Is Bot:</b> " + fmt.Sprintf("%t", un.Bot) + "\n"
+	userString += "👤 <b>" + name + "</b>"
+
+	// Status badges
 	if un.Verified {
-		userString += "<b>Is Verified:</b> ✅\n"
+		userString += " ✓"
 	}
-	userString += "<b>Data Center:</b> {{dcId}}\n"
+	if un.Premium {
+		userString += " ⭐"
+	}
+	if un.Bot {
+		userString += " 🤖"
+	}
+	userString += "\n\n"
+
+	// Username
 	if un.Username != "" {
-		userString += "<b>Username:</b> @" + un.Username + "\n"
-	}
-	if uf.About != "" {
-		userString += "\n<i>" + uf.About + "</i>\n\n"
-	}
-	if un.Usernames != nil {
-		userString += "<b>Res. Usernames:</b> [<b>" + func() string {
-			var s string
-			for _, v := range un.Usernames {
-				s += "@" + v.Username + " "
-			}
-			return s
-		}() + "</b>]\n"
+		userString += "➜ 📧 <b>Username:</b> @" + un.Username + "\n"
 	}
 
-	userString += "<b>User Link:</b> <a href=\"tg://user?id=" + strconv.FormatInt(un.ID, 10) + "\">userLink</a>\n<b>User-ID:</b> <code>" + strconv.FormatInt(un.ID, 10) + "</code>\n"
-	if uf.Birthday != nil {
-		userString += "\n<b>Birthday:</b> " + parseBirthday(uf.Birthday.Day, uf.Birthday.Month, uf.Birthday.Year)
+	// ID
+	userString += "➜ 🆔 <b>ID:</b> <code>" + strconv.FormatInt(un.ID, 10) + "</code>\n"
+
+	// DC Location
+	userString += "➜ 🌐 <b>DC:</b> {{dcId}}\n"
+
+	// Phone visibility
+	if un.Phone != "" {
+		userString += "➜ 📱 <b>Phone:</b> +" + un.Phone + "\n"
 	}
+
+	// Account restrictions
+	if un.Restricted {
+		userString += "➜ 🚫 <b>Restricted:</b> Yes\n"
+	}
+	if un.Scam {
+		userString += "➜ ⚠️ <b>Scam:</b> Yes\n"
+	}
+	if un.Fake {
+		userString += "➜ ⚠️ <b>Fake:</b> Yes\n"
+	}
+
+	// Support/official status
+	if un.Support {
+		userString += "➜ 🛟 <b>Support:</b> Yes\n"
+	}
+
+	// Bot specific features
+	if un.Bot {
+		if un.BotChatHistory {
+			userString += "➜ 📜 <b>Can Read History:</b> Yes\n"
+		}
+		if un.BotInlineGeo {
+			userString += "➜ 📍 <b>Inline Geo:</b> Yes\n"
+		}
+		if un.BotAttachMenu {
+			userString += "➜ 📎 <b>Attach Menu:</b> Yes\n"
+		}
+		if un.BotInlinePlaceholder != "" {
+			userString += "➜ 💭 <b>Inline Placeholder:</b> " + un.BotInlinePlaceholder + "\n"
+		}
+	}
+
+	// Common chats count
+	if uf.CommonChatsCount > 0 {
+		userString += "➜ 👥 <b>Common Groups:</b> " + strconv.Itoa(int(uf.CommonChatsCount)) + "\n"
+	}
+
+	// Reserved usernames
+	if len(un.Usernames) > 0 {
+		var usernames []string
+		for _, v := range un.Usernames {
+			usernames = append(usernames, "@"+v.Username)
+		}
+		userString += "\n📌 <b>Also known as:</b> " + strings.Join(usernames, ", ") + "\n"
+	}
+
+	// Birthday
+	if uf.Birthday != nil {
+		userString += "\n➜ 🎂 <b>Birthday:</b> " + parseBirthday(uf.Birthday.Day, uf.Birthday.Month, uf.Birthday.Year) + "\n"
+	}
+
+	// Bio
+	if uf.About != "" {
+		userString += "\n💬 <b>Bio:</b> <i>" + uf.About + "</i>\n"
+	}
+
+	// Profile link
+	userString += "\n<a href=\"tg://user?id=" + strconv.FormatInt(un.ID, 10) + "\">🔗 View Full Profile</a>"
 
 	var keyb = telegram.NewKeyboard()
 	sendableUser, err := m.Client.GetSendableUser(un)
 	if err == nil {
 		keyb.AddRow(
-			telegram.Button.Mention("Go >> User Profile", sendableUser),
+			telegram.Button.Mention("View Profile", sendableUser),
 		)
 	} else {
 		keyb.AddRow(
-			telegram.Button.URL("Go >> User Profile", "tg://user?id="+strconv.FormatInt(un.ID, 10)),
+			telegram.Button.URL("View Profile", "tg://user?id="+strconv.FormatInt(un.ID, 10)),
 		)
 	}
 
@@ -248,16 +354,32 @@ func UserHandle(m *telegram.NewMessage) error {
 			}
 		}
 
-		mediaOpt.Caption = strings.ReplaceAll(userString, "{{dcId}}", fmt.Sprintf("<b>%d - %s</b>", dcId, dcLocationMap[dcId]))
+		dcFlag := getCountryFlag(dcId)
+		mediaOpt.Caption = strings.ReplaceAll(userString, "{{dcId}}", fmt.Sprintf("DC%d - %s %s", dcId, dcLocationMap[dcId], dcFlag))
 		_, err := m.ReplyMedia(inp, mediaOpt)
 		if err != nil {
 			m.Reply(userString, sendOpt)
 		}
 	} else {
-		userString = strings.ReplaceAll(userString, "{{dcId}}", fmt.Sprintf("<b>%d</b> - <b>%s</b>", dcId, dcLocationMap[dcId]))
+		dcFlag := getCountryFlag(dcId)
+		userString = strings.ReplaceAll(userString, "{{dcId}}", fmt.Sprintf("DC%d - %s %s", dcId, dcLocationMap[dcId], dcFlag))
 		m.Reply(userString, sendOpt)
 	}
 	return nil
+}
+
+func getCountryFlag(dcId int) string {
+	flags := map[int]string{
+		1: "🇺🇸",
+		2: "🇳🇱",
+		3: "🇺🇸",
+		4: "🇳🇱",
+		5: "🇸🇬",
+	}
+	if flag, ok := flags[dcId]; ok {
+		return flag
+	}
+	return ""
 }
 
 var st = time.Now()

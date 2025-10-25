@@ -271,84 +271,124 @@ func FormatIMDBDataToHTML(data *IMDBTitle) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b><b>%s (%s)</b><br><br>", data.Title, parseYearFromString(data.ReleaseDate)))
-	sb.WriteString("\n")
-	if data.ReleaseDate != "" {
-		sb.WriteString(fmt.Sprintf("📅 <b>Release Date:</b> %s<br>", data.ReleaseDate))
-		sb.WriteString("\n")
+
+	// Title with year
+	year := parseYearFromString(data.ReleaseDate)
+	if year != "" {
+		sb.WriteString(fmt.Sprintf("🎬 <b>%s</b> (%s)\n\n", data.Title, year))
+	} else {
+		sb.WriteString(fmt.Sprintf("🎬 <b>%s</b>\n\n", data.Title))
 	}
-	if data.MetaScore != "" {
-		sb.WriteString(fmt.Sprintf("🏆 <b>Metascore:</b> %s | Trailer: <a href='%s'>Trailer</a> | %s Rated", data.MetaScore, data.Trailer, data.ViewerClass))
-		sb.WriteString("\n")
-	}
+
+	// Rating and Metascore on one line
 	if data.Rating != 0 {
-		sb.WriteString(fmt.Sprintf("💹 <b>IMDB Rating:</b> %.1f (%s votes) ⭐⭐⭐<br>", data.Rating, data.RatingCount))
-		sb.WriteString("\n")
-	}
-	if data.Description != "" {
-		sb.WriteString("\n")
-		sb.WriteString(fmt.Sprintf("~ <i>%s</i><br>", data.Description))
-		sb.WriteString("\n\n")
-	}
-	if len(data.Genres) > 0 {
-		sb.WriteString(fmt.Sprintf("✨ <b>Genres:</b> %s<br>", func() string {
-			var genres []string
-			for _, genre := range data.Genres {
-				genres = append(genres, fmt.Sprintf("<a href='https://www.imdb.com/search/title/?genres=%s'>#%s</a>", genre, genre))
-			}
-			return strings.Join(genres, ", ")
-		}()))
-		sb.WriteString("\n")
-	}
-	if len(data.Actors) > 0 {
-		sb.WriteString(fmt.Sprintf("🎭 <b>Cast:</b> %s<br>", func() string {
-			var actors []string
-			for _, actor := range data.Actors {
-				if len(actors) >= 5 {
-					break
-				}
-				actors = append(actors, fmt.Sprintf("<a href='https://www.imdb.com/find?q=%s'>%s</a>", actor, actor))
-			}
-			return strings.Join(actors, ", ")
-		}()))
-		sb.WriteString("\n")
-	}
-	if data.ProductionCompanies != "" {
-		sb.WriteString(fmt.Sprintf("🪀 <b>Production Companies:</b> %s<br>", strings.TrimSuffix(data.ProductionCompanies, `, `)))
-		sb.WriteString("\n")
-	}
-	if data.ReleaseDate != "" {
-		sb.WriteString(fmt.Sprintf("📅 <b>Release Date:</b> %s<br>", data.ReleaseDate))
-		sb.WriteString("\n")
-	}
-	if data.Duration != "" {
-		sb.WriteString(fmt.Sprintf("⌚ <b>RunTime:</b> %s<br>", data.Duration))
-		sb.WriteString("\n")
-	}
-	if data.AlsoKnownAs != "" {
-		sb.WriteString(fmt.Sprintf("©️ AKA: %s<br>", data.AlsoKnownAs))
-		sb.WriteString("\n")
-	}
-	if data.CountryOfOrigin != "" {
-		sb.WriteString(fmt.Sprintf("🏴 <b>Countries:</b> %s<br>", data.CountryOfOrigin))
-		sb.WriteString("\n")
-	}
-	if data.Languages != "" {
-		sb.WriteString(fmt.Sprintf("🌐 <b>Language:</b> %s<br>", data.Languages))
-		sb.WriteString("\n")
-	}
-	if len(data.MoreLikeThis) > 0 {
-		sb.WriteString("\n")
-		sb.WriteString("🕹️ <b>More Like This:</b> ")
-		for i, entry := range data.MoreLikeThis {
-			sb.WriteString(fmt.Sprintf("<a href='https://www.imdb.com/title/%s/'>%s</a>", entry.IMDBID, entry.Title))
-			if i < len(data.MoreLikeThis)-1 {
-				sb.WriteString(", ")
-			}
+		stars := "⭐"
+		if data.Rating >= 8.0 {
+			stars = "⭐⭐⭐"
+		} else if data.Rating >= 6.0 {
+			stars = "⭐⭐"
 		}
-		sb.WriteString("<br>")
+		sb.WriteString(fmt.Sprintf("➜ <b>Rating:</b> 📊 %.1f/10 %s <i>(%s votes)</i>", data.Rating, stars, data.RatingCount))
+		if data.MetaScore != "" {
+			sb.WriteString(fmt.Sprintf(" | <b>Meta:</b> 🏆 %s", data.MetaScore))
+		}
+		sb.WriteString("\n")
 	}
-	sb.WriteString("</b>")
+
+	// Release date and duration on one line
+	if data.ReleaseDate != "" || data.Duration != "" {
+		sb.WriteString("➜ ")
+		if data.ReleaseDate != "" {
+			sb.WriteString(fmt.Sprintf("📅 <b>Released:</b> %s", data.ReleaseDate))
+		}
+		if data.Duration != "" {
+			if data.ReleaseDate != "" {
+				sb.WriteString(" | ")
+			}
+			sb.WriteString(fmt.Sprintf("⏱️ <b>Runtime:</b> %s", data.Duration))
+		}
+		sb.WriteString("\n")
+	}
+
+	// Viewer class
+	if data.ViewerClass != "" {
+		sb.WriteString(fmt.Sprintf("➜ 🔞 <b>Rated:</b> %s\n", data.ViewerClass))
+	}
+
+	// Description
+	if data.Description != "" {
+		sb.WriteString(fmt.Sprintf("\n💬 <i>%s</i>\n\n", data.Description))
+	}
+
+	// Genres as hashtags
+	if len(data.Genres) > 0 {
+		sb.WriteString("➜ 🎭 <b>Genres:</b> ")
+		var genres []string
+		for _, genre := range data.Genres {
+			genres = append(genres, fmt.Sprintf("<a href='https://www.imdb.com/search/title/?genres=%s'>#%s</a>", genre, genre))
+		}
+		sb.WriteString(strings.Join(genres, " "))
+		sb.WriteString("\n")
+	}
+
+	// Cast (top 5)
+	if len(data.Actors) > 0 {
+		sb.WriteString("➜ 👥 <b>Cast:</b> ")
+		var actors []string
+		for i, actor := range data.Actors {
+			if i >= 5 {
+				break
+			}
+			actors = append(actors, fmt.Sprintf("<a href='https://www.imdb.com/find?q=%s'>%s</a>", actor, actor))
+		}
+		sb.WriteString(strings.Join(actors, ", "))
+		sb.WriteString("\n")
+	}
+
+	// Countries and Languages on one line
+	if data.CountryOfOrigin != "" || data.Languages != "" {
+		sb.WriteString("➜ ")
+		if data.CountryOfOrigin != "" {
+			sb.WriteString(fmt.Sprintf("🌍 <b>Country:</b> %s", data.CountryOfOrigin))
+		}
+		if data.Languages != "" {
+			if data.CountryOfOrigin != "" {
+				sb.WriteString(" | ")
+			}
+			sb.WriteString(fmt.Sprintf("🗣️ <b>Language:</b> %s", data.Languages))
+		}
+		sb.WriteString("\n")
+	}
+
+	// Production companies
+	if data.ProductionCompanies != "" {
+		sb.WriteString(fmt.Sprintf("➜ 🎥 <b>Production:</b> %s\n", strings.TrimSuffix(data.ProductionCompanies, `, `)))
+	}
+
+	// AKA
+	if data.AlsoKnownAs != "" {
+		sb.WriteString(fmt.Sprintf("\n➜ 📝 <b>AKA:</b> <i>%s</i>\n", data.AlsoKnownAs))
+	}
+
+	// Trailer link
+	if data.Trailer != "" {
+		sb.WriteString(fmt.Sprintf("\n<a href='%s'>▶️ Watch Trailer</a>", data.Trailer))
+	}
+
+	// More like this (show up to 10, comma separated)
+	if len(data.MoreLikeThis) > 0 {
+		sb.WriteString("\n\n🍿 <b>More Like This:</b> ")
+		var similar []string
+		for i, entry := range data.MoreLikeThis {
+			if i >= 10 {
+				break
+			}
+			similar = append(similar, fmt.Sprintf("<a href='https://www.imdb.com/title/%s/'>%s</a>", entry.IMDBID, entry.Title))
+		}
+		sb.WriteString(strings.Join(similar, ", "))
+		sb.WriteString("\n")
+	}
+
 	return sb.String()
 }
 

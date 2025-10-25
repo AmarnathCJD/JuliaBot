@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"time"
 
 	tg "github.com/amarnathcjd/gogram/telegram"
 	dotenv "github.com/joho/godotenv"
@@ -22,7 +23,6 @@ var ownerId int64 = 0
 var LoadModules = os.Getenv("ENV") != "development"
 
 func main() {
-	// ;logging setup
 	fmt.Println("Starting JuliaBot...")
 	logZap, err := os.OpenFile("log.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
@@ -45,9 +45,13 @@ func main() {
 	cfg := tg.NewClientConfigBuilder(int32(appId), os.Getenv("APP_HASH")).
 		WithSession(sessionName).
 		WithLogger(tg.NewLogger(tg.LogInfo).NoColor()).
+		WithReqTimeout(1000 * time.Millisecond).
 		Build()
 
 	client, err := tg.NewClient(cfg)
+	if err != nil {
+		panic(err)
+	}
 	client.Start()
 
 	fmt.Println("Connecting to Telegram...")
@@ -55,7 +59,6 @@ func main() {
 	client.Conn()
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 	client.Logger.Info("Bot is running..., Press Ctrl+C to stop it.")
-
 	initFunc(client)
 
 	client.Idle()

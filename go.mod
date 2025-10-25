@@ -4,10 +4,11 @@ go 1.24.0
 
 require (
 	github.com/PuerkitoBio/goquery v1.10.3
-	github.com/amarnathcjd/gogram v1.6.3-0.20250824143536-d371f2bd8b52
+	github.com/amarnathcjd/gogram v1.6.3-0.20251025103630-963e446d2e98
 	github.com/fogleman/gg v1.3.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lrstanley/go-ytdlp v0.0.0-20250610000944-a2284ab714d8
+	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/shirou/gopsutil/v4 v4.25.5
 	github.com/tramhao/id3v2 v1.2.1
 )
