@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"time"
+	//"time"
 
 	tg "github.com/amarnathcjd/gogram/telegram"
 	dotenv "github.com/joho/godotenv"
@@ -45,7 +45,7 @@ func main() {
 	cfg := tg.NewClientConfigBuilder(int32(appId), os.Getenv("APP_HASH")).
 		WithSession(sessionName).
 		WithLogger(tg.NewLogger(tg.LogInfo).NoColor()).
-		WithReqTimeout(100000 * time.Millisecond).
+		//WithReqTimeout(100000 * time.Millisecond).
 		Build()
 
 	client, err := tg.NewClient(cfg)
