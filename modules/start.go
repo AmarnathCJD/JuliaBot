@@ -36,7 +36,7 @@ func GatherSystemInfo(m *telegram.NewMessage) error {
 
 	msg, _ := m.Reply("<code>...System Information...</code>")
 
-	if IsImageDepsInstalled() {
+	if !IsImageDepsInstalled() {
 		renderedImage, err := FillAndRenderSVG(false)
 		if err != nil {
 			msg.Edit("❌ Failed to render image: " + err.Error())
