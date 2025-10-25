@@ -44,7 +44,7 @@ func main() {
 
 	cfg := tg.NewClientConfigBuilder(int32(appId), os.Getenv("APP_HASH")).
 		WithSession(sessionName).
-		WithLogger(tg.NewLogger(tg.LogInfo).NoColor()).
+		WithLogger(tg.NewLogger(tg.LogDebug).NoColor()).
 		WithReqTimeout(100000 * time.Millisecond).
 		Build()
 
