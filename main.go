@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"time"
+
 	//"time"
 
 	tg "github.com/amarnathcjd/gogram/telegram"
@@ -35,31 +37,22 @@ func main() {
 
 	appId, _ := strconv.Atoi(os.Getenv("APP_ID"))
 	ownerId, _ = strconv.ParseInt(os.Getenv("OWNER_ID"), 10, 64)
-	var sessionName = "rusty.dat"
-	if os.Getenv("SESSION_NAME") != "" {
-		sessionName = os.Getenv("SESSION_NAME")
-	}
-
-	fmt.Println("Session Name:", sessionName)
 
 	cfg := tg.NewClientConfigBuilder(int32(appId), os.Getenv("APP_HASH")).
-		WithSession(sessionName).
 		WithLogger(tg.NewLogger(tg.LogInfo).NoColor()).
-		//WithReqTimeout(100000 * time.Millisecond).
+		WithReqTimeout(100000 * time.Millisecond).
 		Build()
 
 	client, err := tg.NewClient(cfg)
 	if err != nil {
 		panic(err)
 	}
-	client.Start()
-
-	fmt.Println("Connecting to Telegram...")
-
 	client.Conn()
-	client.LoginBot(os.Getenv("BOT_TOKEN"))
+
+	fmt.Println(client.LoginBot(os.Getenv("BOT_TOKEN")))
 	client.Logger.Info("Bot is running..., Press Ctrl+C to stop it.")
 	initFunc(client)
+	fmt.Println(client.SendMessage("gogrammers", "Hisuckers"))
 
 	client.Idle()
 }

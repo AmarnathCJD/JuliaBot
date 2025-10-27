@@ -36,23 +36,6 @@ func GatherSystemInfo(m *telegram.NewMessage) error {
 
 	msg, _ := m.Reply("<code>...System Information...</code>")
 
-	if !IsImageDepsInstalled() {
-		renderedImage, err := FillAndRenderSVG(false)
-		if err != nil {
-			msg.Edit("❌ Failed to render image: " + err.Error())
-			return err
-		}
-
-		_, err = msg.Edit(
-			"",
-			telegram.SendOptions{Spoiler: true, Media: renderedImage, Caption: ""},
-		)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-
 	system, err := gatherSystemInfo()
 	if err != nil {
 		return err
@@ -97,16 +80,8 @@ func GatherSystemInfo(m *telegram.NewMessage) error {
 	}
 	info += fmt.Sprintf("   ├ <b>GC Cycles:</b> <code>%d</code> | <b>Pauses:</b> <code>%s</code>\n", memStats.NumGC, time.Duration(memStats.PauseTotalNs).Round(time.Millisecond))
 	info += fmt.Sprintf("   └ <b>PID:</b> <code>%d</code>\n\n", system.ProcessID)
-
-	info += "╰─────────────────"
-
-	_, err = msg.Edit(
-		"",
-		telegram.SendOptions{Caption: info},
-	)
-	if err != nil {
-		msg.Edit(info)
-	}
+	info += "╰─ <i>Have a great day! 🌟</i>"
+	msg.Edit(info)
 	return err
 }
 
