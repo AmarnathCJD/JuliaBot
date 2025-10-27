@@ -414,6 +414,7 @@ func MediaInfoHandler(m *telegram.NewMessage) error {
 		ReplyMarkup: telegram.NewKeyboard().AddRow(
 			telegram.Button.URL("View", url),
 		).Build(),
+		LinkPreview: true,
 	})
 	return nil
 }

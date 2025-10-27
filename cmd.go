@@ -96,7 +96,6 @@ func initFunc(c *telegram.Client) {
 		c.On("command:doge", modules.DogeSticker)
 
 		c.On("callback:spot_(.*)_(.*)", modules.SpotifyHandlerCallback)
-		c.On("message:^/midj", modules.MidjHandler)
 		c.On("message:^/vid", modules.YtVideoDL)
 
 		c.On(telegram.OnParticipant, modules.UserJoinHandle)

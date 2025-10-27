@@ -17,14 +17,6 @@ var startTime = time.Now()
 func StartHandle(m *telegram.NewMessage) error {
 	greeting := "✨ <b>Hello there!</b> ✨\n\n"
 	greeting += "I'm <b>Julia</b>, your friendly bot companion! 🤖💙\n\n"
-	greeting += "Here's what I can help you with:\n"
-	greeting += "➜ 🎬 <b>Media Magic:</b> Search movies, download videos, convert files\n"
-	greeting += "➜ 🎵 <b>Music Vibes:</b> Get songs, Spotify info, and more\n"
-	greeting += "➜ 👤 <b>User Info:</b> Discover details about Telegram users\n"
-	greeting += "➜ 🔧 <b>System Stats:</b> Check bot performance and health\n"
-	greeting += "➜ 🎨 <b>Fun Stuff:</b> Memes, inline queries, and surprises!\n\n"
-	greeting += "Type <code>/help</code> to see all my commands! 💫\n\n"
-	greeting += "<i>Let's make something awesome together!</i> ✨"
 
 	m.Reply(greeting)
 	m.React("❤")
@@ -48,7 +40,7 @@ func GatherSystemInfo(m *telegram.NewMessage) error {
 	hostInfo, _ := host.Info()
 	loadAvg, _ := load.Avg()
 
-	info := "╭─ <b>System Information</b>\n\n"
+	info := "<b>System Information</b>\n\n"
 
 	// Highlighted metrics at top
 	info += fmt.Sprintf("⚡ <b>Goroutines:</b> <code>%d</code> | <b>Process Memory:</b> <code>%s</code>\n\n", runtime.NumGoroutine(), system.ProcessMemory)
@@ -80,7 +72,7 @@ func GatherSystemInfo(m *telegram.NewMessage) error {
 	}
 	info += fmt.Sprintf("   ├ <b>GC Cycles:</b> <code>%d</code> | <b>Pauses:</b> <code>%s</code>\n", memStats.NumGC, time.Duration(memStats.PauseTotalNs).Round(time.Millisecond))
 	info += fmt.Sprintf("   └ <b>PID:</b> <code>%d</code>\n\n", system.ProcessID)
-	info += "╰─ <i>Have a great day! 🌟</i>"
+	info += "<i>Have a great day! 🌟</i>"
 	msg.Edit(info)
 	return err
 }
