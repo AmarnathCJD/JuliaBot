@@ -108,6 +108,7 @@ func initFunc(c *telegram.Client) {
 		c.On("message:^/setpfp", modules.SetBotPfpHandler, telegram.FilterFunc(FilterOwner))
 
 		c.On("message:^/media", modules.MediaInfoHandler)
+		c.On("message:^/spec", modules.SpectrogramHandler)
 		c.On("message:^/imdb", modules.ImdbHandler)
 		c.On("inline:imdb", modules.ImDBInlineSearchHandler)
 		c.On("callback:imdb_(.*)_(.*)", modules.ImdbCallbackHandler)

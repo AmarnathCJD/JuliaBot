@@ -675,6 +675,65 @@ func SetBotPfpHandler(m *telegram.NewMessage) error {
 	return nil
 }
 
+func SpectrogramHandler(m *telegram.NewMessage) error {
+	if !m.IsReply() {
+		m.Reply("Reply to an audio file to generate spectrogram")
+		return nil
+	}
+
+	r, err := m.GetReplyMessage()
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	if !r.IsMedia() {
+		m.Reply("This message is not a media file")
+		return nil
+	}
+
+	msg, _ := m.Reply("<code>Generating spectrogram...</code>")
+	fi, err := m.Client.DownloadMedia(r.Media())
+	if err != nil {
+		msg.Edit("Error downloading file: " + err.Error())
+		return nil
+	}
+	defer os.Remove(fi)
+
+	outputFile := "tmp/spectrogram_" + strconv.FormatInt(int64(m.ID), 10) + ".png"
+	defer os.Remove(outputFile)
+
+	os.MkdirAll("tmp", 0755)
+	cmd := exec.Command("sox", fi, "-n", "spectrogram", "-o", outputFile)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	err = cmd.Run()
+	if err != nil {
+		errMsg := stderr.String()
+		if errMsg == "" {
+			errMsg = err.Error()
+		}
+		msg.Edit("<code>Error generating spectrogram:</code> <b>" + errMsg + "</b>")
+		return nil
+	}
+	if _, err := os.Stat(outputFile); os.IsNotExist(err) {
+		msg.Edit("<code>Error: Spectrogram file was not generated</code>")
+		return nil
+	}
+
+	_, err = m.ReplyMedia(outputFile, telegram.MediaOptions{
+		Caption: "🎵 Audio Spectrogram",
+	})
+	if err != nil {
+		msg.Edit("Error uploading spectrogram: " + err.Error())
+		return nil
+	}
+
+	msg.Delete()
+	return nil
+}
+
 func init() {
 	Mods.AddModule("Dev", `<b>Here are the commands available in Dev module:</b>
 
