@@ -52,7 +52,6 @@ func main() {
 	fmt.Println(client.LoginBot(os.Getenv("BOT_TOKEN")))
 	client.Logger.Info("Bot is running..., Press Ctrl+C to stop it.")
 	initFunc(client)
-	fmt.Println(client.SendMessage("gogrammers", "Hisuckers"))
 
 	client.Idle()
 }
