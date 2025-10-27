@@ -49,7 +49,7 @@ func main() {
 	}
 	client.Conn()
 
-	fmt.Println(client.LoginBot(os.Getenv("BOT_TOKEN")))
+	client.LoginBot(os.Getenv("BOT_TOKEN"))
 	client.Logger.Info("Bot is running..., Press Ctrl+C to stop it.")
 	initFunc(client)
 

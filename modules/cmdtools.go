@@ -2,6 +2,7 @@ package modules
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 
 	"github.com/amarnathcjd/gogram/telegram"
@@ -28,7 +29,7 @@ func ConvertToAudioHandle(m *telegram.NewMessage) error {
 		m.Reply("Error downloading the video.")
 		return nil
 	}
-
+	msg.Edit("<code>Downloaded, converting...</code>")
 	defer msg.Delete()
 
 	cmd := exec.Command("ffmpeg", "-i", media, "-vn", "-ab", "128k", "-ar", "44100", "-y", fmt.Sprintf("%s_audio.mp3", media))
@@ -42,5 +43,9 @@ func ConvertToAudioHandle(m *telegram.NewMessage) error {
 		Caption: "Here is your audio file!",
 	})
 
+	os.Remove(media)
+	os.Remove(fmt.Sprintf("%s_audio.mp3", media))
+
 	return err
 }
+

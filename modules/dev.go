@@ -353,6 +353,46 @@ func JsonHandle(m *telegram.NewMessage) error {
 	return nil
 }
 
+func formatMediaInfo(info string) string {
+	lines := strings.Split(info, "\n")
+	var formatted strings.Builder
+	formatted.WriteString("<b>📊 Media Information</b>\n\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			formatted.WriteString("\n")
+			continue
+		}
+
+		// Check if line is a section header (no colon, usually all caps or title case)
+		if !strings.Contains(line, ":") && len(line) > 0 {
+			// Section headers in bold
+			formatted.WriteString("<b>" + line + "</b>\n")
+		} else if strings.Contains(line, ":") {
+			// Split key-value pairs
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+
+				// Format key in bold, value in regular text
+				if value != "" {
+					formatted.WriteString("<b>" + key + ":</b> <code>" + value + "</code>\n")
+				} else {
+					formatted.WriteString("<b>" + key + ":</b>\n")
+				}
+			} else {
+				formatted.WriteString(line + "\n")
+			}
+		} else {
+			formatted.WriteString(line + "\n")
+		}
+	}
+
+	return formatted.String()
+}
+
 func MediaInfoHandler(m *telegram.NewMessage) error {
 	if !m.IsReply() {
 		m.Reply("Reply to a message to get media info")
@@ -404,7 +444,17 @@ func MediaInfoHandler(m *telegram.NewMessage) error {
 		return nil
 	}
 
-	url, _, err := postToSpaceBin(strings.Trim(out.String(), "\n"))
+	mediaInfoOutput := strings.Trim(out.String(), "\n")
+
+	// If output is less than 3000 characters, format and send as message
+	if len(mediaInfoOutput) < 3000 {
+		formattedOutput := formatMediaInfo(mediaInfoOutput)
+		msg.Edit(formattedOutput)
+		return nil
+	}
+
+	// Otherwise, post to pastebin
+	url, _, err := postToSpaceBin(mediaInfoOutput)
 	if err != nil {
 		m.Reply("Error: " + err.Error())
 		return nil
