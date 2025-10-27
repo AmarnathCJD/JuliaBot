@@ -120,6 +120,7 @@ func initFunc(c *telegram.Client) {
 		//c.On(telegram.OnNewMessage, modules.AIHandler)
 
 		c.On(telegram.OnNewMessage, modules.AFKHandler)
+		c.On("command:audio", modules.ConvertToAudioHandle)
 
 		modules.Mods.Init(c)
 	}
