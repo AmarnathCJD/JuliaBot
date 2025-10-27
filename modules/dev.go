@@ -703,8 +703,26 @@ func SpectrogramHandler(m *telegram.NewMessage) error {
 	outputFile := "tmp/spectrogram_" + strconv.FormatInt(int64(m.ID), 10) + ".png"
 	defer os.Remove(outputFile)
 
+	wavFile := "tmp/audio_" + strconv.FormatInt(int64(m.ID), 10) + ".wav"
+	defer os.Remove(wavFile)
+
 	os.MkdirAll("tmp", 0755)
-	cmd := exec.Command("sox", fi, "-n", "spectrogram", "-o", outputFile)
+
+	convertCmd := exec.Command("ffmpeg", "-i", fi, "-ar", "44100", "-ac", "2", wavFile, "-y")
+	var convertErr bytes.Buffer
+	convertCmd.Stderr = &convertErr
+
+	err = convertCmd.Run()
+	if err != nil {
+		errMsg := convertErr.String()
+		if errMsg == "" {
+			errMsg = err.Error()
+		}
+		msg.Edit("<code>Error converting to WAV:</code> <b>" + errMsg + "</b>")
+		return nil
+	}
+
+	cmd := exec.Command("sox", wavFile, "-n", "spectrogram", "-o", outputFile)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
