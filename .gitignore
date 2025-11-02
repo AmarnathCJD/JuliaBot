@@ -31,3 +31,4 @@ vendor/*
 *.iml
 *.webm
 *.m4a
+*.py

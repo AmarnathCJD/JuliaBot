@@ -113,6 +113,9 @@ func initFunc(c *telegram.Client) {
 		c.On("inline:imdb", modules.ImDBInlineSearchHandler)
 		c.On("callback:imdb_(.*)_(.*)", modules.ImdbCallbackHandler)
 
+		c.On("message:^/edit", modules.EditImageCustomHandler)
+		c.On("message:^/gen", modules.GenerateImageHandler)
+
 		// c.On("message:/color", modules.ColorizeHandler)
 		// c.On("message:/upscale", modules.UpscaleHandler)
 		// c.On("message:/expand", modules.ExpandHandler)
