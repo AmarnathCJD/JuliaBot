@@ -2,10 +2,8 @@ github.com/ProtonMail/go-crypto v1.3.0 h1:ILq8+Sf5If5DCpHQp4PbZdS1J7HDFRXz/+xKBi
 github.com/ProtonMail/go-crypto v1.3.0/go.mod h1:9whxjD8Rbs29b4XWbB8irEcE8KHMqaR2e7GWU1R+/PE=
 github.com/PuerkitoBio/goquery v1.10.3 h1:pFYcNSqHxBD06Fpj/KsbStFRsgRATgnf3LeXiUkhzPo=
 github.com/PuerkitoBio/goquery v1.10.3/go.mod h1:tMUX0zDMHXYlAQk6p35XxQMqMweEKB7iK7iLNd4RH4Y=
-github.com/amarnathcjd/gogram v1.6.3 h1:TGS75o2M+JTEkZTGZ866MjpSM9mlKGsw4ANK54nrXGg=
-github.com/amarnathcjd/gogram v1.6.3/go.mod h1:vZURSYiNYNPnZ70msOgmRmcVuku1P6ol2zIAHMM1CFY=
-github.com/amarnathcjd/gogram v1.6.5-0.20251027090313-f709196120c6 h1:tuWSDsJ1V3k418u29JKbybyWR3FYhhFodclLVsEaJEk=
-github.com/amarnathcjd/gogram v1.6.5-0.20251027090313-f709196120c6/go.mod h1:vZURSYiNYNPnZ70msOgmRmcVuku1P6ol2zIAHMM1CFY=
+github.com/amarnathcjd/gogram v1.6.5-0.20251103180559-62485d5fe049 h1:dFZb0tU0c7FILqVy7jU+/QIbj5AENCjR9QlVW6EIhbc=
+github.com/amarnathcjd/gogram v1.6.5-0.20251103180559-62485d5fe049/go.mod h1:vZURSYiNYNPnZ70msOgmRmcVuku1P6ol2zIAHMM1CFY=
 github.com/andybalholm/cascadia v1.3.3 h1:AG2YHrzJIm4BZ19iwJ/DAua6Btl3IwJX+VI4kktS1LM=
 github.com/andybalholm/cascadia v1.3.3/go.mod h1:xNd9bqTn98Ln4DwST8/nG+H0yuB8Hmgu1YHNnWw0GeA=
 github.com/bogem/id3v2 v1.2.0 h1:hKDF+F1gOgQ5r1QmBCEZUk4MveJbKxCeIDSBU7CQ4oI=

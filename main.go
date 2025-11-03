@@ -39,7 +39,7 @@ func main() {
 	ownerId, _ = strconv.ParseInt(os.Getenv("OWNER_ID"), 10, 64)
 
 	cfg := tg.NewClientConfigBuilder(int32(appId), os.Getenv("APP_HASH")).
-		WithLogger(tg.NewLogger(tg.LogInfo).NoColor()).
+		WithLogger(tg.NewLogger(tg.LogDebug)).
 		WithReqTimeout(100000 * time.Millisecond).
 		Build()
 
@@ -52,6 +52,7 @@ func main() {
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 	client.Logger.Info("Bot is running..., Press Ctrl+C to stop it.")
 	initFunc(client)
+	//client.FetchDifferenceOnStartup()
 
 	client.Idle()
 }
