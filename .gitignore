@@ -32,3 +32,4 @@ vendor/*
 *.webm
 *.m4a
 *.py
+snap.go

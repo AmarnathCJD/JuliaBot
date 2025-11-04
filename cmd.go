@@ -43,31 +43,32 @@ func FilterOwnerNoReply(m *telegram.NewMessage) bool {
 
 func initFunc(c *telegram.Client) {
 	c.UpdatesGetState()
+	c.SetCommandPrefixes(".")
 
 	if LoadModules {
 		// adminCMD
-		c.On("cmd:rspot", modules.RestartSpotify, telegram.FilterFunc(FilterOwner))
-		c.On("cmd:rproxy", modules.RestartProxy, telegram.FilterFunc(FilterOwnerAndAuth))
+		c.On("cmd:rspot", modules.RestartSpotify, telegram.NewFilter().FromUsers(ownerId))
+		c.On("cmd:rproxy", modules.RestartProxy, telegram.NewFilter().Custom(FilterOwnerAndAuth))
 		c.On("cmd:promote", modules.PromoteUserHandle)
-		c.On("cmd:restart", modules.RestartHandle, telegram.FilterFunc(FilterOwner))
+		c.On("cmd:restart", modules.RestartHandle, telegram.NewFilter().Custom(FilterOwner))
 		c.On("cmd:id", modules.IDHandle)
 
 		c.On("cmd:mz", modules.YtSongDL)
 		c.On("cmd:spot(:?ify)? (.*)", modules.SpotifyHandler)
 		c.On("cmd:spots", modules.SpotifySearchHandler)
-		c.On("cmd:sh", modules.ShellHandle, telegram.FilterFunc(FilterOwner))
-		c.On("cmd:bash", modules.ShellHandle, telegram.FilterFunc(FilterOwner))
-		c.On("cmd:ls", modules.LsHandler, telegram.FilterFunc(FilterOwner))
-		c.On("cmd:ul", modules.UploadHandle, telegram.FilterFunc(FilterOwnerNoReply))
-		c.On("cmd:upd", modules.UpdateSourceCodeHandle, telegram.FilterFunc(FilterOwnerNoReply))
-		c.On("cmd:gban", modules.GbanMeme, telegram.FilterFunc(FilterOwner))
+		c.On("cmd:sh", modules.ShellHandle, telegram.NewFilter().Custom(FilterOwner))
+		c.On("cmd:bash", modules.ShellHandle, telegram.NewFilter().Custom(FilterOwner))
+		c.On("cmd:ls", modules.LsHandler, telegram.NewFilter().Custom(FilterOwner))
+		c.On("cmd:ul", modules.UploadHandle, telegram.NewFilter().Custom(FilterOwnerNoReply))
+		c.On("cmd:upd", modules.UpdateSourceCodeHandle, telegram.NewFilter().Custom(FilterOwnerNoReply))
+		c.On("cmd:gban", modules.GbanMeme, telegram.NewFilter().Custom(FilterOwner))
 		c.On("cmd:greet", modules.ModifyGreetStatus)
 		c.On("cmd:start", modules.StartHandle)
 		c.On("cmd:help", modules.HelpHandle)
 		c.On("cmd:sys", modules.GatherSystemInfo)
 		c.On("cmd:info", modules.UserHandle)
 		c.On("cmd:json", modules.JsonHandle)
-		c.On("cmd:ping", modules.PingHandle)
+		c.On("cmd:[!?.]ping", modules.PingHandle)
 		c.On("cmd:eval", modules.EvalHandle, telegram.FilterFunc(FilterOwnerNoReply))
 
 		c.On("cmd:sessgen", modules.GenStringSessionHandler)
@@ -90,8 +91,8 @@ func initFunc(c *telegram.Client) {
 		c.On("command:math", modules.MathHandler)
 
 		// c.On("command:ai", modules.AIImageGEN)
-		// c.On("command:snap", modules.SnapSaveHandler)
-		// c.On("command:insta", modules.SnapSaveHandler)
+		c.On("command:snap", modules.SnapSaveHandler)
+		c.On("command:insta", modules.SnapSaveHandler)
 		//c.On("command:truec", modules.TruecallerHandle)
 		c.On("command:doge", modules.DogeSticker)
 
