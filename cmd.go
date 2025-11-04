@@ -43,7 +43,7 @@ func FilterOwnerNoReply(m *telegram.NewMessage) bool {
 
 func initFunc(c *telegram.Client) {
 	c.UpdatesGetState()
-	c.SetCommandPrefixes(".")
+	c.SetCommandPrefixes("./!-?")
 
 	if LoadModules {
 		// adminCMD
