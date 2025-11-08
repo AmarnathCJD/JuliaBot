@@ -579,7 +579,7 @@ func calcFileOrDirSize(path string) int64 {
 }
 
 func GoHandler(m *telegram.NewMessage) error {
-	m.Reply(fmt.Sprintf(`<b>-> Current Go Routines:</b> <code>%d</code>`, runtime.NumGoroutine()))
+	m.Reply(fmt.Sprintf(`➜ <b>Current Go Routines: %d</b>`, runtime.NumGoroutine()))
 	return nil
 }
 
