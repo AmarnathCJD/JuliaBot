@@ -578,6 +578,11 @@ func calcFileOrDirSize(path string) int64 {
 	return size
 }
 
+func GoHandler(m *telegram.NewMessage) error {
+	m.Reply(fmt.Sprintf(`<b>-> Current Go Routines:</b> <code>%d</code>`, runtime.NumGoroutine()))
+	return nil
+}
+
 func GenStringSessionHandler(m *telegram.NewMessage) error {
 	if !m.IsPrivate() {
 		m.Reply("This command can only be used in private chat")

@@ -201,7 +201,7 @@ func mathQuery(query string) (string, error) {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) == "" {
-		return "", fmt.Errorf("Invalid Math Expression")
+		return "", fmt.Errorf("invalid math expression")
 	}
 
 	return string(body), nil
@@ -210,7 +210,7 @@ func mathQuery(query string) (string, error) {
 func MathHandler(m *telegram.NewMessage) error {
 	q := m.Args()
 	if q == "" {
-		m.Reply("Please provide a mathematical expression")
+		m.Reply("please provide a mathematical expression")
 		return nil
 	}
 

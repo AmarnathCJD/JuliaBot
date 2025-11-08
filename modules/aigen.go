@@ -54,7 +54,7 @@ func EditImageCustomHandler(m *telegram.NewMessage) error {
 	defer os.Remove(editedImage)
 
 	_, err = m.ReplyMedia(editedImage, telegram.MediaOptions{
-		Caption: fmt.Sprintf("✨ <b>Image Edited</b>"),
+		Caption: "✨ <b>Edited Image</b>\n<code>" + prompt + "</code>",
 	})
 	if err != nil {
 		msg.Edit("Error uploading edited image: " + err.Error())

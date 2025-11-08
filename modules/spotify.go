@@ -567,7 +567,7 @@ func RepairOGG(inputFile string, r SpotifyResponse) (string, []byte, error) {
 		return outputFile, coverData, nil
 	}
 
-	tag, err := id3v2.Open(outputFile, id3v2.Options{Parse: true})
+	tag, _ := id3v2.Open(outputFile, id3v2.Options{Parse: true})
 	tag.SetArtist(r.Aritst)
 	tag.SetTitle(r.Name)
 	tag.SetVersion(4)
