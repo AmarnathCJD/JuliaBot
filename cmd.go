@@ -71,6 +71,7 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:ping", modules.PingHandle)
 		c.On("cmd:eval", modules.EvalHandle, telegram.FilterFunc(FilterOwnerNoReply))
 		c.On("cmd:go", modules.GoHandler)
+		c.On("cmd:cancel", modules.CancelDownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
 
 		c.On("cmd:sessgen", modules.GenStringSessionHandler)
 
