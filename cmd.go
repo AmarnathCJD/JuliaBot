@@ -25,8 +25,8 @@ func FilterOwnerAndAuth(m *telegram.NewMessage) bool {
 		if m.SenderID() == ownerId {
 			return true
 		}
-		au := strings.Split(auths, ",")
-		for _, user := range au {
+		au := strings.SplitSeq(auths, ",")
+		for user := range au {
 			if strings.TrimSpace(user) == strconv.Itoa(int(m.SenderID())) {
 				return true
 			}
@@ -115,7 +115,7 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:imdb", modules.ImdbHandler)
 		c.On("inline:imdb", modules.ImDBInlineSearchHandler)
 		c.On("callback:imdb_(.*)_(.*)", modules.ImdbCallbackHandler)
-		c.On("cmd:cancel", modules.CancelDownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
+		//c.On("cmd:cancel", modules.CancelDownloadHandle)
 
 		// c.On("cmd:edit", modules.EditImageCustomHandler)
 		// c.On("cmd:gen", modules.GenerateImageHandler)
