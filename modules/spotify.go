@@ -297,7 +297,7 @@ func SpotifySearchHandler(m *telegram.NewMessage) error {
 	for _, r := range response.Results {
 		kb.AddRow(b.Data(fmt.Sprintf("%s - %s", r.Name, r.Artist), fmt.Sprintf("spot_%s_%d", r.ID, m.SenderID())))
 	}
-	m.Reply("<b>Select a song from below:</b>", telegram.SendOptions{
+	m.Reply("<b>Select a song from below:</b>", &telegram.SendOptions{
 		ReplyMarkup: kb.Build(),
 	})
 	return nil
@@ -359,7 +359,7 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 		for _, r := range response.Results {
 			kb.AddRow(b.Data(fmt.Sprintf("%s - %s", r.Name, r.Artist), fmt.Sprintf("spot_%s_%d", r.ID, m.SenderID())))
 		}
-		m.Reply("<b>Select a song from below:</b>", telegram.SendOptions{
+		m.Reply("<b>Select a song from below:</b>", &telegram.SendOptions{
 			ReplyMarkup: kb.Build(),
 		})
 		return nil
@@ -419,7 +419,7 @@ func SpotifyHandler(m *telegram.NewMessage) error {
 	b := telegram.Button
 
 	defer os.Remove(fixedFile)
-	m.ReplyMedia(fixedFile, telegram.MediaOptions{
+	m.ReplyMedia(fixedFile, &telegram.MediaOptions{
 		Attributes: []telegram.DocumentAttribute{
 			&telegram.DocumentAttributeFilename{
 				FileName: fmt.Sprintf("%s.ogg", response.Name),

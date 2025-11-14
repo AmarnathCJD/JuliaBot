@@ -271,18 +271,18 @@ func UserHandle(m *telegram.NewMessage) error {
 				FileReference: stick.FileReference,
 			},
 		}
-		if _, err := m.ReplyMedia(sty, telegram.MediaOptions{
+		if _, err := m.ReplyMedia(sty, &telegram.MediaOptions{
 			ReplyMarkup: keyb.Build(),
 		}); err == nil {
 			buisnessSent = true
 		}
 	}
 
-	mediaOpt := telegram.MediaOptions{
+	mediaOpt := &telegram.MediaOptions{
 		Caption: userString,
 	}
 
-	sendOpt := telegram.SendOptions{}
+	sendOpt := &telegram.SendOptions{}
 
 	if !buisnessSent {
 		mediaOpt.ReplyMarkup = keyb.Build()

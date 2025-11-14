@@ -101,7 +101,7 @@ func DogeStickerInline(m *telegram.InlineQuery) error {
 		Title:   "Umbyasa Doge Sticker",
 		Caption: m.Args(),
 	})
-	m.Answer(b.Results(), telegram.InlineSendOptions{Gallery: true})
+	m.Answer(b.Results(), &telegram.InlineSendOptions{Gallery: true})
 	return nil
 }
 
@@ -173,7 +173,7 @@ func PinterestInlineHandle(i *telegram.InlineQuery) error {
 			})
 		}
 
-		i.Answer(b.Results(), telegram.InlineSendOptions{
+		i.Answer(b.Results(), &telegram.InlineSendOptions{
 			Gallery:    true,
 			NextOffset: strconv.Itoa(offset + 1),
 		})

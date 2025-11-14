@@ -114,9 +114,10 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:imdb", modules.ImdbHandler)
 		c.On("inline:imdb", modules.ImDBInlineSearchHandler)
 		c.On("callback:imdb_(.*)_(.*)", modules.ImdbCallbackHandler)
+		c.On("cmd:cancel", modules.CancelDownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
 
-		c.On("cmd:edit", modules.EditImageCustomHandler)
-		c.On("cmd:gen", modules.GenerateImageHandler)
+		// c.On("cmd:edit", modules.EditImageCustomHandler)
+		// c.On("cmd:gen", modules.GenerateImageHandler)
 
 		// c.On("cmd:color", modules.ColorizeHandler)
 		// c.On("cmd:upscale", modules.UpscaleHandler)

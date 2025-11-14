@@ -39,7 +39,7 @@ func ConvertToAudioHandle(m *telegram.NewMessage) error {
 		return nil
 	}
 
-	_, err = m.ReplyMedia(fmt.Sprintf("%s_audio.mp3", media), telegram.MediaOptions{
+	_, err = m.ReplyMedia(fmt.Sprintf("%s_audio.mp3", media), &telegram.MediaOptions{
 		Caption: "Here is your audio file!",
 	})
 
@@ -48,4 +48,3 @@ func ConvertToAudioHandle(m *telegram.NewMessage) error {
 
 	return err
 }
-

@@ -33,3 +33,9 @@ vendor/*
 *.m4a
 *.py
 snap.go
+*.js 
+*.wasm
+*.sqlite
+*.db
+*.html
+*.bin

@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"time"
 
 	//"time"
 
@@ -40,7 +39,7 @@ func main() {
 
 	cfg := tg.NewClientConfigBuilder(int32(appId), os.Getenv("APP_HASH")).
 		WithLogger(tg.NewLogger(tg.LogInfo)).
-		WithReqTimeout(100000 * time.Millisecond).
+		WithReqTimeout(100).
 		Build()
 
 	client, err := tg.NewClient(cfg)

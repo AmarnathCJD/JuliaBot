@@ -69,7 +69,7 @@ func AFKHandler(m *tg.NewMessage) error {
 								m.ReplyMedia(media)
 								m.Respond(msg)
 							} else {
-								m.ReplyMedia(media, tg.MediaOptions{
+								m.ReplyMedia(media, &tg.MediaOptions{
 									Caption: msg,
 								})
 							}
@@ -101,7 +101,7 @@ func AFKHandler(m *tg.NewMessage) error {
 										m.ReplyMedia(media)
 										m.Respond(msg)
 									} else {
-										m.ReplyMedia(media, tg.MediaOptions{
+										m.ReplyMedia(media, &tg.MediaOptions{
 											Caption: msg,
 										})
 									}
@@ -133,7 +133,7 @@ func AFKHandler(m *tg.NewMessage) error {
 											m.ReplyMedia(media)
 											m.Respond(msg)
 										} else {
-											m.ReplyMedia(media, tg.MediaOptions{
+											m.ReplyMedia(media, &tg.MediaOptions{
 												Caption: msg,
 											})
 										}
@@ -164,7 +164,7 @@ func AFKHandler(m *tg.NewMessage) error {
 											m.ReplyMedia(media)
 											m.Respond(msg)
 										} else {
-											m.ReplyMedia(media, tg.MediaOptions{
+											m.ReplyMedia(media, &tg.MediaOptions{
 												Caption: msg,
 											})
 										}

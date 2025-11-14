@@ -87,7 +87,7 @@ func YtVideoDL(m *telegram.NewMessage) error {
 	defer os.Remove("yt-video.mp4")
 	defer msg.Delete()
 
-	m.ReplyMedia("yt-video.mp4", telegram.MediaOptions{
+	m.ReplyMedia("yt-video.mp4", &telegram.MediaOptions{
 		Attributes: []telegram.DocumentAttribute{
 			&telegram.DocumentAttributeFilename{
 				FileName: "yt-video.mp4",
@@ -142,7 +142,7 @@ func YtSongDL(m *telegram.NewMessage) error {
 			os.WriteFile("song.mp3", body, 0644)
 			defer os.Remove("song.mp3")
 
-			m.ReplyMedia("song.mp3", telegram.MediaOptions{
+			m.ReplyMedia("song.mp3", &telegram.MediaOptions{
 				Attributes: []telegram.DocumentAttribute{
 					&telegram.DocumentAttributeFilename{
 						FileName: strings.Split(match[3], "', '")[1] + ".mp3",
@@ -298,7 +298,7 @@ func InlineSpotify(m *telegram.InlineQuery) error {
 		})
 	}
 
-	m.Answer(b.Results(), telegram.InlineSendOptions{Gallery: true, CacheTime: 0})
+	m.Answer(b.Results(), &telegram.InlineSendOptions{Gallery: true, CacheTime: 0})
 	return nil
 }
 

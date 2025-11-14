@@ -457,7 +457,7 @@ func ImDBInlineSearchHandler(m *tg.InlineQuery) error {
 		})
 	}
 
-	m.Answer(b.Results(), tg.InlineSendOptions{
+	m.Answer(b.Results(), &tg.InlineSendOptions{
 		Gallery: false,
 	})
 	return nil
@@ -465,7 +465,7 @@ func ImDBInlineSearchHandler(m *tg.InlineQuery) error {
 
 func ImdbHandler(m *tg.NewMessage) error {
 	if m.Args() == "" {
-		m.Reply("Please provide a search query.", tg.SendOptions{
+		m.Reply("Please provide a search query.", &tg.SendOptions{
 			ReplyMarkup: tg.NewKeyboard().AddRow(
 				tg.Button.SwitchInline("Go >> Search IMDb", true, "imdb "),
 			).Build(),
@@ -480,7 +480,7 @@ func ImdbHandler(m *tg.NewMessage) error {
 			return err
 		}
 		if data.Poster != "" {
-			m.ReplyMedia(data.Poster, tg.MediaOptions{
+			m.ReplyMedia(data.Poster, &tg.MediaOptions{
 				Caption: FormatIMDBDataToHTML(data),
 				Spoiler: true,
 				ReplyMarkup: tg.NewKeyboard().AddRow(
@@ -488,7 +488,7 @@ func ImdbHandler(m *tg.NewMessage) error {
 				).Build(),
 			})
 		} else {
-			m.Reply(FormatIMDBDataToHTML(data), tg.SendOptions{
+			m.Reply(FormatIMDBDataToHTML(data), &tg.SendOptions{
 				ReplyMarkup: tg.NewKeyboard().AddRow(
 					tg.Button.URL("🔗 IMDb Link", fmt.Sprintf("https://www.imdb.com/title/%s/", m.Args())),
 				).Build(),
@@ -516,7 +516,7 @@ func ImdbHandler(m *tg.NewMessage) error {
 			)
 		}
 
-		m.Reply("🔍 <b>Search Results:</b>", tg.SendOptions{
+		m.Reply("🔍 <b>Search Results:</b>", &tg.SendOptions{
 			ReplyMarkup: kyb.Build(),
 		})
 		return nil

@@ -201,7 +201,7 @@ func EvalHandle(m *telegram.NewMessage) error {
 
 	resp, isfile := perfomEval(code, m, imports)
 	if isfile {
-		if _, err := m.ReplyMedia(resp, telegram.MediaOptions{Caption: "Output"}); err != nil {
+		if _, err := m.ReplyMedia(resp, &telegram.MediaOptions{Caption: "Output"}); err != nil {
 			m.Reply("Error: " + err.Error())
 		}
 		return nil
@@ -342,7 +342,7 @@ func JsonHandle(m *telegram.NewMessage) error {
 			return nil
 		}
 
-		_, err = m.ReplyMedia(tmpFile.Name(), telegram.MediaOptions{Caption: "Message JSON"})
+		_, err = m.ReplyMedia(tmpFile.Name(), &telegram.MediaOptions{Caption: "Message JSON"})
 		if err != nil {
 			m.Reply("Error: " + err.Error())
 		}
@@ -460,7 +460,7 @@ func MediaInfoHandler(m *telegram.NewMessage) error {
 		return nil
 	}
 
-	msg.Edit("<b><a href='"+url+"'>Media Info Pasted</a></b>", telegram.SendOptions{
+	msg.Edit("<b><a href='"+url+"'>Media Info Pasted</a></b>", &telegram.SendOptions{
 		ReplyMarkup: telegram.NewKeyboard().AddRow(
 			telegram.Button.URL("View", url),
 		).Build(),
@@ -745,7 +745,7 @@ func SpectrogramHandler(m *telegram.NewMessage) error {
 		return nil
 	}
 
-	_, err = m.ReplyMedia(outputFile, telegram.MediaOptions{
+	_, err = m.ReplyMedia(outputFile, &telegram.MediaOptions{
 		Caption: "🎵 Audio Spectrogram",
 	})
 	if err != nil {

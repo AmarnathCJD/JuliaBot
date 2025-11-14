@@ -1,12 +1,19 @@
 package modules
 
 import (
+	"context"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
+)
+
+var (
+	downloadCancels = make(map[int32]context.CancelFunc)
+	cancelMutex     sync.RWMutex
 )
 
 func SendFileByIDHandle(m *telegram.NewMessage) error {
@@ -63,7 +70,7 @@ func UploadHandle(m *telegram.NewMessage) error {
 	msg, _ := m.Reply("Uploading...")
 	uploadStartTimestamp := time.Now()
 
-	if _, err := m.RespondMedia(filename, telegram.MediaOptions{
+	if _, err := m.RespondMedia(filename, &telegram.MediaOptions{
 		Spoiler:         spoiler,
 		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
 		ForceDocument:   strings.Contains(filename, "--doc"),
@@ -148,16 +155,59 @@ func DownloadHandle(m *telegram.NewMessage) error {
 
 	uploadStartTimestamp := time.Now()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cancelMutex.Lock()
+	downloadCancels[msg.ID] = cancel
+	cancelMutex.Unlock()
+
+	defer func() {
+		cancelMutex.Lock()
+		delete(downloadCancels, msg.ID)
+		cancelMutex.Unlock()
+	}()
+
 	if fi, err := r.Download(&telegram.DownloadOptions{
 		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
 		FileName:        fn,
+		Ctx:             ctx,
 	}); err != nil {
-		msg.Edit("Error: " + err.Error())
+		if err == context.Canceled {
+			msg.Edit("Download cancelled.")
+		} else {
+			msg.Edit("Error: " + err.Error())
+		}
 		return nil
 	} else {
 		msg.Edit("Downloaded <code>" + fi + "</code> in <code>" + time.Since(uploadStartTimestamp).String() + "</code>")
 	}
 
+	return nil
+}
+
+func CancelDownloadHandle(m *telegram.NewMessage) error {
+	if !m.IsReply() {
+		m.Reply("Reply to a download message to cancel it")
+		return nil
+	}
+
+	reply, err := m.GetReplyMessage()
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	cancelMutex.RLock()
+	cancel, exists := downloadCancels[reply.ID]
+	cancelMutex.RUnlock()
+
+	if !exists {
+		m.Reply("No active download found for this message")
+		return nil
+	}
+
+	cancel()
+	m.Reply("Download cancelled!")
 	return nil
 }
 
@@ -167,5 +217,6 @@ func init() {
 <code>/file &lt;fileId&gt;</code> - Send a file by its fileId
 <code>/fid</code> - Reply to a file to get its fileId
 <code>/ul &lt;filename&gt; [-s]</code> - Upload a file
-<code>/dl</code> - Reply to a file to download it`)
+<code>/dl</code> - Reply to a file to download it
+<code>/cancel</code> - Reply to a download message to cancel it`)
 }

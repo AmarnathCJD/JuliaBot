@@ -145,7 +145,7 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 		return nil
 	}
 
-	var opt = telegram.MediaOptions{
+	var opt = &telegram.MediaOptions{
 		ForceDocument:   true,
 		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
 		Spoiler:         true,

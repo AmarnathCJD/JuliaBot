@@ -44,7 +44,7 @@ func HelpHandle(m *telegram.NewMessage) error {
 
 	if !m.IsPrivate() {
 		m.Reply("DM me for help!",
-			telegram.SendOptions{
+			&telegram.SendOptions{
 				ReplyMarkup: b.Keyboard(b.Row(b.URL("Click Here", "t.me/"+m.Client.Me().Username+"?start=help"))),
 			})
 		return nil
@@ -56,7 +56,7 @@ func HelpHandle(m *telegram.NewMessage) error {
 	}
 
 	m.Reply("Hello! I'm <b>Julia</b> created by <b>@amarnathcjd</b>. To demonstrate the capabilities of <b><a href='github.com/amarnathcjd/gogram'>gogram</a></b> library. Here are the available commands:\n\n",
-		telegram.SendOptions{
+		&telegram.SendOptions{
 			ReplyMarkup: telegram.NewKeyboard().NewColumn(2, buttons...).Build(),
 		})
 
