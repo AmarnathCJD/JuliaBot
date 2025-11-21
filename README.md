@@ -21,6 +21,13 @@ go mod tidy
 go run .
 ```
 
+
+### Docker Setup
+```bash
+docker build -t julia .
+docker run -d --name julia --env-file .env julia
+```
+
 ### Features
 
 - Modular
