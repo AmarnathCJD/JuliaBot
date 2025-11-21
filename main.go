@@ -49,9 +49,10 @@ func main() {
 	client.Conn()
 
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
-	client.Logger.Info("Bot is running..., Press Ctrl+C to stop it.")
+	client.Logger.Info("Bot is running as @%s", client.Me().Username)
 	initFunc(client)
 	//client.FetchDifferenceOnStartup()
 
 	client.Idle()
+	client.Logger.Info("Bot stopped")
 }

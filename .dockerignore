@@ -1,0 +1,6 @@
+**
+!go.*
+!*.go
+!modules
+!cover_gen.sh
+!assets
