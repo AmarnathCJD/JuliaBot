@@ -42,10 +42,11 @@ func FilterOwnerNoReply(m *telegram.NewMessage) bool {
 }
 
 func initFunc(c *telegram.Client) {
-	c.UpdatesGetState()
+	_, _ = c.UpdatesGetState()
 	c.SetCommandPrefixes("./!-?")
 
 	if LoadModules {
+		c.Logger.Info("Loading Modules...")
 		// adminCMD
 		c.On("cmd:rspot", modules.RestartSpotify, telegram.NewFilter().FromUsers(ownerId))
 		c.On("cmd:rproxy", modules.RestartProxy, telegram.NewFilter().Custom(FilterOwnerAndAuth))
@@ -106,8 +107,8 @@ func initFunc(c *telegram.Client) {
 		c.On("command:math", modules.MathHandler)
 
 		// c.On("command:ai", modules.AIImageGEN)
-		c.On("command:snap", modules.SnapSaveHandler)
-		c.On("command:insta", modules.SnapSaveHandler)
+		//c.On("command:snap", modules.SnapSaveHandler)
+		//c.On("command:insta", modules.SnapSaveHandler)
 		//c.On("command:truec", modules.TruecallerHandle)
 		c.On("command:doge", modules.DogeSticker)
 
