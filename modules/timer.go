@@ -4,101 +4,229 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
 )
 
-type TimerService struct {
-	timeToWait int
-	message    string
-	channelID  int64
-	client     *telegram.Client
+type timerData struct {
+	chatID   int64
+	userID   int64
+	message  string
+	media    telegram.MessageMedia
+	client   *telegram.Client
+	duration time.Duration
 }
 
-func (t *TimerService) startTimer() {
-	timer := time.NewTimer(time.Duration(t.timeToWait) * time.Second)
-	<-timer.C
-
-	t.client.SendMessage(t.channelID, t.message)
-}
+var (
+	activeTimers   = make(map[string]*timerData)
+	activeTimersMu sync.RWMutex
+)
 
 func SetTimerHandler(m *telegram.NewMessage) error {
-	if m.Args() == "" {
-		m.Reply("Please provide the time to wait and the message")
+	args := m.Args()
+	if args == "" {
+		m.Reply("<b>Usage:</b> <code>/timer &lt;duration&gt; &lt;message&gt;</code>\n<b>Example:</b> <code>/timer 1h30m Take a break!</code>\n\n<i>Reply to media to include it in the reminder</i>")
 		return nil
 	}
 
-	args := strings.Split(m.Args(), " ")
-	if len(args) < 2 {
-		m.Reply("Invalid arguments. Please provide the time to wait and the message")
-		return nil
+	parts := strings.SplitN(args, " ", 2)
+	message := ""
+	if len(parts) >= 2 {
+		message = parts[1]
 	}
 
-	// time can be like 400 -> 400s, 10m, 1h etc etc 1h10m20s, etc
-	timeToWait, err := parseTime(args[0])
+	duration, err := parseDuration(parts[0])
 	if err != nil {
-		m.Reply("Invalid time format")
+		m.Reply("<b>Error:</b> " + err.Error())
 		return nil
 	}
 
-	message := strings.Join(args[1:], " ")
-
-	timer := TimerService{
-		timeToWait: timeToWait,
-		message:    message,
-		channelID:  m.ChatID(),
-		client:     m.Client,
+	timer := &timerData{
+		chatID:   m.ChatID(),
+		userID:   m.SenderID(),
+		message:  message,
+		client:   m.Client,
+		duration: duration,
 	}
 
-	go timer.startTimer()
-	m.Reply(fmt.Sprintf("Timer set for %s", time.Duration(timeToWait)*time.Second))
+	if m.IsReply() {
+		reply, err := m.GetReplyMessage()
+		if err == nil && reply.IsMedia() {
+			timer.media = reply.Media()
+		}
+	}
+
+	timerID := fmt.Sprintf("%d_%d_%d", m.ChatID(), m.SenderID(), time.Now().UnixNano())
+
+	activeTimersMu.Lock()
+	activeTimers[timerID] = timer
+	activeTimersMu.Unlock()
+
+	time.AfterFunc(duration, func() {
+		sendTimerNotification(timerID)
+	})
+
+	m.Reply(fmt.Sprintf("⏰ Timer set for <b>%s</b>", formatDuration(duration)))
+	return nil
+}
+
+func sendTimerNotification(timerID string) {
+	activeTimersMu.RLock()
+	timer, exists := activeTimers[timerID]
+	activeTimersMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	text := "⏰ <b>Timer Alert!</b>"
+	if timer.message != "" {
+		text += "\n" + timer.message
+	}
+
+	snoozeBtn := telegram.Button.Data("Snooze 5m", "snooze_"+timerID)
+	dismissBtn := telegram.Button.Data("Dismiss", "dismiss_"+timerID)
+	keyboard := telegram.NewKeyboard().AddRow(snoozeBtn).AddRow(dismissBtn).Build()
+
+	if timer.media != nil {
+		timer.client.SendMedia(timer.chatID, timer.media, &telegram.MediaOptions{
+			Caption:     text,
+			ReplyMarkup: keyboard,
+		})
+	} else {
+		timer.client.SendMessage(timer.chatID, text, &telegram.SendOptions{
+			ReplyMarkup: keyboard,
+		})
+	}
+}
+
+func TimerCallbackHandler(cb *telegram.CallbackQuery) error {
+	data := cb.DataString()
+
+	var action, timerID string
+	if strings.HasPrefix(data, "snooze_") {
+		action = "snooze"
+		timerID = strings.TrimPrefix(data, "snooze_")
+	} else if strings.HasPrefix(data, "dismiss_") {
+		action = "dismiss"
+		timerID = strings.TrimPrefix(data, "dismiss_")
+	} else {
+		return nil
+	}
+
+	activeTimersMu.RLock()
+	timer, exists := activeTimers[timerID]
+	activeTimersMu.RUnlock()
+
+	if !exists {
+		cb.Answer("Timer expired", &telegram.CallbackOptions{Alert: true})
+		return nil
+	}
+
+	if cb.Sender.ID != timer.userID {
+		cb.Answer("Only the timer setter can do this!", &telegram.CallbackOptions{Alert: true})
+		return nil
+	}
+
+	switch action {
+	case "snooze":
+		snoozeDuration := 5 * time.Minute
+		time.AfterFunc(snoozeDuration, func() {
+			sendTimerNotification(timerID)
+		})
+		cb.Edit("⏰ <b>Snoozed for 5 minutes</b>")
+		cb.Answer("Snoozed!")
+
+	case "dismiss":
+		activeTimersMu.Lock()
+		delete(activeTimers, timerID)
+		activeTimersMu.Unlock()
+		cb.Edit("✅ <b>Timer dismissed</b>")
+		cb.Answer("Dismissed!")
+	}
 
 	return nil
 }
 
-func parseTime(timeStr string) (int, error) {
-	var timeToWait int
-
-	timeUnits := map[string]int{
-		"s": 1,
-		"m": 60,
-		"h": 3600,
-		"d": 24 * 3600,
-		"w": 7 * 24 * 3600,
+func parseDuration(s string) (time.Duration, error) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return 0, fmt.Errorf("empty duration")
 	}
 
-	timeParts := strings.FieldsFunc(timeStr, func(r rune) bool {
-		return r >= 'a' && r <= 'z'
-	})
+	if d, err := time.ParseDuration(s); err == nil {
+		return d, nil
+	}
 
-	suffixIndex := 0
-	for _, part := range timeParts {
-		if suffixIndex >= len(timeStr) {
-			return 0, fmt.Errorf("invalid time format")
-		}
+	var total time.Duration
+	var numBuf strings.Builder
 
-		for suffixIndex < len(timeStr) && (timeStr[suffixIndex] < 'a' || timeStr[suffixIndex] > 'z') {
-			suffixIndex++
-		}
-
-		if suffixIndex >= len(timeStr) {
-			return 0, fmt.Errorf("invalid time format")
-		}
-
-		suffix := string(timeStr[suffixIndex])
-		if multiplier, exists := timeUnits[suffix]; exists {
-			value, err := strconv.Atoi(part)
-			if err != nil {
-				return 0, err
+	for _, r := range s {
+		switch {
+		case r >= '0' && r <= '9':
+			numBuf.WriteRune(r)
+		case r == 'd' || r == 'w':
+			if numBuf.Len() == 0 {
+				return 0, fmt.Errorf("invalid duration: missing number before '%c'", r)
 			}
-
-			timeToWait += value * multiplier
-			suffixIndex++
-		} else {
-			return 0, fmt.Errorf("invalid time unit: %s", suffix)
+			n, _ := strconv.Atoi(numBuf.String())
+			numBuf.Reset()
+			if r == 'd' {
+				total += time.Duration(n) * 24 * time.Hour
+			} else {
+				total += time.Duration(n) * 7 * 24 * time.Hour
+			}
+		case r == 'h' || r == 'm' || r == 's':
+			if numBuf.Len() == 0 {
+				return 0, fmt.Errorf("invalid duration: missing number before '%c'", r)
+			}
+			n, _ := strconv.Atoi(numBuf.String())
+			numBuf.Reset()
+			switch r {
+			case 'h':
+				total += time.Duration(n) * time.Hour
+			case 'm':
+				total += time.Duration(n) * time.Minute
+			case 's':
+				total += time.Duration(n) * time.Second
+			}
+		default:
+			return 0, fmt.Errorf("invalid character '%c' in duration", r)
 		}
 	}
 
-	return timeToWait, nil
+	if numBuf.Len() > 0 {
+		n, _ := strconv.Atoi(numBuf.String())
+		total += time.Duration(n) * time.Second
+	}
+
+	if total <= 0 {
+		return 0, fmt.Errorf("duration must be positive")
+	}
+
+	return total, nil
+}
+
+func formatDuration(d time.Duration) string {
+	var parts []string
+
+	if days := d / (24 * time.Hour); days > 0 {
+		parts = append(parts, fmt.Sprintf("%dd", days))
+		d -= days * 24 * time.Hour
+	}
+	if hours := d / time.Hour; hours > 0 {
+		parts = append(parts, fmt.Sprintf("%dh", hours))
+		d -= hours * time.Hour
+	}
+	if mins := d / time.Minute; mins > 0 {
+		parts = append(parts, fmt.Sprintf("%dm", mins))
+		d -= mins * time.Minute
+	}
+	if secs := d / time.Second; secs > 0 || len(parts) == 0 {
+		parts = append(parts, fmt.Sprintf("%ds", secs))
+	}
+
+	return strings.Join(parts, " ")
 }

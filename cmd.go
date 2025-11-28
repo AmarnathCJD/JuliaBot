@@ -49,7 +49,13 @@ func initFunc(c *telegram.Client) {
 		// adminCMD
 		c.On("cmd:rspot", modules.RestartSpotify, telegram.NewFilter().FromUsers(ownerId))
 		c.On("cmd:rproxy", modules.RestartProxy, telegram.NewFilter().Custom(FilterOwnerAndAuth))
+
 		c.On("cmd:promote", modules.PromoteUserHandle)
+		c.On("cmd:demote", modules.DemoteUserHandle)
+		c.On("cmd:ban", modules.BanUserHandle)
+		c.On("cmd:unban", modules.UnbanUserHandle)
+		c.On("cmd:kick", modules.KickUserHandle)
+
 		c.On("cmd:restart", modules.RestartHandle, telegram.NewFilter().Custom(FilterOwner))
 		c.On("cmd:id", modules.IDHandle)
 
@@ -61,7 +67,8 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:ls", modules.LsHandler, telegram.NewFilter().Custom(FilterOwner))
 		c.On("cmd:ul", modules.UploadHandle, telegram.NewFilter().Custom(FilterOwnerNoReply))
 		c.On("cmd:upd", modules.UpdateSourceCodeHandle, telegram.NewFilter().Custom(FilterOwnerNoReply))
-		c.On("cmd:gban", modules.GbanMeme, telegram.NewFilter().Custom(FilterOwner))
+		c.On("cmd:gban", modules.Gban, telegram.NewFilter().Custom(FilterOwner))
+		c.On("cmd:ungban", modules.Ungban, telegram.NewFilter().Custom(FilterOwner))
 		c.On("cmd:greet", modules.ModifyGreetStatus)
 		c.On("cmd:start", modules.StartHandle)
 		c.On("cmd:help", modules.HelpHandle)
@@ -69,6 +76,7 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:info", modules.UserHandle)
 		c.On("cmd:json", modules.JsonHandle)
 		c.On("cmd:ping", modules.PingHandle)
+		c.On("cmd:fileinfo", modules.FileInfoHandle)
 		c.On("cmd:eval", modules.EvalHandle, telegram.FilterFunc(FilterOwnerNoReply))
 		c.On("cmd:go", modules.GoHandler)
 		c.On("cmd:cancel", modules.CancelDownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
@@ -83,6 +91,8 @@ func initFunc(c *telegram.Client) {
 		c.On("inline:doge", modules.DogeStickerInline)
 
 		c.On("cmd:stream", modules.StreamHandler)
+		c.On("cmd:streams", modules.ListStreamsHandler)
+		c.On("cmd:stopstream", modules.StopStreamHandler)
 
 		//c.AddRawHandler(&telegram.UpdateBotInlineSend{}, modules.SpotifyInlineHandler)
 		c.On(telegram.OnInline, modules.SpotifyInlineSearch)
@@ -90,6 +100,9 @@ func initFunc(c *telegram.Client) {
 
 		c.On("command:paste", modules.PasteBinHandler)
 		c.On("command:timer", modules.SetTimerHandler)
+		c.On("callback:snooze_", modules.TimerCallbackHandler)
+		c.On("callback:dismiss_", modules.TimerCallbackHandler)
+
 		c.On("command:math", modules.MathHandler)
 
 		// c.On("command:ai", modules.AIImageGEN)

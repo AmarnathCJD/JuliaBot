@@ -2,17 +2,13 @@ package modules
 
 import (
 	"bytes"
-	"compress/gzip"
-	"encoding/json"
+	"context"
 	"fmt"
 	"io"
-	"math/rand"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
-	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
 )
@@ -24,12 +20,6 @@ func PasteBinHandler(m *telegram.NewMessage) error {
 	}
 
 	content := m.Args()
-
-	isKatBin := false
-	if strings.Contains(content, "-k") {
-		isKatBin = true
-		content = strings.Replace(content, "-k", "", -1)
-	}
 
 	if m.IsReply() {
 		r, err := m.GetReplyMessage()
@@ -72,11 +62,8 @@ func PasteBinHandler(m *telegram.NewMessage) error {
 		provider string
 		err      error
 	)
-	if isKatBin {
-		url, provider, err = postToKatBin(content)
-	} else {
-		url, provider, err = postToSpaceBin(content)
-	}
+
+	url, provider, err = postToSpaceBin(content)
 	if err != nil {
 		m.Reply("Error posting to " + provider)
 		return nil
@@ -128,62 +115,42 @@ func postToSpaceBin(content string) (string, string, error) {
 	return "https://spaceb.in" + location, "SpaceBin", nil
 }
 
-func postToKatBin(content string) (string, string, error) {
-	var body = `{"paste": {"content": "%s"}}`
-	body = fmt.Sprintf(body, content)
-
-	req, err := http.NewRequest("POST", "https://katb.in/api/paste", strings.NewReader(body))
+func Gban(m *telegram.NewMessage) error {
+	user, reason, err := GetUserFromContext(m)
 	if err != nil {
-		return "", "", fmt.Errorf("error creating request: %w", err)
+		m.Reply("Error: " + err.Error())
+		return nil
 	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Accept-Encoding", "deflate, gzip")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
-	req.Header.Set("Host", "katb.in")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", "", fmt.Errorf("error making request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 201 {
-		return "", "", fmt.Errorf("status code not 200: %d", resp.StatusCode)
-	}
-
-	var bodyReader io.ReadCloser = resp.Body
-	if resp.Header.Get("Content-Encoding") == "gzip" {
-		bodyReader, err = gzip.NewReader(resp.Body)
-		if err != nil {
-			return "", "", fmt.Errorf("error creating gzip reader: %w", err)
+	message, _ := m.Reply("Enforcing global ban...")
+	done := 0
+	m.Client.Broadcast(context.Background(), nil, func(c telegram.Chat) error {
+		_, err := m.Client.EditBanned(c, user, &telegram.BannedOptions{Ban: true})
+		if err == nil {
+			done++
 		}
-		defer bodyReader.Close()
-	}
+		return nil
+	}, 600)
 
-	var result map[string]interface{}
-	if err := json.NewDecoder(bodyReader).Decode(&result); err != nil {
-		return "", "", fmt.Errorf("error decoding response: %w", err)
-	}
-
-	if result["id"] == nil {
-		return "", "", fmt.Errorf("id not found in response")
-	}
-
-	return fmt.Sprintf("https://katb.in/%s", result["id"]), "Katb.in", nil
+	message.Edit(fmt.Sprintf("Global ban enforced in %d groups.\nReason: %s", done, reason))
+	return nil
 }
 
-func GbanMeme(m *telegram.NewMessage) error {
-	randTime := rand.Intn(100)
-	randChatCount := rand.Intn(1000)
-
-	msg, _ := m.Reply(fmt.Sprintf("⚡ Enforcing Global Ban on %d chats", randChatCount))
-
-	time.Sleep(time.Duration(randTime) * time.Second)
-
-	msg.Reply(fmt.Sprintf("⚒️ Global Ban enforced on %d chats", randChatCount))
+func Ungban(m *telegram.NewMessage) error {
+	user, _, err := GetUserFromContext(m)
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+	message, _ := m.Reply("Removing global ban...")
+	done := 0
+	m.Client.Broadcast(context.Background(), nil, func(c telegram.Chat) error {
+		_, err := m.Client.EditBanned(c, user, &telegram.BannedOptions{Ban: false})
+		if err == nil {
+			done++
+		}
+		return nil
+	}, 600)
+	message.Edit(fmt.Sprintf("Global ban removed in %d groups.", done))
 	return nil
 }
 

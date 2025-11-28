@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -17,6 +18,8 @@ import (
 )
 
 func YtVideoDL(m *telegram.NewMessage) error {
+	// execute proxy rstart cmd
+	_ = exec.Command(proxyRestartCMD).Run()
 	yt.MustInstall(context.TODO(), nil)
 
 	args := m.Args()

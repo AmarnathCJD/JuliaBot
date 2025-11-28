@@ -1,8 +1,8 @@
 package modules
 
 import (
+	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"runtime"
@@ -65,17 +65,6 @@ func UpdateSourceCodeHandle(m *telegram.NewMessage) error {
 	return nil
 }
 
-func IsImageDepsInstalled() bool {
-	// check of cairosvg and ffmpeg is installed
-	_, err := exec.LookPath("cairosvg")
-	if err != nil {
-		return false
-	}
-
-	_, err = exec.LookPath("ffmpeg")
-	return err == nil
-}
-
 func gatherSystemInfo() (*SystemInfo, error) {
 	pid := int32(os.Getpid())
 	proc, err := process.NewProcess(pid)
@@ -133,6 +122,24 @@ func gatherSystemInfo() (*SystemInfo, error) {
 	}, nil
 }
 
+type SystemInfo struct {
+	NumGoroutines int
+	ProcessID     int32
+	ProcessMemory string
+	OS            string
+	Arch          string
+	Uptime        string
+	MemUsed       string
+	MemTotal      string
+	CPUPercent    string
+	CPUPerc       float64
+	MemPerc       float64
+	CPUName       string
+	DiskUsed      string
+	DiskTotal     string
+	DiskPerc      float64
+}
+
 func HumanBytes(bytes uint64) string {
 	const unit = 1024
 	if bytes < unit {
@@ -146,87 +153,6 @@ func HumanBytes(bytes uint64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-type SystemInfo struct {
-	NumGoroutines int
-	ProcessID     int32
-	ProcessMemory string
-	OS            string
-	Arch          string
-	Uptime        string
-	MemUsed       string
-	MemTotal      string
-	MemPerc       float64
-	CPUPercent    string
-	CPUPerc       float64
-	CPUName       string
-	DiskUsed      string
-	DiskTotal     string
-	DiskPerc      float64
-}
-
-func FillAndRenderSVG(webp bool) (string, error) {
-	fi, err := os.Open("./assets/system.svg")
-	if err != nil {
-		return "", err
-	}
-
-	defer fi.Close()
-	content, err := io.ReadAll(fi)
-	if err != nil {
-		return "", err
-	}
-
-	info, err := gatherSystemInfo()
-	if err != nil {
-		return "", err
-	}
-
-	svgContent := string(content)
-	svgContent = strings.NewReplacer("{{cpu_perc}}", info.CPUPercent, "{{cpu_width}}", strconv.Itoa(findWidth(info.CPUPerc/100)),
-		"{{mem_used}}", info.MemUsed, "{{mem_total}}", info.MemTotal, "{{mem_width}}", strconv.Itoa(findWidth(info.MemPerc/100)),
-		"{{goroutines}}", strconv.Itoa(info.NumGoroutines), "{{pid}}", strconv.Itoa(int(info.ProcessID)),
-		"{{mem_proc}}", info.ProcessMemory,
-		"{{cpu_name}}", trimString(info.CPUName, 40), "{{disk_used}}", info.DiskUsed, "{{disk_total}}", info.DiskTotal, "{{disk_width}}", strconv.Itoa(findWidth(info.DiskPerc/100)),
-		"{{operating_sys}}", info.OS, "{{arch}}", info.Arch, "{{uptime}}", info.Uptime).Replace(svgContent)
-
-	fo, err := os.Create("./assets/system_rendered.svg")
-	if err != nil {
-		return "", err
-	}
-
-	defer fo.Close()
-	_, err = fo.WriteString(svgContent)
-	if err != nil {
-		return "", err
-	}
-
-	// convert to png cairosvg a.svg -o o.png -s 4
-	cmd := exec.Command("cairosvg", "./assets/system_rendered.svg", "-o", "./assets/system_rendered.png", "-s", "4")
-	err = cmd.Run()
-	if err != nil {
-		return "", fmt.Errorf("failed to convert svg to png: %w", err)
-	}
-
-	if webp {
-		cmd = exec.Command("ffmpeg", "-i", "./assets/system_rendered.png", "-vcodec", "webp", "./assets/system_rendered.webp")
-		err = cmd.Run()
-		if err != nil {
-			return "", fmt.Errorf("failed to convert png to webp: %w", err)
-		}
-
-		defer os.Remove("./assets/system_rendered.png")
-		return "./assets/system_rendered.webp", nil
-	}
-
-	defer os.Remove("./assets/system_rendered.svg")
-	return "./assets/system_rendered.png", nil
-}
-
-func findWidth(perc float64) int {
-	totalW := 360
-	return int(float64(totalW) * perc)
-}
-
 func trimString(s string, length int) string {
 	if len(s) > length {
 		return s[:length] + ""
@@ -235,23 +161,82 @@ func trimString(s string, length int) string {
 	return s
 }
 
-func mediaDownloadProgress(fname string, editMsg *telegram.NewMessage, pm *telegram.ProgressManager) func(atotalBytes, currentBytes int64) {
-	return func(totalBytes int64, currentBytes int64) {
-		text := ""
-		text += "<b>📄 Name:</b> <code>%s</code>\n"
-		text += "<b>💾 File Size:</b> <code>%.2f MiB</code>\n"
-		text += "<b>⌛️ ETA:</b> <code>%s</code>\n"
-		text += "<b>⏱ Speed:</b> <code>%s</code>\n"
-		text += "<b>⚙️ Progress:</b> %s <code>%.2f%%</code>"
-
-		size := float64(totalBytes) / 1024 / 1024
-		eta := pm.GetETA(currentBytes)
-		speed := pm.GetSpeed(currentBytes)
-		percent := pm.GetProgress(currentBytes)
-
-		progressbar := strings.Repeat("■", int(percent/10)) + strings.Repeat("□", 10-int(percent/10))
-
-		message := fmt.Sprintf(text, fname, size, eta, speed, progressbar, percent)
-		editMsg.Edit(message)
+func IsUserAdmin(bot *telegram.Client, userID int, chatID int, right string) bool {
+	member, err := bot.GetChatMember(chatID, userID)
+	if err != nil {
+		return false
 	}
+
+	if member.Status == telegram.Admin || member.Status == telegram.Creator {
+		if right == "promote" {
+			if member.Rights.AddAdmins {
+				return true
+			}
+		} else if right == "ban" {
+			if member.Rights.BanUsers {
+				return true
+			}
+		} else if right == "delete" {
+			if member.Rights.DeleteMessages {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func CanBot(bot *telegram.Client, chat *telegram.Channel, right string) bool {
+	if chat.AdminRights != nil {
+		if right == "ban" {
+			return chat.AdminRights.BanUsers
+		} else if right == "delete" {
+			return chat.AdminRights.DeleteMessages
+		} else if right == "invite" {
+			return chat.AdminRights.InviteUsers
+		} else if right == "promote" {
+			return chat.AdminRights.AddAdmins
+		}
+	}
+	return false
+}
+
+func GetUserFromContext(m *telegram.NewMessage) (telegram.InputPeer, string, error) {
+	if m.IsReply() {
+		reply, err := m.GetReplyMessage()
+		if err != nil {
+			return nil, "", err
+		}
+		peer, err := m.Client.ResolvePeer(reply.Sender)
+		if err != nil {
+			return nil, "", err
+		}
+
+		return peer, m.Args(), nil
+	} else if m.Args() != "" {
+		arg := m.Args()
+		args := strings.Split(arg, " ")
+		arg = args[0]
+
+		argInt, err := strconv.Atoi(arg)
+		if err == nil {
+			user, err := m.Client.ResolvePeer(argInt)
+			if err != nil {
+				return nil, "", err
+			}
+			if len(args) > 1 {
+				return user, strings.Join(args[1:], " "), nil
+			}
+			return user, "", nil
+		} else {
+			user, err := m.Client.ResolvePeer(arg)
+			if err != nil {
+				return nil, "", err
+			}
+			if len(args) > 1 {
+				return user, strings.Join(args[1:], " "), nil
+			}
+			return user, "", nil
+		}
+	}
+	return nil, "", errors.New("no user found in context")
 }

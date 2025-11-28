@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/amarnathcjd/gogram/telegram"
+	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
 func ShellHandle(m *telegram.NewMessage) error {
@@ -233,56 +234,60 @@ func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, 
 
 	code_file := fmt.Sprintf(boiler_code_for_eval, importStatement, m.ID, msg_b, snd_b, cnt_b, chn_b, cache_b, code, m.Client.ExportSession())
 	tmp_dir := "tmp"
-	_, err := os.ReadDir(tmp_dir)
-	if err != nil {
-		err = os.Mkdir(tmp_dir, 0755)
-		if err != nil {
-			fmt.Println(err)
+	if _, err := os.ReadDir(tmp_dir); err != nil {
+		if err := os.Mkdir(tmp_dir, 0755); err != nil {
+			return fmt.Sprintf("❌ <b>System Error</b>\n<code>%s</code>", err.Error()), false
 		}
 	}
-
-	//defer os.Remove(tmp_dir)
 
 	os.WriteFile(tmp_dir+"/eval.go", []byte(code_file), 0644)
 	cmd := exec.Command("go", "run", "tmp/eval.go")
-	var stdOut bytes.Buffer
+	var stdOut, stdErr bytes.Buffer
 	cmd.Stdout = &stdOut
-	var stdErr bytes.Buffer
 	cmd.Stderr = &stdErr
 
-	err = cmd.Run()
-	if stdOut.String() == "" && stdErr.String() == "" {
+	err := cmd.Run()
+	stdout := strings.TrimSpace(stdOut.String())
+	stderr := strings.TrimSpace(stdErr.String())
+
+	if stdout == "" && stderr == "" {
 		if err != nil {
-			return fmt.Sprintf("<b>#EVALERR:</b> <code>%s</code>", err.Error()), false
+			return fmt.Sprintf("❌ <b>Execution Error</b>\n<pre>%s</pre>", err.Error()), false
 		}
-		return "<b>#EVALOut:</b> <code>No Output</code>", false
+		return "✅ <b>Eval Complete</b>\n<i>No output returned</i>", false
 	}
 
-	if stdOut.String() != "" {
-		if len(stdOut.String()) > 4095 {
-			os.WriteFile("tmp/eval_out.txt", stdOut.Bytes(), 0644)
+	if stdout != "" {
+		parts := strings.Split(stdout, "output-start")
+		output := stdout
+		if len(parts) > 1 {
+			output = strings.TrimSpace(parts[1])
+		}
+
+		if len(output) > 4000 {
+			os.WriteFile("tmp/eval_out.txt", []byte(output), 0644)
 			return "tmp/eval_out.txt", true
 		}
 
-		strDou := strings.Split(stdOut.String(), "output-start")
-
-		return fmt.Sprintf("<b>#EVALOut:</b> <code>%s</code>", strings.TrimSpace(strDou[1])), false
+		return fmt.Sprintf("✅ <b>Eval Output</b>\n<pre>%s</pre>", output), false
 	}
 
-	if stdErr.String() != "" {
-		var regexErr = regexp.MustCompile(`eval.go:\d+:\d+:`)
-		errMsg := regexErr.Split(stdErr.String(), -1)
-		if len(errMsg) > 1 {
-			if len(errMsg[1]) > 4095 {
-				os.WriteFile("tmp/eval_out.txt", []byte(errMsg[1]), 0644)
-				return "tmp/eval_out.txt", true
-			}
-			return fmt.Sprintf("<b>#EVALERR:</b> <code>%s</code>", strings.TrimSpace(errMsg[1])), false
+	if stderr != "" {
+		regexErr := regexp.MustCompile(`eval\.go:(\d+):(\d+):\s*`)
+		errMsg := regexErr.ReplaceAllString(stderr, "Line $1: ")
+
+		errMsg = strings.ReplaceAll(errMsg, "# command-line-arguments\n", "")
+		errMsg = strings.TrimSpace(errMsg)
+
+		if len(errMsg) > 4000 {
+			os.WriteFile("tmp/eval_out.txt", []byte(errMsg), 0644)
+			return "tmp/eval_out.txt", true
 		}
-		return fmt.Sprintf("<b>#EVALERR:</b> <code>%s</code>", stdErr.String()), false
+
+		return fmt.Sprintf("❌ <b>Compilation Error</b>\n<pre>%s</pre>", errMsg), false
 	}
 
-	return "<b>#EVALOut:</b> <code>No Output</code>", false
+	return "✅ <b>Eval Complete</b>\n<i>No output returned</i>", false
 }
 
 func JsonHandle(m *telegram.NewMessage) error {
@@ -600,7 +605,7 @@ func GenStringSessionHandler(m *telegram.NewMessage) error {
 	})
 	defer client.Terminate()
 
-	phoneNum, err := m.Ask("Please enter your phone number")
+	_, phoneNum, err := m.Ask("Please enter your phone number")
 	if err != nil {
 		m.Reply("Error: " + err.Error())
 		return nil
@@ -608,7 +613,7 @@ func GenStringSessionHandler(m *telegram.NewMessage) error {
 
 	if ok, err := client.Login(phoneNum.Text(), &telegram.LoginOptions{
 		CodeCallback: func() (string, error) {
-			code, err := m.Ask("Please enter the code")
+			_, code, err := m.Ask("Please enter the code")
 			if err != nil {
 				m.Reply("Error: " + err.Error())
 				return "", err
@@ -616,7 +621,7 @@ func GenStringSessionHandler(m *telegram.NewMessage) error {
 			return code.Text(), nil
 		},
 		PasswordCallback: func() (string, error) {
-			password, err := m.Ask("Please enter the @FA password")
+			_, password, err := m.Ask("Please enter the @FA password")
 			if err != nil {
 				m.Reply("Error: " + err.Error())
 				return "", err
@@ -754,6 +759,48 @@ func SpectrogramHandler(m *telegram.NewMessage) error {
 	}
 
 	msg.Delete()
+	return nil
+}
+
+var (
+	spotifyRestartCMD = "sudo systemctl restart spotdl.service"
+	proxyRestartCMD   = "sudo systemctl restart wireproxy.service"
+	selfRestartCMD    = "sudo go run ."
+)
+
+func RestartSpotify(m *tg.NewMessage) error {
+	msg, _ := m.Reply("Restarting Spotify...")
+	if err := execCommand(spotifyRestartCMD); err != nil {
+		return err
+	}
+	msg.Edit("Spotify restarted successfully.")
+	return nil
+}
+
+func RestartProxy(m *tg.NewMessage) error {
+	msg, _ := m.Reply("Restarting WProxy...")
+	if err := execCommand(proxyRestartCMD); err != nil {
+		return err
+	}
+	msg.Edit("Proxy restarted successfully.")
+	return nil
+}
+
+func RestartHandle(m *tg.NewMessage) error {
+	msg, _ := m.Reply("Restarting bot...")
+	if err := execCommand(selfRestartCMD); err != nil {
+		return err
+	}
+	msg.Edit("Bot restarted successfully.")
+	return nil
+}
+
+func execCommand(cmd string) error {
+	command := exec.Command("bash", "-c", cmd)
+	_, err := command.CombinedOutput()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -211,6 +211,86 @@ func CancelDownloadHandle(m *telegram.NewMessage) error {
 	return nil
 }
 
+func FileInfoHandle(m *telegram.NewMessage) error {
+	if !m.IsReply() {
+		m.Reply("Reply to a file to get its info")
+		return nil
+	}
+
+	r, err := m.GetReplyMessage()
+	if err != nil {
+		m.Reply("Error: " + err.Error())
+		return nil
+	}
+
+	var fi struct {
+		FileName   string
+		Type       string
+		Size       int64
+		FileID     string
+		Attributes map[string]string
+	}
+
+	if r.File != nil {
+		fi.FileName = r.File.Name
+		fi.Size = r.File.Size
+		fi.FileID = r.File.FileID
+	}
+
+	switch m := r.Message.Media.(type) {
+	case *telegram.MessageMediaDocument:
+		fi.Type = "Document"
+		for _, attr := range m.Document.(*telegram.DocumentObj).Attributes {
+			switch a := attr.(type) {
+			case *telegram.DocumentAttributeVideo:
+				fi.Type = "Video"
+				fi.Attributes["Duration"] = strconv.Itoa(int(a.Duration)) + " seconds"
+				fi.Attributes["Width"] = strconv.Itoa(int(a.W)) + " px"
+				fi.Attributes["Height"] = strconv.Itoa(int(a.H)) + " px"
+			case *telegram.DocumentAttributeAudio:
+				fi.Type = "Audio"
+				fi.Attributes["Duration"] = strconv.Itoa(int(a.Duration)) + " seconds"
+				fi.Attributes["Title"] = a.Title
+				fi.Attributes["Performer"] = a.Performer
+				fi.Attributes["Voice"] = strconv.FormatBool(a.Voice)
+			case *telegram.DocumentAttributeAnimated:
+				fi.Type = "Animated"
+			case *telegram.DocumentAttributeSticker:
+				fi.Type = "Sticker"
+				fi.Attributes["Alt"] = a.Alt
+			}
+		}
+	case *telegram.MessageMediaPhoto:
+		fi.Type = "Photo"
+	case *telegram.MessageMediaPoll:
+		fi.Type = "Poll"
+	case *telegram.MessageMediaGeo:
+		fi.Type = "Geo"
+		fi.Attributes["AccuracyRadius"] = strconv.Itoa(int(m.Geo.(*telegram.GeoPointObj).AccuracyRadius)) + " meters"
+		fi.Attributes["Latitude"] = strconv.FormatFloat(m.Geo.(*telegram.GeoPointObj).Lat, 'f', 6, 64)
+		fi.Attributes["Longitude"] = strconv.FormatFloat(m.Geo.(*telegram.GeoPointObj).Long, 'f', 6, 64)
+	default:
+		fi.Type = "Unknown"
+	}
+
+	var output strings.Builder
+	output.WriteString("📄 <b>File Information</b>\n")
+	output.WriteString("────────────────────\n")
+	output.WriteString("📛 <b>FileName</b>: <code>" + fi.FileName + "</code>\n")
+	output.WriteString("📂 <b>Type</b>: <code>" + fi.Type + "</code>\n")
+	output.WriteString("📦 <b>Size</b>: <code>" + HumanBytes(uint64(fi.Size)) + "</code>\n")
+	output.WriteString("🆔 <b>FileID</b>: <code>" + fi.FileID + "</code>\n")
+	if len(fi.Attributes) > 0 {
+		output.WriteString("⚙️ <b>Attributes</b>:\n")
+		for k, v := range fi.Attributes {
+			output.WriteString("   • <b>" + k + "</b>: <code>" + v + "</code>\n")
+		}
+	}
+
+	m.Reply(output.String())
+	return nil
+}
+
 func init() {
 	Mods.AddModule("Files", `<b>Here are the commands available in Files module:</b>
 
