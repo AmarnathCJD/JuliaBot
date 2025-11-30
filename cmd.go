@@ -86,6 +86,7 @@ func initFunc(c *telegram.Client) {
 
 		c.On("cmd:file", modules.SendFileByIDHandle)
 		c.On("cmd:fid", modules.GetFileIDHandle)
+		c.On("cmd:finfo", modules.FileInfoHandle)
 		c.On("cmd:ldl", modules.DownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
 
 		c.On("inline:pin", modules.PinterestInlineHandle)
@@ -111,7 +112,7 @@ func initFunc(c *telegram.Client) {
 
 		// c.On("command:ai", modules.AIImageGEN)
 		//c.On("command:snap", modules.SnapSaveHandler)
-		//c.On("command:insta", modules.SnapSaveHandler)
+		c.On("command:insta", modules.SnapSaveHandler)
 		//c.On("command:truec", modules.TruecallerHandle)
 		c.On("command:doge", modules.DogeSticker)
 
