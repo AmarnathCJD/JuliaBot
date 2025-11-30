@@ -4,8 +4,9 @@ go 1.25.0
 
 require (
 	github.com/PuerkitoBio/goquery v1.11.0
-	github.com/amarnathcjd/gogram v1.6.10-0.20251128183601-a7879112af32
+	github.com/amarnathcjd/gogram v1.6.10-0.20251130105953-6c6694678e0b
 	github.com/fogleman/gg v1.3.0
+	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lrstanley/go-ytdlp v1.2.7
 	github.com/shirou/gopsutil v3.21.11+incompatible

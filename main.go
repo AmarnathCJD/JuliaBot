@@ -25,20 +25,32 @@ var LoadModules = os.Getenv("ENV") != "development"
 
 func main() {
 	fmt.Println("Starting JuliaBot...")
+
+	// Initialize network logger
+	networkLogger := NewNetworkLogger("8999")
+	if err := networkLogger.Start(); err != nil {
+		fmt.Printf("Failed to start network logger: %v\n", err)
+	}
+
 	logZap, err := os.OpenFile("log.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	defer logZap.Close()
-	wr := io.MultiWriter(os.Stdout, logZap)
-	log.SetOutput(wr)
+	defer networkLogger.Stop()
+
+	// Include network logger in output writers
+	wr := io.MultiWriter(os.Stdout, logZap, networkLogger)
+	//log.SetOutput(wr)
 
 	appId, _ := strconv.Atoi(os.Getenv("APP_ID"))
 	ownerId, _ = strconv.ParseInt(os.Getenv("OWNER_ID"), 10, 64)
 
 	cfg := tg.NewClientConfigBuilder(int32(appId), os.Getenv("APP_HASH")).
-		WithLogger(tg.NewLogger(tg.LogInfo)).
+		WithLogger(tg.NewLogger(tg.LogInfo, tg.LoggerConfig{
+			Output: wr,
+		})).
 		WithReqTimeout(100).
 		Build()
 

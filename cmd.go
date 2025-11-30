@@ -91,9 +91,12 @@ func initFunc(c *telegram.Client) {
 		c.On("inline:pin", modules.PinterestInlineHandle)
 		c.On("inline:doge", modules.DogeStickerInline)
 
+		c.On("cmd:finfo", modules.FileInfoHandle)
 		c.On("cmd:stream", modules.StreamHandler)
 		c.On("cmd:streams", modules.ListStreamsHandler)
 		c.On("cmd:stopstream", modules.StopStreamHandler)
+
+		c.On(telegram.OnNewMessage, modules.HandleAIMessage)
 
 		//c.AddRawHandler(&telegram.UpdateBotInlineSend{}, modules.SpotifyInlineHandler)
 		c.On(telegram.OnInline, modules.SpotifyInlineSearch)
