@@ -471,6 +471,9 @@ func HandleAIMessage(m *tg.NewMessage) error {
 	if isForAi, query = isForAiMessage(m); !isForAi {
 		return nil
 	}
+	action, _ := m.SendAction("typing")
+	defer action.Cancel()
+
 	var peerId int64
 	if m.IsPrivate() {
 		peerId = m.SenderID()
