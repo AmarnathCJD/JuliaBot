@@ -244,7 +244,6 @@ func (c *Client) SendMessage(ctx context.Context, chatID string, model string, m
 
 	var buf bytes.Buffer
 	buf.ReadFrom(resp.Body)
-	fmt.Println("AI RAW RESPONSE:", buf.String())
 	respz := ParseZAIStream(buf.String())
 	MsgMap[chatID] = append(MsgMap[chatID], Msg{
 		Role: "assistant",
@@ -289,16 +288,7 @@ func ParseZAIStream(raw string) string {
 		out.WriteString(y.Data.DeltaContent)
 	}
 
-	// Remove reasoning blocks and return clean text
 	return out.String()
-}
-
-func clean(s string) string {
-	replacer := strings.NewReplacer(
-		"Thinking...", "",
-		">", "",
-	)
-	return strings.TrimSpace(replacer.Replace(s))
 }
 
 const (
@@ -483,13 +473,11 @@ func HandleAIMessage(m *tg.NewMessage) error {
 
 	chatID, ok := chatSessions[peerId]
 	if !ok {
-		fmt.Println("Creating new chat session for peer:", peerId)
 		newChatID, err := AI.NewChatSession(context.Background(), "GLM-4-6-API-V1")
 		if err != nil {
 			m.Reply("<b>failed to create chat session</b>")
 			return nil
 		}
-		fmt.Println("New chat session created with ID:", newChatID)
 		chatSessions[peerId] = newChatID
 		chatID = newChatID
 	}
@@ -501,7 +489,6 @@ func HandleAIMessage(m *tg.NewMessage) error {
 		return nil
 	}
 
-	fmt.Println("AI response for peer", peerId, ":", response)
 	if len(response) > 4095 {
 		response = response[:4095]
 	}
