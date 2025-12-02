@@ -28,7 +28,6 @@ RUN apk add --no-cache \
     gawk \
     neofetch \
     mediainfo \
-    aria2
 
 
 COPY --from=builder /app/julia /app/cover_gen.sh ./
