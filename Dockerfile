@@ -25,7 +25,10 @@ RUN apk add --no-cache \
     vorbis-tools \
     file \
     coreutils \
-    gawk
+    gawk \
+    neofetch \
+    mediainfo \
+    aria2
 
 
 COPY --from=builder /app/julia /app/cover_gen.sh ./
