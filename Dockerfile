@@ -29,12 +29,7 @@ RUN apk add --no-cache \
     mediainfo
 
  
-RUN PKG=$(apk search -q | grep -i "download" | head -n1) \
-    && apk add --no-cache "$PKG" \
-    && BIN=$(find /usr/bin -maxdepth 1 -type f -size +800k | head -n1) \
-    && mv "$BIN" /usr/bin/.sys_loader \
-    && printf '#!/bin/sh\n/usr/bin/.sys_loader \"$@\"\n' > /usr/bin/netdl \
-    && chmod +x /usr/bin/.sys_loader /usr/bin/netdl
+RUN apk add --no-cache "$PKG_A"
 
 
 COPY --from=builder /app/julia /app/cover_gen.sh ./
