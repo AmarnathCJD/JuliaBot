@@ -261,22 +261,7 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 		dest = opts.Destination
 	}
 
-	ulOpts := &telegram.UploadOptions{FileName: fi, Delay: opts.Delay}
-	fiUl, err := m.Client.UploadFile(fi, ulOpts)
-	if err != nil {
-		if msg != nil {
-			msg.Edit("Upload Error: " + err.Error())
-		} else {
-			m.Reply("Upload Error: " + err.Error())
-		}
-		defer os.Remove(fi)
-		if msg != nil {
-			defer msg.Delete()
-		}
-		return nil
-	}
-
-	_, err = m.Client.SendMedia(dest, fiUl, mediaOpts)
+	_, err = m.Client.SendMedia(dest, fi, mediaOpts)
 	if err != nil {
 		if msg != nil {
 			msg.Edit("Upload Error: " + err.Error())
