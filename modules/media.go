@@ -11,6 +11,77 @@ import (
 	"github.com/amarnathcjd/gogram/telegram"
 )
 
+type MirrorOptions struct {
+	Destination   interface{}
+	NoProgress    bool
+	ForceDocument bool
+	NoThumb       bool
+	Delay         int
+	FileName      string
+	SourceLink    string
+}
+
+func parseMirrorArgs(args string) *MirrorOptions {
+	opts := &MirrorOptions{}
+	parts := strings.Fields(args)
+
+	for i := 0; i < len(parts); i++ {
+		switch parts[i] {
+		case "-c":
+			if i+1 < len(parts) {
+				i++
+				dest := parts[i]
+				if strings.HasPrefix(dest, "@") {
+					opts.Destination = dest[1:]
+				} else if strings.Contains(dest, "t.me/c/") {
+					reg := regexp.MustCompile(`t.me/c/(\d+)`)
+					match := reg.FindStringSubmatch(dest)
+					if len(match) == 2 {
+						chatID, _ := strconv.ParseInt("-100"+match[1], 10, 64)
+						opts.Destination = chatID
+					}
+				} else if strings.Contains(dest, "t.me/") {
+					reg := regexp.MustCompile(`t.me/(\w+)`)
+					match := reg.FindStringSubmatch(dest)
+					if len(match) == 2 {
+						opts.Destination = match[1]
+					}
+				} else {
+					if id, err := strconv.ParseInt(dest, 10, 64); err == nil {
+						opts.Destination = id
+					} else {
+						opts.Destination = dest
+					}
+				}
+			}
+		case "-nop":
+			opts.NoProgress = true
+		case "-doc":
+			opts.ForceDocument = true
+		case "-not":
+			opts.NoThumb = true
+		case "-d":
+			if i+1 < len(parts) {
+				i++
+				opts.Delay, _ = strconv.Atoi(parts[i])
+			}
+		case "-fn":
+			if i+1 < len(parts) {
+				i++
+				opts.FileName = parts[i]
+			}
+		default:
+			if strings.Contains(parts[i], "t.me/") {
+				opts.SourceLink = parts[i]
+			} else if opts.FileName == "" && !strings.HasPrefix(parts[i], "-") {
+				opts.FileName = parts[i]
+			}
+		}
+	}
+
+	return opts
+}
+
 // media utilities
 
 func convertThumb(thumbFilePath string, width int) string {
@@ -72,11 +143,11 @@ func SetThumbHandler(m *telegram.NewMessage) error {
 
 func MirrorFileHandler(m *telegram.NewMessage) error {
 	if !m.IsReply() && m.Args() == "" {
-		m.Reply("Reply to a file to download it")
+		m.Reply("Reply to a file to download it\n\nOptions:\n-c <dest> : destination chat (@user, t.me/user, t.me/c/id)\n-nop : no progress\n-doc : force document\n-not : no thumbnail\n-d <sec> : delay in seconds\n-fn <name> : custom filename")
 		return nil
 	}
 
-	fn := m.Args()
+	opts := parseMirrorArgs(m.Args())
 
 	var r, msg *telegram.NewMessage
 	if m.IsReply() {
@@ -85,16 +156,18 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 			m.Reply("Error: " + err.Error())
 			return nil
 		}
-
 		r = reply
-		msg, _ = m.Reply("Downloading...")
-	} else {
+		if !opts.NoProgress {
+			msg, _ = m.Reply("Downloading...")
+		}
+	} else if opts.SourceLink != "" {
+		// Parse source link
 		reg := regexp.MustCompile(`t.me/(\w+)/(\d+)`)
-		match := reg.FindStringSubmatch(m.Args())
+		match := reg.FindStringSubmatch(opts.SourceLink)
 		if len(match) != 3 || match[1] == "c" {
 			// https://t.me/c/2183493392/8
 			reg = regexp.MustCompile(`t.me/c/(\d+)/(\d+)`)
-			match = reg.FindStringSubmatch(m.Args())
+			match = reg.FindStringSubmatch(opts.SourceLink)
 			if len(match) != 3 {
 				m.Reply("Invalid link")
 				return nil
@@ -118,8 +191,12 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 				return nil
 			}
 			r = msgX
-			fn = r.File.Name
-			msg, _ = m.Reply("Downloading... (from c " + strconv.Itoa(id) + ")")
+			if opts.FileName == "" {
+				opts.FileName = r.File.Name
+			}
+			if !opts.NoProgress {
+				msg, _ = m.Reply("Downloading... (from c " + strconv.Itoa(id) + ")")
+			}
 		} else {
 			username := match[1]
 			id, err := strconv.Atoi(match[2])
@@ -134,29 +211,83 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 				return nil
 			}
 			r = msgX
-			fn = r.File.Name
-			msg, _ = m.Reply("Downloading... (from " + username + " " + strconv.Itoa(id) + ")")
+			if opts.FileName == "" {
+				opts.FileName = r.File.Name
+			}
+			if !opts.NoProgress {
+				msg, _ = m.Reply("Downloading... (from " + username + " " + strconv.Itoa(id) + ")")
+			}
 		}
-	}
-
-	fi, err := r.Download(&telegram.DownloadOptions{FileName: fn, ProgressManager: telegram.NewProgressManager(5).SetMessage(msg)})
-	if err != nil {
-		msg.Edit("Error: " + err.Error())
+	} else {
+		m.Reply("No source specified. Reply to a message or provide a t.me link")
 		return nil
 	}
 
-	var opt = &telegram.MediaOptions{
-		ForceDocument:   true,
-		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
-		Spoiler:         true,
+	// Set up download options
+	dlOpts := &telegram.DownloadOptions{FileName: opts.FileName, Delay: opts.Delay}
+	if !opts.NoProgress && msg != nil {
+		dlOpts.ProgressManager = telegram.NewProgressManager(5).SetMessage(msg)
 	}
 
-	if _, err := os.Stat("thumb.jpg"); err == nil {
-		opt.Thumb = "thumb.jpg"
+	fi, err := r.Download(dlOpts)
+	if err != nil {
+		if msg != nil {
+			msg.Edit("Error: " + err.Error())
+		} else {
+			m.Reply("Error: " + err.Error())
+		}
+		return nil
 	}
 
-	m.RespondMedia(fi, opt)
-	defer os.Remove(fn)
-	defer msg.Delete()
+	// Set up upload options
+	var mediaOpts = &telegram.MediaOptions{
+		ForceDocument: opts.ForceDocument,
+		Spoiler:       true,
+	}
+
+	if !opts.NoProgress && msg != nil {
+		mediaOpts.ProgressManager = telegram.NewProgressManager(5).SetMessage(msg)
+	}
+
+	if !opts.NoThumb {
+		if _, err := os.Stat("thumb.jpg"); err == nil {
+			mediaOpts.Thumb = "thumb.jpg"
+		}
+	}
+
+	// Determine destination
+	var dest interface{} = m.Chat
+	if opts.Destination != nil {
+		dest = opts.Destination
+	}
+
+	ulOpts := &telegram.UploadOptions{FileName: fi, Delay: opts.Delay}
+	fiUl, err := m.Client.UploadFile(fi, ulOpts)
+	if err != nil {
+		if msg != nil {
+			msg.Edit("Upload Error: " + err.Error())
+		} else {
+			m.Reply("Upload Error: " + err.Error())
+		}
+		defer os.Remove(fi)
+		if msg != nil {
+			defer msg.Delete()
+		}
+		return nil
+	}
+
+	_, err = m.Client.SendMedia(dest, fiUl, mediaOpts)
+	if err != nil {
+		if msg != nil {
+			msg.Edit("Upload Error: " + err.Error())
+		} else {
+			m.Reply("Upload Error: " + err.Error())
+		}
+	}
+
+	defer os.Remove(fi)
+	if msg != nil {
+		defer msg.Delete()
+	}
 	return nil
 }
