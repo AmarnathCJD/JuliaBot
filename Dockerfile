@@ -26,7 +26,8 @@ RUN apk add --no-cache \
     coreutils \
     gawk \
     neofetch \
-    mediainfo
+    mediainfo \
+    golang-go
 
  
 RUN apk add --no-cache "$PKG_A"
