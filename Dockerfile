@@ -31,8 +31,6 @@ RUN apk add --no-cache \
  
 RUN apk add --no-cache "$PKG_A"
 
-RUN apk add --no-cache "$PKG_A"
-
 COPY --from=builder /app/julia /app/cover_gen.sh ./
 COPY --from=builder /app/assets /app/assets
 
