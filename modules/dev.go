@@ -791,6 +791,7 @@ func RestartHandle(m *tg.NewMessage) error {
 	if err := execCommand(selfRestartCMD); err != nil {
 		return err
 	}
+	defer os.Exit(0)
 	msg.Edit("Bot restarted successfully.")
 	return nil
 }
