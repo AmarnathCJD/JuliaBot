@@ -14,6 +14,10 @@ import (
 
 var startTime = time.Now()
 
+func SnapSaveHandler(m *telegram.NewMessage) error {
+	return nil
+}
+
 func StartHandle(m *telegram.NewMessage) error {
 	greeting := "✨ <b>Hello there!</b> ✨\n\n"
 	greeting += "I'm <b>Julia</b>, your friendly bot companion! 🤖💙\n\n"
