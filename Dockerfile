@@ -15,8 +15,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-w -s" -o julia
 
 RUN apk del .build-deps
 
-FROM alpine:3.20
-
+FROM alpine:3.20 
 WORKDIR /app
 
 RUN apk add --no-cache \
@@ -26,14 +25,16 @@ RUN apk add --no-cache \
     file \
     coreutils \
     gawk \
-    openssl \
     neofetch \
     mediainfo
+
+ 
+RUN apk add --no-cache "$PKG_A"
 
 RUN apk add --no-cache "$PKG_A"
 
 COPY --from=builder /app/julia /app/cover_gen.sh ./
-COPY --from=builder /app/assets /app/assets ./
+COPY --from=builder /app/assets /app/assets
 
 RUN chmod +x /app/julia /app/cover_gen.sh
 
