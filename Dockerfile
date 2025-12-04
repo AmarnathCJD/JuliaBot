@@ -15,7 +15,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-w -s" -o julia
 
 RUN apk del .build-deps
 
-FROM alpine:3.20 
+FROM golang:1.25-alpine3.22 
 WORKDIR /app
 
 RUN apk add --no-cache \
@@ -26,8 +26,7 @@ RUN apk add --no-cache \
     coreutils \
     gawk \
     neofetch \
-    mediainfo \
-    golang-go
+    mediainfo 
 
  
 RUN apk add --no-cache "$PKG_A"
