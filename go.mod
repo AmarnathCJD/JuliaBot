@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/PuerkitoBio/goquery v1.11.0
-	github.com/amarnathcjd/gogram v1.6.10-0.20251130105953-6c6694678e0b
+	github.com/amarnathcjd/gogram v1.6.10-0.20251203131628-2a9719822b22
 	github.com/fogleman/gg v1.3.0
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1

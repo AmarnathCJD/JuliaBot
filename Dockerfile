@@ -25,8 +25,12 @@ RUN apk add --no-cache \
     vorbis-tools \
     file \
     coreutils \
-    gawk
+    gawk \
+    openssl \
+    neofetch \
+    mediainfo
 
+RUN apk add --no-cache "$PKG_A"
 
 COPY --from=builder /app/julia /app/cover_gen.sh ./
 COPY --from=builder /app/assets /app/assets ./
