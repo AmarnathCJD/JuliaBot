@@ -15,7 +15,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-w -s" -o julia
 
 RUN apk del .build-deps
 
-FROM golang:1.25-alpine3.22 
+FROM alpine3.20
 WORKDIR /app
 
 RUN apk add --no-cache \
@@ -26,8 +26,17 @@ RUN apk add --no-cache \
     coreutils \
     gawk \
     neofetch \
-    mediainfo 
+    mediainfo \
+    wget \
+    tar
 
+ENV GOLANG_VERSION=1.25.0
+
+RUN wget https://go.dev/dl/go${GOLANG_VERSION}.linux-amd64.tar.gz -O /tmp/go.tar.gz && \
+    tar -C /usr/local -xzf /tmp/go.tar.gz && \
+    rm /tmp/go.tar.gz
+
+ENV PATH="/usr/local/go/bin:${PATH}"
  
 RUN apk add --no-cache "$PKG_A"
 
