@@ -40,3 +40,4 @@ snap.go
 *.db
 *.html
 *.bin
+*.b64

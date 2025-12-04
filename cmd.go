@@ -48,8 +48,8 @@ func initFunc(c *telegram.Client) {
 	if LoadModules {
 		c.Logger.Info("Loading Modules...")
 		// adminCMD
-		c.On("cmd:rspot", modules.RestartSpotify, telegram.NewFilter().FromUsers(ownerId))
-		c.On("cmd:rproxy", modules.RestartProxy, telegram.NewFilter().Custom(FilterOwnerAndAuth))
+		c.On("cmd:rspot", modules.RestartSpotify, telegram.FromUser(ownerId))
+		c.On("cmd:rproxy", modules.RestartProxy, telegram.Custom(FilterOwnerAndAuth))
 
 		c.On("cmd:promote", modules.PromoteUserHandle)
 		c.On("cmd:demote", modules.DemoteUserHandle)
@@ -57,19 +57,19 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:unban", modules.UnbanUserHandle)
 		c.On("cmd:kick", modules.KickUserHandle)
 
-		c.On("cmd:restart", modules.RestartHandle, telegram.NewFilter().Custom(FilterOwner))
+		c.On("cmd:restart", modules.RestartHandle, telegram.Custom(FilterOwner))
 		c.On("cmd:id", modules.IDHandle)
 
 		c.On("cmd:mz", modules.YtSongDL)
 		c.On("cmd:spot(:?ify)? (.*)", modules.SpotifyHandler)
 		c.On("cmd:spots", modules.SpotifySearchHandler)
-		c.On("cmd:sh", modules.ShellHandle, telegram.NewFilter().Custom(FilterOwner))
-		c.On("cmd:bash", modules.ShellHandle, telegram.NewFilter().Custom(FilterOwner))
-		c.On("cmd:ls", modules.LsHandler, telegram.NewFilter().Custom(FilterOwner))
-		c.On("cmd:ul", modules.UploadHandle, telegram.NewFilter().Custom(FilterOwnerNoReply))
-		c.On("cmd:upd", modules.UpdateSourceCodeHandle, telegram.NewFilter().Custom(FilterOwnerNoReply))
-		c.On("cmd:gban", modules.Gban, telegram.NewFilter().Custom(FilterOwner))
-		c.On("cmd:ungban", modules.Ungban, telegram.NewFilter().Custom(FilterOwner))
+		c.On("cmd:sh", modules.ShellHandle, telegram.Custom(FilterOwner))
+		c.On("cmd:bash", modules.ShellHandle, telegram.Custom(FilterOwner))
+		c.On("cmd:ls", modules.LsHandler, telegram.Custom(FilterOwner))
+		c.On("cmd:ul", modules.UploadHandle, telegram.Custom(FilterOwnerNoReply))
+		c.On("cmd:upd", modules.UpdateSourceCodeHandle, telegram.Custom(FilterOwnerNoReply))
+		c.On("cmd:gban", modules.Gban, telegram.Custom(FilterOwner))
+		c.On("cmd:ungban", modules.Ungban, telegram.Custom(FilterOwner))
 		c.On("cmd:greet", modules.ModifyGreetStatus)
 		c.On("cmd:start", modules.StartHandle)
 		c.On("cmd:help", modules.HelpHandle)
@@ -78,15 +78,15 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:json", modules.JsonHandle)
 		c.On("cmd:ping", modules.PingHandle)
 		c.On("cmd:fileinfo", modules.FileInfoHandle)
-		c.On("cmd:eval", modules.EvalHandle, telegram.FilterFunc(FilterOwnerNoReply))
+		c.On("cmd:eval", modules.EvalHandle, telegram.Custom(FilterOwnerNoReply))
 		c.On("cmd:go", modules.GoHandler)
-		c.On("cmd:cancel", modules.CancelDownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
+		c.On("cmd:cancel", modules.CancelDownloadHandle, telegram.Custom(FilterOwnerNoReply))
 
 		c.On("cmd:sessgen", modules.GenStringSessionHandler)
 
 		c.On("cmd:file", modules.SendFileByIDHandle)
 		c.On("cmd:fid", modules.GetFileIDHandle)
-		c.On("cmd:ldl", modules.DownloadHandle, telegram.FilterFunc(FilterOwnerNoReply))
+		c.On("cmd:ldl", modules.DownloadHandle, telegram.Custom(FilterOwnerNoReply))
 
 		c.On("inline:pin", modules.PinterestInlineHandle)
 		c.On("inline:doge", modules.DogeStickerInline)
@@ -110,8 +110,8 @@ func initFunc(c *telegram.Client) {
 		c.On("command:math", modules.MathHandler)
 
 		// c.On("command:ai", modules.AIImageGEN)
-		//c.On("command:snap", modules.SnapSaveHandler)
-		c.On("command:insta", modules.SnapSaveHandler)
+		c.On("command:snap", modules.InstaHandler)
+		c.On("command:insta", modules.InstaHandler)
 		//c.On("command:truec", modules.TruecallerHandle)
 		c.On("command:doge", modules.DogeSticker)
 
@@ -125,7 +125,7 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:setthumb", modules.SetThumbHandler)
 		c.On("cmd:mirror", modules.MirrorFileHandler)
 
-		c.On("cmd:setpfp", modules.SetBotPfpHandler, telegram.FilterFunc(FilterOwner))
+		c.On("cmd:setpfp", modules.SetBotPfpHandler, telegram.Custom(FilterOwner))
 
 		c.On("cmd:media", modules.MediaInfoHandler)
 		c.On("cmd:spec", modules.SpectrogramHandler)
