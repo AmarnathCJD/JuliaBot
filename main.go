@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 
@@ -11,7 +12,6 @@ import (
 	tg "github.com/amarnathcjd/gogram/telegram"
 	_ "github.com/joho/godotenv/autoload"
 
-	_ "net/http"
 	_ "net/http/pprof"
 )
 
@@ -37,6 +37,14 @@ func main() {
 	client.Log.SetOutput(wr)
 
 	client.Logger.Info("Bot is running as @%s", client.Me().Username)
+
+	go func() {
+		log.Println("Pprof server starting on :9009")
+		if err := http.ListenAndServe(":9009", nil); err != nil {
+			log.Printf("Pprof server error: %v", err)
+		}
+	}()
+
 	initFunc(client)
 
 	client.Idle()
