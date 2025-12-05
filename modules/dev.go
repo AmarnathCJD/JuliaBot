@@ -1,7 +1,9 @@
 package modules
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -12,6 +14,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
 	tg "github.com/amarnathcjd/gogram/telegram"
@@ -19,44 +22,178 @@ import (
 
 func ShellHandle(m *telegram.NewMessage) error {
 	cmd := m.Args()
-	var cmd_args []string
 	if cmd == "" {
 		m.Reply("No command provided")
 		return nil
 	}
 
+	var cmx *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = "cmd"
-		cmd_args_b := strings.Split(m.Args(), " ")
-		cmd_args = []string{"/C"}
-		cmd_args = append(cmd_args, cmd_args_b...)
+		cmx = exec.Command("cmd", "/C", cmd)
 	} else {
-		cmd = strings.Split(cmd, " ")[0]
-		cmd_args = strings.Split(m.Args(), " ")
-		cmd_args = append(cmd_args[:0], cmd_args[1:]...)
+		cmx = exec.Command("bash", "-c", cmd)
 	}
-	cmx := exec.Command(cmd, cmd_args...)
+
 	var out bytes.Buffer
 	cmx.Stdout = &out
 	var errx bytes.Buffer
 	cmx.Stderr = &errx
 	err := cmx.Run()
 
-	if errx.String() == "" && out.String() == "" {
-		if err != nil {
-			m.Reply("<code>Error:</code> <b>" + err.Error() + "</b>")
-			return nil
-		}
+	stdout := strings.TrimSpace(out.String())
+	stderr := strings.TrimSpace(errx.String())
+
+	var result string
+	if stdout != "" && stderr != "" {
+		result = stdout + "\n\n<b>stderr:</b>\n" + stderr
+	} else if stdout != "" {
+		result = stdout
+	} else if stderr != "" {
+		result = stderr
+	} else if err != nil {
+		m.Reply("<code>Error:</code> <b>" + err.Error() + "</b>")
+		return nil
+	} else {
 		m.Reply("<code>No Output</code>")
 		return nil
 	}
 
-	if out.String() != "" {
-		m.Reply(`<pre lang="bash">` + strings.TrimSpace(out.String()) + `</pre>`)
-	} else {
-		m.Reply(`<pre lang="bash">` + strings.TrimSpace(errx.String()) + `</pre>`)
+	if len(result) > 4000 {
+		os.WriteFile("tmp/shell_out.txt", []byte(result), 0644)
+		m.ReplyMedia("tmp/shell_out.txt", &telegram.MediaOptions{Caption: "Output"})
+		os.Remove("tmp/shell_out.txt")
+		return nil
 	}
+
+	m.Reply(`<pre language="bash">` + result + `</pre>`)
 	return nil
+}
+
+func TcpHandler(m *telegram.NewMessage) error {
+	pid := os.Getpid()
+
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd", "/C", fmt.Sprintf("netstat -ano | findstr %d", pid))
+	} else {
+		cmd = exec.Command("bash", "-c", fmt.Sprintf("ss -tnp 2>/dev/null | grep 'pid=%d' || cat /proc/%d/net/tcp 2>/dev/null", pid, pid))
+	}
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	cmd.Run()
+
+	output := strings.TrimSpace(out.String())
+	count := strings.Count(output, "\n") + 1
+
+	if output == "" {
+		tcpConns := parseProcNetTcp(pid)
+		if len(tcpConns) == 0 {
+			m.Reply("<code>No active TCP connections</code>")
+			return nil
+		}
+		output = strings.Join(tcpConns, "\n")
+	}
+
+	result := fmt.Sprintf("<b>TCP Connections (PID: %d)</b>\n\n<b>%s</b>", pid, output)
+	result += fmt.Sprintf("\n\n<b>Total Connections:</b> %d", count)
+	if len(result) > 4000 {
+		os.WriteFile("tmp/tcp_out.txt", []byte(output), 0644)
+		m.ReplyMedia("tmp/tcp_out.txt", &telegram.MediaOptions{Caption: fmt.Sprintf("TCP Connections (PID: %d)", pid)})
+		os.Remove("tmp/tcp_out.txt")
+		return nil
+	}
+
+	m.Reply(result)
+	return nil
+}
+
+func parseProcNetTcp(pid int) []string {
+	var connections []string
+
+	fdPath := fmt.Sprintf("/proc/%d/fd", pid)
+	fds, err := os.ReadDir(fdPath)
+	if err != nil {
+		return connections
+	}
+
+	socketInodes := make(map[string]bool)
+	for _, fd := range fds {
+		link, err := os.Readlink(filepath.Join(fdPath, fd.Name()))
+		if err != nil {
+			continue
+		}
+		if strings.HasPrefix(link, "socket:[") {
+			inode := strings.TrimPrefix(strings.TrimSuffix(link, "]"), "socket:[")
+			socketInodes[inode] = true
+		}
+	}
+
+	tcpFile, err := os.Open("/proc/net/tcp")
+	if err != nil {
+		return connections
+	}
+	defer tcpFile.Close()
+
+	scanner := bufio.NewScanner(tcpFile)
+	scanner.Scan()
+
+	stateMap := map[string]string{
+		"01": "ESTABLISHED",
+		"02": "SYN_SENT",
+		"03": "SYN_RECV",
+		"04": "FIN_WAIT1",
+		"05": "FIN_WAIT2",
+		"06": "TIME_WAIT",
+		"07": "CLOSE",
+		"08": "CLOSE_WAIT",
+		"09": "LAST_ACK",
+		"0A": "LISTEN",
+		"0B": "CLOSING",
+	}
+
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) < 10 {
+			continue
+		}
+
+		inode := fields[9]
+		if !socketInodes[inode] {
+			continue
+		}
+
+		localAddr := parseHexAddr(fields[1])
+		remoteAddr := parseHexAddr(fields[2])
+		state := stateMap[fields[3]]
+		if state == "" {
+			state = fields[3]
+		}
+
+		connections = append(connections, fmt.Sprintf("%s → %s [%s]", localAddr, remoteAddr, state))
+	}
+
+	return connections
+}
+
+func parseHexAddr(hexAddr string) string {
+	parts := strings.Split(hexAddr, ":")
+	if len(parts) != 2 {
+		return hexAddr
+	}
+
+	ip := parts[0]
+	if len(ip) == 8 {
+		b1, _ := strconv.ParseUint(ip[6:8], 16, 8)
+		b2, _ := strconv.ParseUint(ip[4:6], 16, 8)
+		b3, _ := strconv.ParseUint(ip[2:4], 16, 8)
+		b4, _ := strconv.ParseUint(ip[0:2], 16, 8)
+		port, _ := strconv.ParseUint(parts[1], 16, 16)
+		return fmt.Sprintf("%d.%d.%d.%d:%d", b1, b2, b3, b4, port)
+	}
+
+	return hexAddr
 }
 
 // --------- Eval function ------------
@@ -64,112 +201,60 @@ func ShellHandle(m *telegram.NewMessage) error {
 const boiler_code_for_eval = `
 package main
 
-import "fmt"
-import "github.com/amarnathcjd/gogram/telegram"
-import "encoding/json"
+import (
+	"fmt"
+	tg "github.com/amarnathcjd/gogram/telegram"
+)
 
 %s
 
-var msg_id int32 = %d
+var msgID int32 = %d
+var chatID int64 = %d
+var cacheJSON = %q
 
-var client *telegram.Client
-var message *telegram.NewMessage
-var m *telegram.NewMessage
-var r *telegram.NewMessage
-` + "var msg = `%s`\nvar snd = `%s`\nvar cht = `%s`\nvar chn = `%s`\nvar cch = `%s`" + `
-
+var client *tg.Client
+var message *tg.NewMessage
+var m *tg.NewMessage
+var r *tg.NewMessage
 
 func evalCode() {
 	%s
 }
 
 func main() {
-	var msg_o *telegram.MessageObj
-	var snd_o *telegram.UserObj
-	var cht_o *telegram.ChatObj
-	var chn_o *telegram.Channel
-	json.Unmarshal([]byte(msg), &msg_o)
-	json.Unmarshal([]byte(snd), &snd_o)
-	json.Unmarshal([]byte(cht), &cht_o)
-	json.Unmarshal([]byte(chn), &chn_o)
-	client, _ = telegram.NewClient(telegram.ClientConfig{
-		StringSession: "%s",
+	var err error
+	client, err = tg.NewClient(tg.ClientConfig{
+		StringSession: %q,
+		LogLevel:      tg.LogDisable,
 	})
-
-	client.Cache.ImportJSON([]byte(cch))
-
-	client.Conn()
-
-	x := []telegram.User{}
-	y := []telegram.Chat{}
-	x = append(x, snd_o)
-	if chn_o != nil {
-		y = append(y, chn_o)
-	}
-	if cht_o != nil {
-		y = append(y, cht_o)
-	}
-	client.Cache.UpdatePeersToCache(x, y)
-	idx := 0
-	if cht_o != nil {
-		idx = int(cht_o.ID)
-	}
-	if chn_o != nil {
-		idx = int(chn_o.ID)
-	}
-	if snd_o != nil && idx == 0 {
-		idx = int(snd_o.ID)
-	}
-
-	messageX, err := client.GetMessages(idx, &telegram.SearchOption{
-		IDs: int(msg_id),
-	})
-
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Client error:", err)
+		return
 	}
 
-	message = &messageX[0]
+	if cacheJSON != "" {
+		client.Cache.ImportJSON([]byte(cacheJSON))
+	}
+
+	if _, err := client.Conn(); err != nil {
+		fmt.Println("Connection error:", err)
+		return
+	}
+
+	msgs, err := client.GetMessages(chatID, &tg.SearchOption{
+		IDs: int(msgID),
+	})
+	if err != nil || len(msgs) == 0 {
+		fmt.Println("Failed to get message:", err)
+		return
+	}
+
+	message = &msgs[0]
 	m = message
 	r, _ = message.GetReplyMessage()
 
 	fmt.Println("output-start")
 	evalCode()
-}
-
-func packMessage(c *telegram.Client, message telegram.Message, sender *telegram.UserObj, channel *telegram.Channel, chat *telegram.ChatObj) *telegram.NewMessage {
-	var (
-		m = &telegram.NewMessage{}
-	)
-	switch message := message.(type) {
-	case *telegram.MessageObj:
-		m.ID = message.ID
-		m.OriginalUpdate = message
-		m.Message = message
-		m.Client = c
-	default:
-		return nil
-	}
-	m.Sender = sender
-	m.Chat = chat
-	m.Channel = channel
-	if m.Channel != nil && (m.Sender.ID == m.Channel.ID) {
-		m.SenderChat = channel
-	} else {
-		m.SenderChat = &telegram.Channel{}
-	}
-	m.Peer, _ = c.GetSendablePeer(message.(*telegram.MessageObj).PeerID)
-
-	/*if m.IsMedia() {
-		FileID := telegram.PackBotFileID(m.Media())
-		m.File = &telegram.CustomFile{
-			FileID: FileID,
-			Name:   getFileName(m.Media()),
-			Size:   getFileSize(m.Media()),
-			Ext:    getFileExt(m.Media()),
-		}
-	}*/
-	return m
 }
 `
 
@@ -196,15 +281,16 @@ func EvalHandle(m *telegram.NewMessage) error {
 		return nil
 	}
 
-	defer os.Remove("tmp/eval.go")
-	defer os.Remove("tmp/eval_out.txt")
-	defer os.Remove("tmp")
+	os.MkdirAll("tmp", 0755)
+	msg, _ := m.Reply("Evaluating...")
+	defer msg.Delete()
 
 	resp, isfile := perfomEval(code, m, imports)
 	if isfile {
 		if _, err := m.ReplyMedia(resp, &telegram.MediaOptions{Caption: "Output"}); err != nil {
 			m.Reply("Error: " + err.Error())
 		}
+		os.Remove(resp)
 		return nil
 	}
 	resp = strings.TrimSpace(resp)
@@ -218,21 +304,26 @@ func EvalHandle(m *telegram.NewMessage) error {
 }
 
 func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, bool) {
-	msg_b, _ := json.Marshal(m.Message)
-	snd_b, _ := json.Marshal(m.Sender)
-	cnt_b, _ := json.Marshal(m.Chat)
-	chn_b, _ := json.Marshal(m.Channel)
-	cache_b, _ := m.Client.Cache.ExportJSON()
 	var importStatement string = ""
 	if len(imports) > 0 {
 		importStatement = "import (\n"
 		for _, v := range imports {
-			importStatement += `"` + v + `"` + "\n"
+			importStatement += "\t\"" + v + "\"\n"
 		}
 		importStatement += ")\n"
 	}
 
-	code_file := fmt.Sprintf(boiler_code_for_eval, importStatement, m.ID, msg_b, snd_b, cnt_b, chn_b, cache_b, code, m.Client.ExportSession())
+	var chatID int64
+	if m.Channel != nil {
+		chatID = m.Channel.ID
+	} else if m.Chat != nil {
+		chatID = m.Chat.ID
+	} else if m.Sender != nil {
+		chatID = m.Sender.ID
+	}
+
+	cacheJSON, _ := m.Client.Cache.ExportJSON()
+	code_file := fmt.Sprintf(boiler_code_for_eval, importStatement, m.ID, chatID, cacheJSON, code, m.Client.ExportSession())
 	tmp_dir := "tmp"
 	if _, err := os.ReadDir(tmp_dir); err != nil {
 		if err := os.Mkdir(tmp_dir, 0755); err != nil {
@@ -240,8 +331,16 @@ func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, 
 		}
 	}
 
-	os.WriteFile(tmp_dir+"/eval.go", []byte(code_file), 0644)
-	cmd := exec.Command("go", "run", "tmp/eval.go")
+	evalFile := tmp_dir + "/eval.go"
+	os.WriteFile(evalFile, []byte(code_file), 0644)
+	defer os.Remove(evalFile)
+
+	exec.Command("go", "mod", "tidy").Run()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "go", "run", evalFile)
 	var stdOut, stdErr bytes.Buffer
 	cmd.Stdout = &stdOut
 	cmd.Stderr = &stdErr
@@ -249,6 +348,10 @@ func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, 
 	err := cmd.Run()
 	stdout := strings.TrimSpace(stdOut.String())
 	stderr := strings.TrimSpace(stdErr.String())
+
+	if ctx.Err() == context.DeadlineExceeded {
+		return "⏱️ <b>Timeout</b>\n<i>Execution exceeded 60 seconds</i>", false
+	}
 
 	if stdout == "" && stderr == "" {
 		if err != nil {

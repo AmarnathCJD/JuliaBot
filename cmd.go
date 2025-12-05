@@ -59,6 +59,7 @@ func initFunc(c *telegram.Client) {
 
 		c.On("cmd:restart", modules.RestartHandle, telegram.Custom(FilterOwner))
 		c.On("cmd:id", modules.IDHandle)
+		c.On("cmd:tcp", modules.TcpHandler, telegram.Custom(FilterOwnerAndAuth))
 
 		c.On("cmd:mz", modules.YtSongDL)
 		c.On("cmd:spot(:?ify)? (.*)", modules.SpotifyHandler)

@@ -458,7 +458,8 @@ var chatSessions = make(map[int64]string)
 func HandleAIMessage(m *tg.NewMessage) error {
 	var isForAi bool
 	var query string
-	if isForAi, query = isForAiMessage(m); !isForAi {
+	var ctx string
+	if isForAi, query, ctx = isForAiMessage(m); !isForAi {
 		return nil
 	}
 	action, _ := m.SendAction("typing")
@@ -482,6 +483,18 @@ func HandleAIMessage(m *tg.NewMessage) error {
 		chatID = newChatID
 	}
 
+	if ctx != "" {
+		MsgMap[chatID] = append(MsgMap[chatID], Msg{
+			Role: "user",
+			Content: []any{
+				map[string]any{
+					"type": "text",
+					"text": "[CONTEXT TO CONSIDER (only for this response)]: " + ctx,
+				},
+			},
+		})
+	}
+
 	response, err := AI.SendMessage(context.Background(), chatID, "GLM-4-6-API-V1", query)
 	if err != nil {
 		m.Reply("failed to get AI response")
@@ -496,11 +509,11 @@ func HandleAIMessage(m *tg.NewMessage) error {
 	return nil
 }
 
-func isForAiMessage(m *tg.NewMessage) (bool, string) {
+func isForAiMessage(m *tg.NewMessage) (bool, string, string) {
 	if m.IsReply() {
 		reply, err := m.GetReplyMessage()
-		if err == nil && reply.SenderID() == m.Client.Me().ID {
-			return true, m.Text()
+		if err == nil && reply.SenderID() == m.Client.Me().ID && (strings.Contains(strings.ToLower(reply.Text()), "ai") || strings.Contains(strings.ToLower(reply.Text()), "rusty")) {
+			return true, m.Text(), reply.Text()
 		}
 	}
 
@@ -510,8 +523,8 @@ func isForAiMessage(m *tg.NewMessage) (bool, string) {
 		strings.Contains(strings.ToLower(m.Text()), "rusty") {
 		replacer := strings.NewReplacer("ai ", "", "/ai ", "", "!ai ", "", "Rusty", "", "rusty", "")
 		cleaned := strings.TrimSpace(replacer.Replace(m.Text()))
-		return true, cleaned
+		return true, cleaned, ""
 	}
 
-	return false, ""
+	return false, "", ""
 }
