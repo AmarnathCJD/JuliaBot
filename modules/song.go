@@ -10,15 +10,41 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
 	yt "github.com/lrstanley/go-ytdlp"
 )
 
+type YTVideoInfo struct {
+	Title         string
+	Image         string
+	LengthSeconds string
+	Formats       []YTFormat
+	AudioURL      string
+	UserID        int64
+	ChatID        int64
+	MessageID     int32
+	OriginalURL   string
+}
+
+type YTFormat struct {
+	Quality  string
+	URL      string
+	HasAudio bool
+	FileSize string
+	MimeType string
+}
+
+var (
+	ytVideoCache   = make(map[string]*YTVideoInfo)
+	ytVideoCacheMu sync.RWMutex
+)
+
 func YtVideoDL(m *telegram.NewMessage) error {
-	// execute proxy rstart cmd
 	_ = exec.Command(proxyRestartCMD).Run()
 	yt.MustInstall(context.TODO(), nil)
 
@@ -39,12 +65,12 @@ func YtVideoDL(m *telegram.NewMessage) error {
 		Downloader("aria2c").
 		DownloaderArgs("--console-log-level=warn --max-connection-per-server=16 --split=16 --min-split-size=1M").
 		ProgressFunc(time.Second*7, func(update yt.ProgressUpdate) {
-			text := "<b>~ Downloading Youtube Video ~</b>\n\n"
-			text += "<b>📄 Name:</b> <code>%s</code>\n"
-			text += "<b>💾 File Size:</b> <code>%.2f MiB</code>\n"
-			text += "<b>⌛️ ETA:</b> <code>%s</code>\n"
-			text += "<b>⏱ Speed:</b> <code>%s</code>\n"
-			text += "<b>⚙️ Progress:</b> %s <code>%.2f%%</code>"
+			text := "<b>Downloading Youtube Video</b>\n\n"
+			text += "<b>Name:</b> <code>%s</code>\n"
+			text += "<b>File Size:</b> <code>%.2f MiB</code>\n"
+			text += "<b>ETA:</b> <code>%s</code>\n"
+			text += "<b>Speed:</b> <code>%s</code>\n"
+			text += "<b>Progress:</b> %s <code>%.2f%%</code>"
 
 			size := float64(update.TotalBytes) / 1024 / 1024
 			eta := func() string {
@@ -117,6 +143,10 @@ func YtSongDL(m *telegram.NewMessage) error {
 			m.Reply("<code>video not found.</code>")
 			return nil
 		}
+
+		fmt.Println("Video ID:", vidId)
+		fmt.Println("Channel:", channel)
+		fmt.Println("Thumbnail:", thumb)
 
 		args = "https://www.youtube.com/watch?v=" + vidId
 		channelId = channel
@@ -268,9 +298,9 @@ func InlineSpotify(m *telegram.InlineQuery) error {
 	var caption string
 	if s.IsPlaying {
 		caption = fmt.Sprintf(
-			"🎵 <b><i>Now Playing:</i></b> <a href=\"%s\">%s</a>\n"+
-				"🎤 <b><i>Artist:</i></b> %s\n"+
-				"⏱ <b><i>Time:</i></b> %s / %s",
+			"<b><i>Now Playing:</i></b> <a href=\"%s\">%s</a>\n"+
+				"<b><i>Artist:</i></b> %s\n"+
+				"<b><i>Time:</i></b> %s / %s",
 			s.URL,
 			s.Title,
 			s.Artists,
@@ -278,7 +308,7 @@ func InlineSpotify(m *telegram.InlineQuery) error {
 			fmtDuration(s.DurationMs),
 		)
 	} else {
-		caption = "<i>🚫 No song is currently playing</i>"
+		caption = "<i>No song is currently playing</i>"
 	}
 
 	btn := telegram.Button
@@ -310,6 +340,370 @@ func fmtDuration(ms int) string {
 	min := sec / 60
 	sec = sec % 60
 	return fmt.Sprintf("%02d:%02d", min, sec)
+}
+
+func YTCustomHandler(m *telegram.NewMessage) error {
+	query := m.Args()
+	if query == "" {
+		m.Reply("Provide youtube link~")
+		return nil
+	}
+
+	var videoURL string
+	if strings.Contains(query, "youtube.com") || strings.Contains(query, "youtu.be") {
+		videoURL = query
+	} else {
+		vidId, _, _, err := searchYouTube(query)
+		if err != nil {
+			m.Reply("<code>Video not found.</code>")
+			return nil
+		}
+		videoURL = "https://www.youtube.com/watch?v=" + vidId
+	}
+
+	msg, _ := m.Reply("<i>Fetching video info...</i>")
+
+	info, err := fetchYTCustom(videoURL)
+	if err != nil || info == nil || len(info.Formats) == 0 {
+		msg.Edit("<i>Trying quick download...</i>")
+		return ytQuickFallback(m, msg, videoURL)
+	}
+
+	cacheID := fmt.Sprintf("%d%d", m.ChatID(), time.Now().UnixNano())
+	info.UserID = m.SenderID()
+	info.ChatID = m.ChatID()
+	info.OriginalURL = videoURL
+
+	ytVideoCacheMu.Lock()
+	ytVideoCache[cacheID] = info
+	ytVideoCacheMu.Unlock()
+
+	keyboard := telegram.NewKeyboard()
+	row := []telegram.KeyboardButton{}
+	for i, f := range info.Formats {
+		label := f.Quality
+		if f.HasAudio {
+			label += " [Audio]"
+		}
+		if f.FileSize != "" {
+			size, _ := strconv.ParseInt(f.FileSize, 10, 64)
+			if size > 0 {
+				label += fmt.Sprintf(" (%.1fMB)", float64(size)/1024/1024)
+			}
+		}
+		callbackData := fmt.Sprintf("ytdl_%s_%d", cacheID, i)
+		row = append(row, telegram.Button.Data(label, callbackData))
+		if len(row) == 2 || i == len(info.Formats)-1 {
+			keyboard.AddRow(row...)
+			row = []telegram.KeyboardButton{}
+		}
+	}
+
+	keyboard.AddRow(telegram.Button.Data("Cancel", fmt.Sprintf("ytdl_%s_cancel", cacheID)))
+
+	caption := fmt.Sprintf(
+		"<b>%s</b>\n\n"+
+			"<b>Duration:</b> %s\n\n"+
+			"<i>Select quality:</i>",
+		info.Title,
+		fmtDurationSec(info.LengthSeconds),
+	)
+
+	info.MessageID = msg.ID
+	msg.Edit(caption, &telegram.SendOptions{ReplyMarkup: keyboard.Build()})
+
+	return nil
+}
+
+func fmtDurationSec(sec string) string {
+	s, _ := strconv.Atoi(sec)
+	min := s / 60
+	s = s % 60
+	return fmt.Sprintf("%02d:%02d", min, s)
+}
+
+func fetchYTCustom(videoURL string) (*YTVideoInfo, error) {
+	payload := map[string]string{
+		"url":         videoURL,
+		"accessToken": os.Getenv("INSTA_ACCESS"),
+	}
+	payloadBytes, _ := json.Marshal(payload)
+
+	req, _ := http.NewRequest("POST", "https://insta.gogram.fun/yt-custom", bytes.NewBuffer(payloadBytes))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("status code: %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Title         string `json:"title"`
+		Image         string `json:"image"`
+		LengthSeconds string `json:"lengthSeconds"`
+		FormatOptions struct {
+			Video struct {
+				MP4 []struct {
+					Quality  string `json:"quality"`
+					URL      string `json:"url"`
+					HasAudio bool   `json:"hasAudio"`
+					FileSize string `json:"fileSize"`
+					MimeType string `json:"mimeType"`
+				} `json:"mp4"`
+			} `json:"video"`
+		} `json:"format_options"`
+		Error string `json:"error"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	if result.Error != "" {
+		return nil, fmt.Errorf("%s", result.Error)
+	}
+
+	info := &YTVideoInfo{
+		Title:         result.Title,
+		Image:         result.Image,
+		LengthSeconds: result.LengthSeconds,
+	}
+
+	var audioURL string
+	for _, f := range result.FormatOptions.Video.MP4 {
+		info.Formats = append(info.Formats, YTFormat{
+			Quality:  f.Quality,
+			URL:      f.URL,
+			HasAudio: f.HasAudio,
+			FileSize: f.FileSize,
+			MimeType: f.MimeType,
+		})
+		if f.HasAudio && audioURL == "" {
+			audioURL = f.URL
+		}
+	}
+	info.AudioURL = audioURL
+
+	return info, nil
+}
+
+func ytQuickFallback(m *telegram.NewMessage, msg *telegram.NewMessage, videoURL string) error {
+	payload := map[string]string{
+		"url":         videoURL,
+		"accessToken": os.Getenv("INSTA_ACCESS"),
+	}
+	payloadBytes, _ := json.Marshal(payload)
+
+	req, _ := http.NewRequest("POST", "https://insta.gogram.fun/yt-quick", bytes.NewBuffer(payloadBytes))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		msg.Edit("<code>Failed to fetch video.</code>")
+		return nil
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		DownloadURL string `json:"downloadURL"`
+		Status      string `json:"status"`
+		Error       string `json:"error"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if result.DownloadURL == "" {
+		msg.Edit("<code>Failed to get download URL.</code>")
+		return nil
+	}
+
+	msg.Edit("<i>Downloading video...</i>")
+
+	filePath, err := downloadFile(result.DownloadURL, "yt_quick_video.mp4")
+	if err != nil {
+		msg.Edit("<code>Failed to download video.</code>")
+		return nil
+	}
+	defer os.Remove(filePath)
+
+	msg.Edit("<i>Uploading video...</i>")
+
+	m.ReplyMedia(filePath, &telegram.MediaOptions{
+		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+	})
+	msg.Delete()
+
+	return nil
+}
+
+func YTCallbackHandler(cb *telegram.CallbackQuery) error {
+	data := cb.DataString()
+	if !strings.HasPrefix(data, "ytdl_") {
+		return nil
+	}
+
+	data = strings.TrimPrefix(data, "ytdl_")
+	lastUnderscore := strings.LastIndex(data, "_")
+	if lastUnderscore == -1 {
+		return nil
+	}
+
+	cacheID := data[:lastUnderscore]
+	action := data[lastUnderscore+1:]
+
+	if action == "cancel" {
+		ytVideoCacheMu.Lock()
+		delete(ytVideoCache, cacheID)
+		ytVideoCacheMu.Unlock()
+		cb.Edit("<b>Cancelled</b>")
+		cb.Answer("Cancelled")
+		return nil
+	}
+
+	ytVideoCacheMu.RLock()
+	info, exists := ytVideoCache[cacheID]
+	ytVideoCacheMu.RUnlock()
+
+	if !exists {
+		cb.Answer("Session expired. Please try again.", &telegram.CallbackOptions{Alert: true})
+		return nil
+	}
+
+	if cb.Sender.ID != info.UserID {
+		cb.Answer("Only the requester can select quality.", &telegram.CallbackOptions{Alert: true})
+		return nil
+	}
+
+	formatIdx, err := strconv.Atoi(action)
+	if err != nil || formatIdx < 0 || formatIdx >= len(info.Formats) {
+		cb.Answer("Invalid selection", &telegram.CallbackOptions{Alert: true})
+		return nil
+	}
+
+	selectedFormat := info.Formats[formatIdx]
+	cb.Answer(fmt.Sprintf("Downloading %s", selectedFormat.Quality))
+	cb.Edit(fmt.Sprintf("<i>Downloading %s quality...</i>", selectedFormat.Quality))
+
+	var finalPath string
+	var cleanupFiles []string
+
+	if selectedFormat.HasAudio {
+		filePath, err := downloadFile(selectedFormat.URL, fmt.Sprintf("yt_%s.mp4", selectedFormat.Quality))
+		if err != nil {
+			cb.Edit("<code>Failed to download video.</code>")
+			return nil
+		}
+		finalPath = filePath
+		cleanupFiles = append(cleanupFiles, filePath)
+	} else {
+		if info.AudioURL == "" {
+			cb.Edit("<code>No audio source available.</code>")
+			return nil
+		}
+
+		cb.Edit(fmt.Sprintf("<i>Downloading %s video...</i>", selectedFormat.Quality))
+		videoPath, err := downloadFile(selectedFormat.URL, fmt.Sprintf("yt_video_%s.mp4", selectedFormat.Quality))
+		if err != nil {
+			cb.Edit("<code>Failed to download video.</code>")
+			return nil
+		}
+		cleanupFiles = append(cleanupFiles, videoPath)
+
+		cb.Edit("<i>Downloading audio...</i>")
+		audioPath, err := downloadFile(info.AudioURL, "yt_audio.mp4")
+		if err != nil {
+			for _, f := range cleanupFiles {
+				os.Remove(f)
+			}
+			cb.Edit("<code>Failed to download audio.</code>")
+			return nil
+		}
+		cleanupFiles = append(cleanupFiles, audioPath)
+
+		cb.Edit("<i>Merging video and audio...</i>")
+		outputPath := fmt.Sprintf("yt_merged_%s.mp4", selectedFormat.Quality)
+		if err := mergeVideoAudio(videoPath, audioPath, outputPath); err != nil {
+			for _, f := range cleanupFiles {
+				os.Remove(f)
+			}
+			cb.Edit("<code>Failed to merge video and audio.</code>")
+			return nil
+		}
+		cleanupFiles = append(cleanupFiles, outputPath)
+		finalPath = outputPath
+	}
+
+	ytVideoCacheMu.Lock()
+	delete(ytVideoCache, cacheID)
+	ytVideoCacheMu.Unlock()
+
+	cb.Edit("<i>Uploading video...</i>")
+
+	msg := &telegram.NewMessage{
+		ID:     info.MessageID,
+		Client: cb.Client,
+	}
+
+	_, err = cb.Client.SendMedia(info.ChatID, finalPath, &telegram.MediaOptions{
+		Caption:         fmt.Sprintf("<b>%s</b>\nQuality: %s", info.Title, selectedFormat.Quality),
+		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+	})
+
+	for _, f := range cleanupFiles {
+		os.Remove(f)
+	}
+
+	if err != nil {
+		cb.Edit("<code>Failed to upload video.</code>")
+		return nil
+	}
+
+	cb.Delete()
+	return nil
+}
+
+func downloadFile(url, filename string) (string, error) {
+	filePath := "tmp/" + filename
+	os.MkdirAll("tmp", 0755)
+
+	dl := yt.New().
+		Output(filePath).
+		Downloader("aria2c").
+		DownloaderArgs("--console-log-level=warn --max-connection-per-server=16 --split=16 --min-split-size=1M").
+		NoWarnings()
+
+	_, err := dl.Run(context.TODO(), url)
+	if err != nil {
+		return "", err
+	}
+
+	return filePath, nil
+}
+
+func mergeVideoAudio(videoPath, audioPath, outputPath string) error {
+	cmd := exec.Command("ffmpeg", "-y",
+		"-i", videoPath,
+		"-i", audioPath,
+		"-c:v", "copy",
+		"-c:a", "aac",
+		"-strict", "experimental",
+		outputPath,
+	)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("ffmpeg error: %v, stderr: %s", err, stderr.String())
+	}
+
+	return nil
 }
 
 func init() {

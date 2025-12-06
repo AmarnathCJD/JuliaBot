@@ -28,7 +28,8 @@ RUN apk add --no-cache \
     neofetch \
     mediainfo \
     wget \
-    tar
+    tar \
+    yt-dlp
 
 ENV GOLANG_VERSION=1.25.0
 

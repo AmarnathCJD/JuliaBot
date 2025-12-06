@@ -61,7 +61,7 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:id", modules.IDHandle)
 		c.On("cmd:tcp", modules.TcpHandler, telegram.Custom(FilterOwnerAndAuth))
 
-		c.On("cmd:mz", modules.YtSongDL)
+		c.On("cmd:vid", modules.YTCustomHandler)
 		c.On("cmd:spot(:?ify)? (.*)", modules.SpotifyHandler)
 		c.On("cmd:spots", modules.SpotifySearchHandler)
 		c.On("cmd:sh", modules.ShellHandle, telegram.Custom(FilterOwner))
@@ -117,7 +117,9 @@ func initFunc(c *telegram.Client) {
 		c.On("command:doge", modules.DogeSticker)
 
 		c.On("callback:spot_(.*)_(.*)", modules.SpotifyHandlerCallback)
-		c.On("cmd:vid", modules.YtVideoDL)
+		//c.On("cmd:vid", modules.YtVideoDL)
+		c.On("cmd:ytc", modules.YTCustomHandler)
+		c.On("callback:ytdl_(.*)", modules.YTCallbackHandler)
 
 		c.On(telegram.OnParticipant, modules.UserJoinHandle)
 
