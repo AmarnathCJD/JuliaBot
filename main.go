@@ -30,10 +30,16 @@ func main() {
 	appId, _ := strconv.Atoi(os.Getenv("APP_ID"))
 	ownerId, _ = strconv.ParseInt(os.Getenv("OWNER_ID"), 10, 64)
 
-	client, err := tg.QuickBot(int32(appId), os.Getenv("APP_HASH"), os.Getenv("BOT_TOKEN"))
+	client, err := tg.NewClient(tg.ClientConfig{
+		//Session: "user1",
+		AppID:   int32(appId),
+		AppHash: os.Getenv("APP_HASH"),
+	})
 	if err != nil {
 		panic(err)
 	}
+	client.Conn()
+	client.AuthPrompt()
 	client.Log.SetOutput(wr)
 
 	client.Logger.Info("Bot is running as @%s", client.Me().Username)
@@ -46,7 +52,15 @@ func main() {
 	}()
 
 	initFunc(client)
-
+	// client.OnRaw(&tg.UpdateGroupCall{}, func(m tg.Update, c *tg.Client) error {
+	// 	fmt.Println(client.JSON(m))
+	// 	return nil
+	// })
+	client.OnCommand("senders", func(m *tg.NewMessage) error {
+		x := client.GetExportedSendersStatus()
+		m.Reply(client.JSON(x))
+		return nil
+	})
 	client.Idle()
 	client.Logger.Info("Bot stopped")
 }
