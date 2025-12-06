@@ -335,7 +335,7 @@ func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, 
 	os.WriteFile(evalFile, []byte(code_file), 0644)
 	defer os.Remove(evalFile)
 
-	exec.Command("go", "mod", "tidy").Run()
+	exec.Command("cd", "tmp", "&&", "go", "mod", "tidy").Run()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
