@@ -21,7 +21,6 @@ WORKDIR /app
 RUN apk add --no-cache \
     ffmpeg \
     bash \
-    vorbis-tools \
     file \
     coreutils \
     gawk \
