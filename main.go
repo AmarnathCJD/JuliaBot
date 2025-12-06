@@ -39,7 +39,8 @@ func main() {
 		panic(err)
 	}
 	client.Conn()
-	client.AuthPrompt()
+	//client.AuthPrompt()
+	client.LoginBot(os.Getenv("BOT_TOKEN"))
 	client.Log.SetOutput(wr)
 
 	client.Logger.Info("Bot is running as @%s", client.Me().Username)
