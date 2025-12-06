@@ -59,7 +59,7 @@ func main() {
 	// })
 	client.OnCommand("senders", func(m *tg.NewMessage) error {
 		x := client.GetExportedSendersStatus()
-		m.Reply(fmt.Sprintf(x))
+		m.Reply(fmt.Sprintf("%+v", x))
 		return nil
 	})
 	client.Idle()
