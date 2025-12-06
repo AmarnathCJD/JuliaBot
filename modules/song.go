@@ -690,13 +690,10 @@ func mergeVideoAudio(videoPath, audioPath, outputPath string) error {
 	cmd := exec.Command("ffmpeg", "-y",
 		"-i", videoPath,
 		"-i", audioPath,
-		"-c:v", "libx264",
-		"-preset", "fast",
-		"-crf", "23",
+		"-c:v", "copy",
 		"-c:a", "aac",
 		"-b:a", "128k",
 		"-movflags", "+faststart",
-		"-pix_fmt", "yuv420p",
 		outputPath,
 	)
 
