@@ -525,7 +525,7 @@ func ytQuickFallback(m *telegram.NewMessage, msg *telegram.NewMessage, videoURL 
 
 	msg.Edit("<i>Downloading video...</i>")
 
-	filePath, err := downloadFile(result.DownloadURL, "yt_quick_video.mp4")
+	filePath, err := downloadFile(result.DownloadURL, "yt_quick_video.mp4", msg)
 	if err != nil {
 		msg.Edit("<code>Failed to download video.</code>")
 		return nil
@@ -594,7 +594,11 @@ func YTCallbackHandler(cb *telegram.CallbackQuery) error {
 	var cleanupFiles []string
 
 	if selectedFormat.HasAudio {
-		filePath, err := downloadFile(selectedFormat.URL, fmt.Sprintf("yt_%s.mp4", selectedFormat.Quality))
+		msg := &telegram.NewMessage{
+			ID:     info.MessageID,
+			Client: cb.Client,
+		}
+		filePath, err := downloadFile(selectedFormat.URL, fmt.Sprintf("yt_%s.mp4", selectedFormat.Quality), msg)
 		if err != nil {
 			cb.Edit("<code>Failed to download video.</code>")
 			return nil
@@ -608,7 +612,11 @@ func YTCallbackHandler(cb *telegram.CallbackQuery) error {
 		}
 
 		cb.Edit(fmt.Sprintf("<i>Downloading %s video...</i>", selectedFormat.Quality))
-		videoPath, err := downloadFile(selectedFormat.URL, fmt.Sprintf("yt_video_%s.mp4", selectedFormat.Quality))
+		msg := &telegram.NewMessage{
+			ID:     info.MessageID,
+			Client: cb.Client,
+		}
+		videoPath, err := downloadFile(selectedFormat.URL, fmt.Sprintf("yt_video_%s.mp4", selectedFormat.Quality), msg)
 		if err != nil {
 			cb.Edit("<code>Failed to download video.</code>")
 			return nil
@@ -616,7 +624,7 @@ func YTCallbackHandler(cb *telegram.CallbackQuery) error {
 		cleanupFiles = append(cleanupFiles, videoPath)
 
 		cb.Edit("<i>Downloading audio...</i>")
-		audioPath, err := downloadFile(info.AudioURL, "yt_audio.mp4")
+		audioPath, err := downloadFile(info.AudioURL, "yt_audio.mp4", msg)
 		if err != nil {
 			for _, f := range cleanupFiles {
 				os.Remove(f)
@@ -682,7 +690,7 @@ func YTCallbackHandler(cb *telegram.CallbackQuery) error {
 	return nil
 }
 
-func downloadFile(url, filename string) (string, error) {
+func downloadFile(url, filename string, progressMsg *telegram.NewMessage) (string, error) {
 	filePath := "tmp/" + filename
 	os.MkdirAll("tmp", 0755)
 
@@ -691,6 +699,15 @@ func downloadFile(url, filename string) (string, error) {
 		Downloader("aria2c").
 		DownloaderArgs("--console-log-level=warn --max-connection-per-server=16 --split=16 --min-split-size=1M").
 		NoWarnings()
+
+	if progressMsg != nil {
+		dl = dl.ProgressFunc(time.Second*5, func(update yt.ProgressUpdate) {
+			percent := float64(update.DownloadedBytes) / float64(update.TotalBytes) * 100
+			if percent > 0 {
+				progressMsg.Edit(fmt.Sprintf("<i>Downloading: %.1f%%</i>", percent))
+			}
+		})
+	}
 
 	_, err := dl.Run(context.TODO(), url)
 	if err != nil {
