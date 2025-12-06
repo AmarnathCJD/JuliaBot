@@ -650,6 +650,20 @@ func YTCallbackHandler(cb *telegram.CallbackQuery) error {
 		Client: cb.Client,
 	}
 
+	// if finalPath size > 2GB, abort with error
+	fileInfo, err := os.Stat(finalPath)
+	if err != nil {
+		cb.Edit("<code>Failed to access video file.</code>")
+		return nil
+	}
+	if fileInfo.Size() > 2*1024*1024*1024 {
+		cb.Edit("<code>> 2GB files cannot be uploaded to Telegram.</code>")
+		for _, f := range cleanupFiles {
+			os.Remove(f)
+		}
+		return nil
+	}
+
 	_, err = cb.Client.SendMedia(info.ChatID, finalPath, &telegram.MediaOptions{
 		Caption:         fmt.Sprintf("<b>%s</b>\nQuality: %s", info.Title, selectedFormat.Quality),
 		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
