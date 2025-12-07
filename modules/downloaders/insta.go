@@ -1,4 +1,4 @@
-package modules
+package downloaders
 
 import (
 	"bytes"
@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/amarnathcjd/gogram/telegram"
 )
@@ -42,50 +43,102 @@ func callSnapServer(downloadURL, accessToken string) (*SnapResponse, error) {
 	return &result, nil
 }
 
+// checkContentType checks if URL is actually an image by HEAD request
+func checkContentType(url string) (bool, string) {
+	resp, err := http.Head(url)
+	if err != nil {
+		return false, ""
+	}
+	defer resp.Body.Close()
+
+	contentDisposition := resp.Header.Get("Content-Disposition")
+	if contentDisposition != "" {
+		if strings.Contains(strings.ToLower(contentDisposition), ".jpg") ||
+			strings.Contains(strings.ToLower(contentDisposition), ".jpeg") ||
+			strings.Contains(strings.ToLower(contentDisposition), ".png") ||
+			strings.Contains(strings.ToLower(contentDisposition), ".gif") {
+			return true, contentDisposition
+		}
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if strings.Contains(strings.ToLower(contentType), "image") {
+		return true, contentType
+	}
+
+	return false, ""
+}
+
 // downloadMediaFiles downloads URLs and returns local file paths
-func downloadMediaFiles(mediaURLs []string) ([]string, error) {
+func downloadMediaFiles(mediaURLs []string, isVideoList bool) ([]string, error) {
 	var filePaths []string
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	type urlCheck struct {
+		index   int
+		url     string
+		isImage bool
+		info    string
+	}
+
+	checkResults := make([]urlCheck, len(mediaURLs))
 
 	for i, mediaURL := range mediaURLs {
-		resp, err := http.Get(mediaURL)
+		wg.Add(1)
+		go func(idx int, url string) {
+			defer wg.Done()
+			isImage, info := checkContentType(url)
+			checkResults[idx] = urlCheck{
+				index:   idx,
+				url:     url,
+				isImage: isImage,
+				info:    info,
+			}
+		}(i, mediaURL)
+	}
+
+	wg.Wait()
+
+	for _, result := range checkResults {
+		resp, err := http.Get(result.url)
 		if err != nil {
-			fmt.Printf("Error downloading %s: %v\n", mediaURL, err)
 			continue
 		}
-		defer resp.Body.Close()
 
 		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		if err != nil {
-			fmt.Printf("Error reading response body: %v\n", err)
 			continue
 		}
 
 		ext := ".mp4"
-		contentType := resp.Header.Get("Content-Type")
-		if strings.Contains(strings.ToLower(mediaURL), ".jpg") ||
-			strings.Contains(strings.ToLower(mediaURL), ".jpeg") ||
-			strings.Contains(strings.ToLower(mediaURL), ".png") ||
-			strings.Contains(strings.ToLower(contentType), "image") {
+		if result.isImage {
 			ext = ".jpg"
+			if strings.Contains(strings.ToLower(result.info), ".png") {
+				ext = ".png"
+			} else if strings.Contains(strings.ToLower(result.info), ".gif") {
+				ext = ".gif"
+			}
 		}
 
-		filename := fmt.Sprintf("insta_%d%s", i, ext)
+		filename := fmt.Sprintf("insta_%d%s", result.index, ext)
 		filePath := filepath.Join(os.TempDir(), filename)
 
 		file, err := os.Create(filePath)
 		if err != nil {
-			fmt.Printf("Error creating file: %v\n", err)
 			continue
 		}
 
 		_, err = io.Copy(file, bytes.NewReader(body))
 		file.Close()
 		if err != nil {
-			fmt.Printf("Error writing to file: %v\n", err)
 			continue
 		}
 
+		mu.Lock()
 		filePaths = append(filePaths, filePath)
+		mu.Unlock()
 	}
 
 	return filePaths, nil
@@ -127,7 +180,7 @@ func InstaHandler(m *telegram.NewMessage) error {
 	allURLs = append(allURLs, resp.Images...)
 	allURLs = append(allURLs, resp.Videos...)
 
-	filePaths, err := downloadMediaFiles(allURLs)
+	filePaths, err := downloadMediaFiles(allURLs, false)
 	if err != nil {
 		m.Reply("Failed to download media files")
 		return nil

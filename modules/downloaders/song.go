@@ -1,4 +1,4 @@
-package modules
+package downloaders
 
 import (
 	"bytes"
@@ -45,9 +45,6 @@ var (
 )
 
 func YtVideoDL(m *telegram.NewMessage) error {
-	_ = exec.Command(proxyRestartCMD).Run()
-	yt.MustInstall(context.TODO(), nil)
-
 	args := m.Args()
 	if args == "" {
 		m.Reply("Provide video url~")
@@ -736,11 +733,4 @@ func mergeVideoAudio(videoPath, audioPath, outputPath string) error {
 	}
 
 	return nil
-}
-
-func init() {
-	Mods.AddModule("Song", `<b>Here are the commands available in Song module:</b>
-The Song module is used to download songs from YouTube.
-
-Its currently Broken!`)
 }

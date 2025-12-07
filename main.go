@@ -41,8 +41,8 @@ func main() {
 	}
 	client.Conn()
 	//client.AuthPrompt()
-	client.LoginBot(os.Getenv("BOT_TOKEN"))
 	client.Log.SetOutput(wr)
+	client.LoginBot(os.Getenv("BOT_TOKEN"))
 
 	client.Logger.Info("Bot is running as @%s", client.Me().Username)
 
@@ -60,7 +60,11 @@ func main() {
 	// })
 	client.OnCommand("senders", func(m *tg.NewMessage) error {
 		x := client.GetExportedSendersStatus()
-		m.Reply(fmt.Sprintf("%+v", x))
+		var result string
+		for a, b := range x {
+			result += fmt.Sprintf("dc%d: %d senders\n", a, b)
+		}
+		m.Reply("<b>Exported Senders Status:</b>\n" + result)
 		return nil
 	})
 	client.Idle()

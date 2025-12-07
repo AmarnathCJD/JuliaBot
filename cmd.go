@@ -2,6 +2,7 @@ package main
 
 import (
 	"main/modules"
+	"main/modules/downloaders"
 	"os"
 	"strconv"
 	"strings"
@@ -61,7 +62,7 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:id", modules.IDHandle)
 		c.On("cmd:tcp", modules.TcpHandler, telegram.Custom(FilterOwnerAndAuth))
 
-		c.On("cmd:vid", modules.YTCustomHandler)
+		c.On("cmd:vid", downloaders.YTCustomHandler)
 		c.On("cmd:spot(:?ify)? (.*)", modules.SpotifyHandler)
 		c.On("cmd:spots", modules.SpotifySearchHandler)
 		c.On("cmd:sh", modules.ShellHandle, telegram.Custom(FilterOwner))
@@ -93,9 +94,11 @@ func initFunc(c *telegram.Client) {
 		c.On("inline:doge", modules.DogeStickerInline)
 
 		c.On("cmd:finfo", modules.FileInfoHandle)
+		c.On("cmd:setrtmp", modules.SetRTMPHandler)
 		c.On("cmd:stream", modules.StreamHandler)
 		c.On("cmd:streams", modules.ListStreamsHandler)
 		c.On("cmd:stopstream", modules.StopStreamHandler)
+		c.On("callback:stream_", modules.StreamCallbackHandler)
 
 		c.On(telegram.OnNewMessage, modules.HandleAIMessage)
 
@@ -111,15 +114,16 @@ func initFunc(c *telegram.Client) {
 		c.On("command:math", modules.MathHandler)
 
 		// c.On("command:ai", modules.AIImageGEN)
-		c.On("command:snap", modules.InstaHandler)
-		c.On("command:insta", modules.InstaHandler)
+		c.On("command:snap", downloaders.InstaHandler)
+		c.On("command:insta", downloaders.InstaHandler)
+		c.On("command:tera", downloaders.TeraboxHandler)
 		//c.On("command:truec", modules.TruecallerHandle)
 		c.On("command:doge", modules.DogeSticker)
 
 		c.On("callback:spot_(.*)_(.*)", modules.SpotifyHandlerCallback)
 		//c.On("cmd:vid", modules.YtVideoDL)
-		c.On("cmd:ytc", modules.YTCustomHandler)
-		c.On("callback:ytdl_(.*)", modules.YTCallbackHandler)
+		c.On("cmd:ytc", downloaders.YTCustomHandler)
+		c.On("callback:ytdl_(.*)", downloaders.YTCallbackHandler)
 
 		c.On(telegram.OnParticipant, modules.UserJoinHandle)
 
