@@ -367,6 +367,8 @@ Follow these rules for every normal response:
 
 Always follow these rules in every reply.  
 Limit your response to less than 4096 characters unless the user insists otherwise.
+
+Reply short for basic questions, detailed for complex ones.
 `
 )
 
@@ -515,7 +517,7 @@ func isForAiMessage(m *tg.NewMessage) (bool, string, string) {
 	}
 
 	lowerText := strings.ToLower(m.Text())
-	hasAIKeyword := strings.Contains(lowerText, "ai") || strings.Contains(lowerText, "rusty")
+	hasAIKeyword := strings.Contains(lowerText, "!ai") || strings.Contains(lowerText, "rusty")
 
 	if m.IsReply() {
 		reply, err := m.GetReplyMessage()
