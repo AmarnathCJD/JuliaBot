@@ -70,14 +70,18 @@ func TeraboxHandler(m *telegram.NewMessage) error {
 
 	msg.Edit("<i>Downloading file...</i>")
 
-	filePath, err := downloadTeraboxFile(teraResp.DirectURL, msg)
+	proxiedURL := fmt.Sprintf("https://insta.gogram.fun/proxy?url=%s&accessToken=%s",
+		url.QueryEscape(teraResp.DirectURL),
+		url.QueryEscape(accessToken))
+
+	filePath, err := downloadTeraboxFile(proxiedURL, msg)
 	if err != nil {
 		msg.Edit(fmt.Sprintf("Download failed: %v", err))
 		return nil
 	}
 
 	defer os.Remove(filePath)
-	msg.Delete()
+	defer msg.Delete()
 
 	m.ReplyMedia(filePath, &telegram.MediaOptions{
 		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
