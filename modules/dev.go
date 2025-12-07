@@ -303,6 +303,13 @@ func EvalHandle(m *telegram.NewMessage) error {
 	return nil
 }
 
+const goModContents = `module main
+
+go 1.25.0
+
+require github.com/amarnathcjd/gogram v1.6.10-0.20251206151850-63c357afc3a5
+`
+
 func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, bool) {
 	var importStatement string = ""
 	if len(imports) > 0 {
@@ -338,16 +345,13 @@ func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, 
 	tmpGoMod := tmp_dir + "/go.mod"
 	tmpGoSum := tmp_dir + "/go.sum"
 
-	modInitCmd := exec.Command("go", "mod", "init", "main")
-	modInitCmd.Dir = tmp_dir
-	modInitCmd.Run()
-
-	modTidyCmd := exec.Command("go", "mod", "tidy")
-	modTidyCmd.Dir = tmp_dir
-	modTidyCmd.Run()
-
-	defer os.Remove(tmpGoMod)
-	defer os.Remove(tmpGoSum)
+	os.WriteFile(tmpGoMod, []byte(goModContents), 0644)
+	// if no go.sum call 'go mod tidy' to generate one
+	if _, err := os.Stat(tmpGoSum); os.IsNotExist(err) {
+		cmd := exec.Command("go", "mod", "tidy")
+		cmd.Dir = tmp_dir
+		cmd.Run()
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -468,7 +472,7 @@ func JsonHandle(m *telegram.NewMessage) error {
 			m.Reply("Error: " + err.Error())
 		}
 	} else {
-		m.Reply("<pre lang='json'>" + string(jsonString) + "</pre>")
+		m.Reply("<pre language='json'>" + string(jsonString) + "</pre>")
 	}
 
 	return nil
