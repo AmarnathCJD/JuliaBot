@@ -15,10 +15,16 @@ import (
 	yt "github.com/lrstanley/go-ytdlp"
 )
 
+type TeraboxFile struct {
+	URL      string `json:"url"`
+	Filename string `json:"filename"`
+	Size     string `json:"size"`
+	Category string `json:"category"`
+}
+
 type TeraboxResponse struct {
-	DirectURL string `json:"url"`
-	Name      string `json:"name"`
-	Error     string `json:"error"`
+	Files []TeraboxFile `json:"files"`
+	Error string        `json:"error"`
 }
 
 func TeraboxHandler(m *telegram.NewMessage) error {
@@ -64,35 +70,82 @@ func TeraboxHandler(m *telegram.NewMessage) error {
 		return nil
 	}
 
-	if teraResp.DirectURL == "" {
-		msg.Edit("No download URL found")
+	if len(teraResp.Files) == 0 {
+		msg.Edit("No files found")
 		return nil
 	}
 
-	msg.Edit("<i>Downloading file...</i>")
+	if len(teraResp.Files) == 1 {
+		msg.Edit("<i>Downloading file...</i>")
 
-	proxiedURL := fmt.Sprintf("https://insta.gogram.fun/proxy?url=%s&accessToken=%s",
-		url.QueryEscape(teraResp.DirectURL),
-		url.QueryEscape(accessToken))
+		proxiedURL := fmt.Sprintf("https://insta.gogram.fun/proxy?url=%s&accessToken=%s",
+			url.QueryEscape(teraResp.Files[0].URL),
+			url.QueryEscape(accessToken))
 
-	filePath, err := downloadTeraboxFile(proxiedURL, msg, teraResp.Name)
-	if err != nil {
-		msg.Edit(fmt.Sprintf("Download failed: %v", err))
-		return nil
+		filePath, err := downloadTeraboxFile(proxiedURL, msg, teraResp.Files[0].Filename)
+		if err != nil {
+			msg.Edit(fmt.Sprintf("Download failed: %v", err))
+			return nil
+		}
+
+		defer os.Remove(filePath)
+		defer msg.Delete()
+
+		target, _ := m.ReplyMedia(filePath, &telegram.MediaOptions{
+			ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+			Caption:         fmt.Sprintf("Downloaded from Terabox\n\n⚠️ Forward this message, as it will get auto-deleted in 5 minutes.\n\nFile Name: %s", teraResp.Files[0].Filename),
+		})
+
+		go func() {
+			time.Sleep(5 * time.Minute)
+			target.Delete()
+		}()
+	} else {
+		msg.Edit(fmt.Sprintf("<b>Found %d files in directory</b>\n\nDownloading all files...", len(teraResp.Files)))
+
+		var uploadedFiles []string
+		for i, file := range teraResp.Files {
+			msg.Edit(fmt.Sprintf("<i>Downloading file %d/%d: %s...</i>", i+1, len(teraResp.Files), file.Filename))
+
+			proxiedURL := fmt.Sprintf("https://insta.gogram.fun/proxy?url=%s&accessToken=%s",
+				url.QueryEscape(file.URL),
+				url.QueryEscape(accessToken))
+
+			filePath, err := downloadTeraboxFile(proxiedURL, msg, file.Filename)
+			if err != nil {
+				continue
+			}
+
+			uploadedFiles = append(uploadedFiles, filePath)
+		}
+
+		if len(uploadedFiles) == 0 {
+			msg.Edit("Failed to download any files")
+			return nil
+		}
+
+		msg.Edit(fmt.Sprintf("<i>Uploading %d files to Telegram...</i>", len(uploadedFiles)))
+
+		var targets []*telegram.NewMessage
+		for i, filePath := range uploadedFiles {
+			defer os.Remove(filePath)
+
+			target, _ := m.ReplyMedia(filePath, &telegram.MediaOptions{
+				ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+				Caption:         fmt.Sprintf("File %d/%d from Terabox\n\n⚠️ Forward this message, as it will get auto-deleted in 5 minutes.", i+1, len(uploadedFiles)),
+			})
+			targets = append(targets, target)
+		}
+
+		msg.Delete()
+
+		go func() {
+			time.Sleep(5 * time.Minute)
+			for _, target := range targets {
+				target.Delete()
+			}
+		}()
 	}
-
-	defer os.Remove(filePath)
-	defer msg.Delete()
-
-	target, _ := m.ReplyMedia(filePath, &telegram.MediaOptions{
-		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
-		Caption:         fmt.Sprintf("Downloaded from Terabox\n\n⚠️ Forward this message, as it will get auto-deleted in 5 minutes.\n\nFile Name: %s", teraResp.Name),
-	})
-
-	go func() {
-		time.Sleep(5 * time.Minute)
-		target.Delete()
-	}()
 
 	return nil
 }
