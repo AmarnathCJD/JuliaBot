@@ -17,6 +17,7 @@ import (
 
 type TeraboxResponse struct {
 	DirectURL string `json:"url"`
+	Name      string `json:"name"`
 	Error     string `json:"error"`
 }
 
@@ -74,7 +75,7 @@ func TeraboxHandler(m *telegram.NewMessage) error {
 		url.QueryEscape(teraResp.DirectURL),
 		url.QueryEscape(accessToken))
 
-	filePath, err := downloadTeraboxFile(proxiedURL, msg)
+	filePath, err := downloadTeraboxFile(proxiedURL, msg, teraResp.Name)
 	if err != nil {
 		msg.Edit(fmt.Sprintf("Download failed: %v", err))
 		return nil
@@ -83,15 +84,21 @@ func TeraboxHandler(m *telegram.NewMessage) error {
 	defer os.Remove(filePath)
 	defer msg.Delete()
 
-	m.ReplyMedia(filePath, &telegram.MediaOptions{
+	target, _ := m.ReplyMedia(filePath, &telegram.MediaOptions{
 		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+		Caption:         fmt.Sprintf("Downloaded from Terabox\n\n⚠️ Forward this message, as it will get auto-deleted in 5 minutes.\n\nFile Name: %s", teraResp.Name),
 	})
+
+	go func() {
+		time.Sleep(5 * time.Minute)
+		target.Delete()
+	}()
 
 	return nil
 }
 
-func downloadTeraboxFile(directURL string, progressMsg *telegram.NewMessage) (string, error) {
-	filePath := "tmp/terabox_download.%(ext)s"
+func downloadTeraboxFile(directURL string, progressMsg *telegram.NewMessage, fn string) (string, error) {
+	filePath := "tmp/" + fn + "_terabox_download.%(ext)s"
 	os.MkdirAll("tmp", 0755)
 
 	dl := yt.New().
@@ -155,7 +162,7 @@ func downloadTeraboxFile(directURL string, progressMsg *telegram.NewMessage) (st
 
 			var message string
 			if update.Info != nil && update.Info.Title != nil {
-				message = fmt.Sprintf(text, *update.Info.Title, size, eta, speed, progressbar, percent)
+				message = fmt.Sprintf(text, fn, size, eta, speed, progressbar, percent)
 			} else {
 				message = fmt.Sprintf("<b>Downloading Terabox File</b>\n\n<b>File Size:</b> <code>%.2f MiB</code>\n<b>ETA:</b> <code>%s</code>\n<b>Speed:</b> <code>%s</code>\n<b>Progress:</b> %s <code>%.2f%%</code>",
 					size, eta, speed, progressbar, percent)
@@ -169,11 +176,9 @@ func downloadTeraboxFile(directURL string, progressMsg *telegram.NewMessage) (st
 		return "", err
 	}
 
-	matches, err := filepath.Glob("tmp/terabox_download.*")
+	matches, err := filepath.Glob("tmp/" + fn + "_terabox_download.*")
 	if err != nil || len(matches) == 0 {
 		return "", fmt.Errorf("downloaded file not found")
 	}
-
-	actualFilePath := matches[0]
-	return actualFilePath, nil
+	return matches[0], nil
 }
