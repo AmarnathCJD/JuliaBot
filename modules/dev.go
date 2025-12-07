@@ -335,24 +335,25 @@ func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, 
 	os.WriteFile(evalFile, []byte(code_file), 0644)
 	defer os.Remove(evalFile)
 
-	goModPath := "go.mod"
-	goSumPath := "go.sum"
-	tmpGoModPath := tmp_dir + "/go.mod"
-	tmpGoSumPath := tmp_dir + "/go.sum"
+	tmpGoMod := tmp_dir + "/go.mod"
+	tmpGoSum := tmp_dir + "/go.sum"
 
-	if goModData, err := os.ReadFile(goModPath); err == nil {
-		os.WriteFile(tmpGoModPath, goModData, 0644)
-		defer os.Remove(tmpGoModPath)
-	}
-	if goSumData, err := os.ReadFile(goSumPath); err == nil {
-		os.WriteFile(tmpGoSumPath, goSumData, 0644)
-		defer os.Remove(tmpGoSumPath)
-	}
+	modInitCmd := exec.Command("go", "mod", "init", "main")
+	modInitCmd.Dir = tmp_dir
+	modInitCmd.Run()
+
+	modTidyCmd := exec.Command("go", "mod", "tidy")
+	modTidyCmd.Dir = tmp_dir
+	modTidyCmd.Run()
+
+	defer os.Remove(tmpGoMod)
+	defer os.Remove(tmpGoSum)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "go", "run", evalFile)
+	cmd := exec.CommandContext(ctx, "go", "run", "eval.go")
+	cmd.Dir = tmp_dir
 	var stdOut, stdErr bytes.Buffer
 	cmd.Stdout = &stdOut
 	cmd.Stderr = &stdErr
