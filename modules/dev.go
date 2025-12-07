@@ -335,7 +335,19 @@ func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, 
 	os.WriteFile(evalFile, []byte(code_file), 0644)
 	defer os.Remove(evalFile)
 
-	exec.Command("cd", "tmp", "&&", "go", "mod", "tidy").Run()
+	goModPath := "go.mod"
+	goSumPath := "go.sum"
+	tmpGoModPath := tmp_dir + "/go.mod"
+	tmpGoSumPath := tmp_dir + "/go.sum"
+
+	if goModData, err := os.ReadFile(goModPath); err == nil {
+		os.WriteFile(tmpGoModPath, goModData, 0644)
+		defer os.Remove(tmpGoModPath)
+	}
+	if goSumData, err := os.ReadFile(goSumPath); err == nil {
+		os.WriteFile(tmpGoSumPath, goSumData, 0644)
+		defer os.Remove(tmpGoSumPath)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

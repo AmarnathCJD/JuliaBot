@@ -513,17 +513,28 @@ func isForAiMessage(m *tg.NewMessage) (bool, string, string) {
 	if m.IsCommand() {
 		return false, "", ""
 	}
+
+	lowerText := strings.ToLower(m.Text())
+	hasAIKeyword := strings.Contains(lowerText, "ai") || strings.Contains(lowerText, "rusty")
+
 	if m.IsReply() {
 		reply, err := m.GetReplyMessage()
-		if err == nil && reply.SenderID() == m.Client.Me().ID && (strings.Contains(strings.ToLower(reply.Text()), "ai") || strings.Contains(strings.ToLower(reply.Text()), "rusty")) {
-			return true, m.Text(), reply.Text()
+		if err == nil && reply.SenderID() == m.Client.Me().ID {
+			if hasAIKeyword {
+				if m.IsMedia() && m.Sticker() != nil {
+					for _, tag := range m.Sticker().Attributes {
+						switch tag := tag.(type) {
+						case *tg.DocumentAttributeSticker:
+							return true, tag.Alt, reply.Text()
+						}
+					}
+				}
+				return true, m.Text(), reply.Text()
+			}
 		}
 	}
 
-	if strings.HasPrefix(strings.ToLower(m.Text()), "ai ") ||
-		strings.HasPrefix(strings.ToLower(m.Text()), "/ai ") ||
-		strings.HasPrefix(strings.ToLower(m.Text()), "!ai ") ||
-		strings.Contains(strings.ToLower(m.Text()), "rusty") {
+	if hasAIKeyword {
 		replacer := strings.NewReplacer("ai ", "", "/ai ", "", "!ai ", "", "Rusty", "", "rusty", "")
 		cleaned := strings.TrimSpace(replacer.Replace(m.Text()))
 		return true, cleaned, ""
