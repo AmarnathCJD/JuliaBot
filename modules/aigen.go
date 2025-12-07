@@ -510,6 +510,9 @@ func HandleAIMessage(m *tg.NewMessage) error {
 }
 
 func isForAiMessage(m *tg.NewMessage) (bool, string, string) {
+	if m.IsCommand() {
+		return false, "", ""
+	}
 	if m.IsReply() {
 		reply, err := m.GetReplyMessage()
 		if err == nil && reply.SenderID() == m.Client.Me().ID && (strings.Contains(strings.ToLower(reply.Text()), "ai") || strings.Contains(strings.ToLower(reply.Text()), "rusty")) {
