@@ -52,7 +52,7 @@ func initAria2() error {
 	}
 
 	rpcPort := "6800"
-	rpcSecret := "juliabot_secret"
+	rpcSecret := "ldl"
 
 	aria2Cmd = exec.Command("aria2c",
 		"--enable-rpc",
@@ -90,16 +90,16 @@ func initAria2() error {
 	return nil
 }
 
-func (a *Aria2RPC) call(method string, params []interface{}) (map[string]interface{}, error) {
+func (a *Aria2RPC) call(method string, params []any) (map[string]any, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	if params == nil {
-		params = []interface{}{}
+		params = []any{}
 	}
-	params = append([]interface{}{a.token}, params...)
+	params = append([]any{a.token}, params...)
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"jsonrpc": "2.0",
 		"id":      time.Now().UnixNano(),
 		"method":  method,
@@ -114,7 +114,7 @@ func (a *Aria2RPC) call(method string, params []interface{}) (map[string]interfa
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func (a *Aria2RPC) call(method string, params []interface{}) (map[string]interfa
 }
 
 func (a *Aria2RPC) addURI(uri string) (string, error) {
-	result, err := a.call("aria2.addUri", []interface{}{[]string{uri}})
+	result, err := a.call("aria2.addUri", []any{[]string{uri}})
 	if err != nil {
 		return "", err
 	}
@@ -137,7 +137,7 @@ func (a *Aria2RPC) addURI(uri string) (string, error) {
 
 func (a *Aria2RPC) addTorrent(torrentData []byte) (string, error) {
 	encoded := base64Encode(torrentData)
-	result, err := a.call("aria2.addTorrent", []interface{}{encoded})
+	result, err := a.call("aria2.addTorrent", []any{encoded})
 	if err != nil {
 		return "", err
 	}
@@ -145,40 +145,35 @@ func (a *Aria2RPC) addTorrent(torrentData []byte) (string, error) {
 	return gid, nil
 }
 
-func (a *Aria2RPC) tellStatus(gid string) (map[string]interface{}, error) {
-	result, err := a.call("aria2.tellStatus", []interface{}{gid})
+func (a *Aria2RPC) tellStatus(gid string) (map[string]any, error) {
+	result, err := a.call("aria2.tellStatus", []any{gid})
 	if err != nil {
 		return nil, err
 	}
-	status, ok := result["result"].(map[string]interface{})
+	status, ok := result["result"].(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("invalid status response")
 	}
 	return status, nil
 }
 
-func (a *Aria2RPC) remove(gid string) error {
-	_, err := a.call("aria2.remove", []interface{}{gid})
-	return err
-}
-
 func (a *Aria2RPC) forceRemove(gid string) error {
-	_, err := a.call("aria2.forceRemove", []interface{}{gid})
+	_, err := a.call("aria2.forceRemove", []any{gid})
 	return err
 }
 
-func (a *Aria2RPC) tellActive() ([]map[string]interface{}, error) {
+func (a *Aria2RPC) tellActive() ([]map[string]any, error) {
 	result, err := a.call("aria2.tellActive", nil)
 	if err != nil {
 		return nil, err
 	}
-	active, ok := result["result"].([]interface{})
+	active, ok := result["result"].([]any)
 	if !ok {
 		return nil, fmt.Errorf("invalid active response")
 	}
-	var downloads []map[string]interface{}
+	var downloads []map[string]any
 	for _, item := range active {
-		if dl, ok := item.(map[string]interface{}); ok {
+		if dl, ok := item.(map[string]any); ok {
 			downloads = append(downloads, dl)
 		}
 	}
@@ -196,8 +191,8 @@ func AddDLHandler(m *telegram.NewMessage) error {
 	var err error
 
 	if m.IsReply() && uri == "" {
-		reply, rerr := m.GetReplyMessage()
-		if rerr == nil {
+		reply, err := m.GetReplyMessage()
+		if err == nil {
 			if doc := reply.Document(); doc != nil {
 				fileName := reply.File.Name
 				if strings.HasSuffix(strings.ToLower(fileName), ".torrent") {
@@ -244,7 +239,7 @@ func AddDLHandler(m *telegram.NewMessage) error {
 }
 
 func updateProgress(dl *Aria2Download) {
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -268,8 +263,8 @@ func updateProgress(dl *Aria2Download) {
 				dl.downloadSpeed, _ = strconv.ParseInt(downloadSpeed, 10, 64)
 			}
 
-			if files, ok := status["files"].([]interface{}); ok && len(files) > 0 {
-				if file, ok := files[0].(map[string]interface{}); ok {
+			if files, ok := status["files"].([]any); ok && len(files) > 0 {
+				if file, ok := files[0].(map[string]any); ok {
 					if path, ok := file["path"].(string); ok {
 						parts := strings.Split(path, "/")
 						dl.fileName = parts[len(parts)-1]
@@ -338,8 +333,8 @@ func ListDLsHandler(m *telegram.NewMessage) error {
 		total, _ := strconv.ParseInt(dl["totalLength"].(string), 10, 64)
 
 		fileName := "Unknown"
-		if files, ok := dl["files"].([]interface{}); ok && len(files) > 0 {
-			if file, ok := files[0].(map[string]interface{}); ok {
+		if files, ok := dl["files"].([]any); ok && len(files) > 0 {
+			if file, ok := files[0].(map[string]any); ok {
 				if path, ok := file["path"].(string); ok {
 					parts := strings.Split(path, "/")
 					fileName = parts[len(parts)-1]
@@ -412,8 +407,8 @@ func ListDLHandler(m *telegram.NewMessage) error {
 	dlStatus := status["status"].(string)
 
 	fileName := "Unknown"
-	if files, ok := status["files"].([]interface{}); ok && len(files) > 0 {
-		if file, ok := files[0].(map[string]interface{}); ok {
+	if files, ok := status["files"].([]any); ok && len(files) > 0 {
+		if file, ok := files[0].(map[string]any); ok {
 			if path, ok := file["path"].(string); ok {
 				parts := strings.Split(path, "/")
 				fileName = parts[len(parts)-1]
