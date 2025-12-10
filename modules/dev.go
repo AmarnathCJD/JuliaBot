@@ -351,7 +351,7 @@ func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, 
 
 	if _, err := os.Stat(tmpGoSum); os.IsNotExist(err) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		cmd := exec.CommandContext(ctx, "go", "mod", "download")
+		cmd := exec.CommandContext(ctx, "go", "mod", "download", "github.com/amarnathcjd/gogram@dev")
 		cmd.Dir = tmp_dir
 		cmd.Run()
 		cancel()

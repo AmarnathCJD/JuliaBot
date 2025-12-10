@@ -10,6 +10,7 @@ import (
 
 	//"time"
 
+	"github.com/amarnathcjd/gogram/telegram"
 	tg "github.com/amarnathcjd/gogram/telegram"
 	_ "github.com/joho/godotenv/autoload"
 
@@ -67,6 +68,12 @@ func main() {
 		m.Reply("<b>Exported Senders Status:</b>\n" + result)
 		return nil
 	})
+	client.OnCommand("wizard", advancedWizardExample, telegram.FromUser(ownerId))
 	client.Idle()
 	client.Logger.Info("Bot stopped")
+}
+
+func advancedWizardExample(m *telegram.NewMessage) error {
+
+	return nil
 }
