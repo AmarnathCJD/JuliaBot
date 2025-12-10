@@ -84,6 +84,11 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:go", modules.GoHandler)
 		c.On("cmd:cancel", modules.CancelDownloadHandle, telegram.Custom(FilterOwnerNoReply))
 
+		c.On("cmd:adddl", modules.AddDLHandler, telegram.Custom(FilterOwnerAndAuth))
+		c.On("cmd:listdls", modules.ListDLsHandler, telegram.Custom(FilterOwnerAndAuth))
+		c.On("cmd:rmdl", modules.RmDLHandler, telegram.Custom(FilterOwnerAndAuth))
+		c.On("cmd:listdl", modules.ListDLHandler, telegram.Custom(FilterOwnerAndAuth))
+
 		c.On("cmd:sessgen", modules.GenStringSessionHandler)
 
 		c.On("cmd:file", modules.SendFileByIDHandle)
