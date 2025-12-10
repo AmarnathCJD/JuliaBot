@@ -343,7 +343,6 @@ func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, 
 	defer os.Remove(evalFile)
 
 	tmpGoMod := tmp_dir + "/go.mod"
-	tmpGoSum := tmp_dir + "/go.sum"
 
 	if _, err := os.Stat(tmpGoMod); os.IsNotExist(err) {
 		os.WriteFile(tmpGoMod, []byte(goModContents), 0644)
