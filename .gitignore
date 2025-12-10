@@ -3,7 +3,6 @@
 *.dat
 *.db
 *.rar
-/tmp/
 *.ipa
 *.mp4
 system_rendered.svg

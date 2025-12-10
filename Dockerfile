@@ -50,9 +50,8 @@ ENV GOMODCACHE=/app/.cache/go-mod
 
 RUN mkdir -p /app/.cache/go-build /app/.cache/go-mod /app/tmp
 
-COPY --from=builder /app/modules/dev.go /tmp/dev.go
-RUN grep "require github.com/amarnathcjd/gogram" /tmp/dev.go | head -1 | awk '{print "module main\n\ngo 1.25.0\n\n"$1" "$2" "$3}' > /app/tmp/go.mod && \
-    cd /app/tmp && go mod tidy && \
-    rm /tmp/dev.go
+COPY --from=builder /app/tmp/main.go /app/tmp/main.go
+COPY --from=builder /app/tmp/go.mod /app/tmp/go.mod
+RUN cd /app/tmp && go mod tidy && go get -u github.com/amarnathcjd/gogram@dev
 
 ENTRYPOINT ["/app/julia"]

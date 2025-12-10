@@ -347,11 +347,8 @@ func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, 
 
 	if _, err := os.Stat(tmpGoMod); os.IsNotExist(err) {
 		os.WriteFile(tmpGoMod, []byte(goModContents), 0644)
-	}
-
-	if _, err := os.Stat(tmpGoSum); os.IsNotExist(err) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		cmd := exec.CommandContext(ctx, "go", "mod", "download", "github.com/amarnathcjd/gogram@dev")
+		cmd := exec.CommandContext(ctx, "go", "mod", "tidy")
 		cmd.Dir = tmp_dir
 		cmd.Run()
 		cancel()
@@ -384,7 +381,6 @@ func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, 
 	}
 
 	cmd := exec.CommandContext(ctx, binaryPath)
-	cmd.Dir = tmp_dir
 	var stdOut, stdErr bytes.Buffer
 	cmd.Stdout = &stdOut
 	cmd.Stderr = &stdErr
