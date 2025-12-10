@@ -171,6 +171,7 @@ func DownloadHandle(m *telegram.NewMessage) error {
 		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
 		FileName:        fn,
 		Ctx:             ctx,
+		Delay:           150,
 	}); err != nil {
 		if err == context.Canceled {
 			msg.Edit("Download cancelled.")
