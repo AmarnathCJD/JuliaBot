@@ -45,4 +45,11 @@ COPY --from=builder /app/assets /app/assets
 
 RUN chmod +x /app/julia /app/cover_gen.sh
 
+ENV GOCACHE=/app/.cache/go-build
+ENV GOMODCACHE=/app/.cache/go-mod
+
+RUN mkdir -p /app/.cache/go-build /app/.cache/go-mod
+
+RUN cd /app/tmp && go mod download github.com/amarnathcjd/gogram@dev || true
+
 ENTRYPOINT ["/app/julia"]

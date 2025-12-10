@@ -345,18 +345,45 @@ func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, 
 	tmpGoMod := tmp_dir + "/go.mod"
 	tmpGoSum := tmp_dir + "/go.sum"
 
-	os.WriteFile(tmpGoMod, []byte(goModContents), 0644)
-	// if no go.sum call 'go mod tidy' to generate one
+	if _, err := os.Stat(tmpGoMod); os.IsNotExist(err) {
+		os.WriteFile(tmpGoMod, []byte(goModContents), 0644)
+	}
+
 	if _, err := os.Stat(tmpGoSum); os.IsNotExist(err) {
-		cmd := exec.Command("go", "mod", "tidy")
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		cmd := exec.CommandContext(ctx, "go", "mod", "download")
 		cmd.Dir = tmp_dir
 		cmd.Run()
+		cancel()
 	}
+
+	binaryPath := tmp_dir + "/eval_bin"
+	if runtime.GOOS == "windows" {
+		binaryPath += ".exe"
+	}
+	defer os.Remove(binaryPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "go", "run", "eval.go")
+	buildCmd := exec.CommandContext(ctx, "go", "build", "-o", filepath.Base(binaryPath), "eval.go")
+	buildCmd.Dir = tmp_dir
+	var buildErr bytes.Buffer
+	buildCmd.Stderr = &buildErr
+
+	if err := buildCmd.Run(); err != nil {
+		stderr := strings.TrimSpace(buildErr.String())
+		if stderr != "" {
+			regexErr := regexp.MustCompile(`eval\.go:(\d+):(\d+):\s*`)
+			errMsg := regexErr.ReplaceAllString(stderr, "Line $1: ")
+			errMsg = strings.ReplaceAll(errMsg, "# command-line-arguments\n", "")
+			errMsg = strings.TrimSpace(errMsg)
+			return fmt.Sprintf("❌ <b>Compilation Error</b>\n<pre>%s</pre>", errMsg), false
+		}
+		return fmt.Sprintf("❌ <b>Build Error</b>\n<code>%s</code>", err.Error()), false
+	}
+
+	cmd := exec.CommandContext(ctx, binaryPath)
 	cmd.Dir = tmp_dir
 	var stdOut, stdErr bytes.Buffer
 	cmd.Stdout = &stdOut
