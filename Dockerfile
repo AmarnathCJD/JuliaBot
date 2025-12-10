@@ -8,6 +8,7 @@ RUN apk add --no-cache --virtual .build-deps \
     musl-dev
 
 COPY go.mod go.sum ./
+COPY tmp/main.go tmp/go.mod ./tmp/
 RUN go mod download
 
 COPY . .
