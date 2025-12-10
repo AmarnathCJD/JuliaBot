@@ -48,8 +48,11 @@ RUN chmod +x /app/julia /app/cover_gen.sh
 ENV GOCACHE=/app/.cache/go-build
 ENV GOMODCACHE=/app/.cache/go-mod
 
-RUN mkdir -p /app/.cache/go-build /app/.cache/go-mod
+RUN mkdir -p /app/.cache/go-build /app/.cache/go-mod /app/tmp
 
-RUN cd /app/tmp && go mod download github.com/amarnathcjd/gogram@dev || true
+COPY --from=builder /app/modules/dev.go /tmp/dev.go
+RUN grep "require github.com/amarnathcjd/gogram" /tmp/dev.go | head -1 | awk '{print "module main\n\ngo 1.25.0\n\n"$1" "$2" "$3}' > /app/tmp/go.mod && \
+    cd /app/tmp && go mod tidy && \
+    rm /tmp/dev.go
 
 ENTRYPOINT ["/app/julia"]
