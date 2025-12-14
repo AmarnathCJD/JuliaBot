@@ -119,7 +119,7 @@ func YtVideoDL(m *telegram.NewMessage) error {
 				FileName: "yt-video.mp4",
 			},
 		},
-		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+		//ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
 	})
 	return nil
 }
@@ -340,6 +340,8 @@ func fmtDuration(ms int) string {
 }
 
 func YTCustomHandler(m *telegram.NewMessage) error {
+	m.Reply("On maintenance.")
+	return nil
 	query := m.Args()
 	if query == "" {
 		m.Reply("Provide youtube link~")
@@ -532,7 +534,7 @@ func ytQuickFallback(m *telegram.NewMessage, msg *telegram.NewMessage, videoURL 
 	msg.Edit("<i>Uploading video...</i>")
 
 	m.ReplyMedia(filePath, &telegram.MediaOptions{
-		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+		//ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
 	})
 	msg.Delete()
 
@@ -650,10 +652,10 @@ func YTCallbackHandler(cb *telegram.CallbackQuery) error {
 
 	cb.Edit("<i>Uploading video...</i>")
 
-	msg := &telegram.NewMessage{
-		ID:     info.MessageID,
-		Client: cb.Client,
-	}
+	// msg := &telegram.NewMessage{
+	// 	ID:     info.MessageID,
+	// 	Client: cb.Client,
+	// }
 
 	// if finalPath size > 2GB, abort with error
 	fileInfo, err := os.Stat(finalPath)
@@ -670,8 +672,8 @@ func YTCallbackHandler(cb *telegram.CallbackQuery) error {
 	}
 
 	_, err = cb.Client.SendMedia(info.ChatID, finalPath, &telegram.MediaOptions{
-		Caption:         fmt.Sprintf("<b>%s</b>\nQuality: %s", info.Title, selectedFormat.Quality),
-		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+		Caption: fmt.Sprintf("<b>%s</b>\nQuality: %s", info.Title, selectedFormat.Quality),
+		//ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
 	})
 
 	for _, f := range cleanupFiles {

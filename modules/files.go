@@ -71,9 +71,12 @@ func UploadHandle(m *telegram.NewMessage) error {
 	uploadStartTimestamp := time.Now()
 
 	if _, err := m.RespondMedia(filename, &telegram.MediaOptions{
-		Spoiler:         spoiler,
-		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
-		ForceDocument:   strings.Contains(filename, "--doc"),
+		ForceDocument: strings.Contains(filename, "--doc"),
+		Spoiler:       spoiler,
+		Upload: &telegram.UploadOptions{
+
+			ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+		},
 	}); err != nil {
 		msg.Edit("Error: " + err.Error())
 		return nil

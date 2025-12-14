@@ -92,8 +92,8 @@ func TeraboxHandler(m *telegram.NewMessage) error {
 		defer msg.Delete()
 
 		target, _ := m.ReplyMedia(filePath, &telegram.MediaOptions{
-			ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
-			Caption:         fmt.Sprintf("Downloaded from Terabox\n\n⚠️ Forward this message, as it will get auto-deleted in 5 minutes.\n\nFile Name: %s", teraResp.Files[0].Filename),
+			//ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+			Caption: fmt.Sprintf("Downloaded from Terabox\n\n⚠️ Forward this message, as it will get auto-deleted in 5 minutes.\n\nFile Name: %s", teraResp.Files[0].Filename),
 		})
 
 		go func() {
@@ -131,8 +131,8 @@ func TeraboxHandler(m *telegram.NewMessage) error {
 			defer os.Remove(filePath)
 
 			target, _ := m.ReplyMedia(filePath, &telegram.MediaOptions{
-				ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
-				Caption:         fmt.Sprintf("File %d/%d from Terabox\n\n⚠️ Forward this message, as it will get auto-deleted in 5 minutes.", i+1, len(uploadedFiles)),
+				//ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+				Caption: fmt.Sprintf("File %d/%d from Terabox\n\n⚠️ Forward this message, as it will get auto-deleted in 5 minutes.", i+1, len(uploadedFiles)),
 			})
 			targets = append(targets, target)
 		}

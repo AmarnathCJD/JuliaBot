@@ -30,16 +30,25 @@ func main() {
 
 	appId, _ := strconv.Atoi(os.Getenv("APP_ID"))
 	ownerId, _ = strconv.ParseInt(os.Getenv("OWNER_ID"), 10, 64)
-
+	// p, err := tg.ProxyFromURL("https://t.me/proxy?server=ultra.transiiantanialnmiomana.info&port=443&secret=eee9a4f23b1d768c04a8d7f39120ca5b6e6D656469612E737465616D706F77657265642E636F6D")
+	// if err != nil {
+	// 	panic(err)
+	// }
 	client, err := tg.NewClient(tg.ClientConfig{
-		//Session: "user1",
+		Session: "userxyz",
 		AppID:   int32(appId),
 		AppHash: os.Getenv("APP_HASH"),
+		//Proxy:      p,
+		//DataCenter: 1,
+		LogLevel: tg.LogTrace,
 	})
 	if err != nil {
 		panic(err)
 	}
+
+	// client.SetProxy(p)
 	client.Conn()
+	//client.SendMessage("gogrammers", "Hi")
 	//client.AuthPrompt()
 	client.Log.SetOutput(wr)
 	client.LoginBot(os.Getenv("BOT_TOKEN"))

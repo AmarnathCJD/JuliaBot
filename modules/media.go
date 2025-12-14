@@ -246,7 +246,7 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 	}
 
 	if !opts.NoProgress && msg != nil {
-		mediaOpts.ProgressManager = telegram.NewProgressManager(5).SetMessage(msg)
+		mediaOpts.Upload.ProgressManager = telegram.NewProgressManager(5).SetMessage(msg)
 	}
 
 	if !opts.NoThumb {
