@@ -131,6 +131,7 @@ func initFunc(c *telegram.Client) {
 		c.On("callback:ytdl_(.*)", downloaders.YTCallbackHandler)
 
 		c.On(telegram.OnParticipant, modules.UserJoinHandle)
+		c.OnCommand("gif", modules.GifToSticker)
 
 		// media-utils
 
