@@ -1,6 +1,7 @@
 package modules
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 
@@ -37,6 +38,9 @@ func GifToSticker(m *tg.NewMessage) error {
 		"-i", fi,
 		"sticker.webm",
 	}
+
+	defer os.Remove("gif.gif")
+	defer os.Remove("sticker.webm")
 
 	exec.Command(cmd[0], cmd[1:]...).Run()
 	m.ReplyMedia("sticker.webm", &tg.MediaOptions{
