@@ -132,6 +132,8 @@ func initFunc(c *telegram.Client) {
 
 		c.On(telegram.OnParticipant, modules.UserJoinHandle)
 		c.OnCommand("gif", modules.GifToSticker)
+		c.OnCommand("kang", modules.KangSticker)
+		c.OnCommand("rmkang", modules.RemoveKangedSticker)
 
 		// media-utils
 

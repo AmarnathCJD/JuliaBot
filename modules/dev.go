@@ -16,11 +16,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/amarnathcjd/gogram/telegram"
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
-func ShellHandle(m *telegram.NewMessage) error {
+func ShellHandle(m *tg.NewMessage) error {
 	cmd := m.Args()
 	if cmd == "" {
 		m.Reply("No command provided")
@@ -60,7 +59,7 @@ func ShellHandle(m *telegram.NewMessage) error {
 
 	if len(result) > 4000 {
 		os.WriteFile("tmp/shell_out.txt", []byte(result), 0644)
-		m.ReplyMedia("tmp/shell_out.txt", &telegram.MediaOptions{Caption: "Output"})
+		m.ReplyMedia("tmp/shell_out.txt", &tg.MediaOptions{Caption: "Output"})
 		os.Remove("tmp/shell_out.txt")
 		return nil
 	}
@@ -69,7 +68,7 @@ func ShellHandle(m *telegram.NewMessage) error {
 	return nil
 }
 
-func TcpHandler(m *telegram.NewMessage) error {
+func TcpHandler(m *tg.NewMessage) error {
 	pid := os.Getpid()
 
 	var cmd *exec.Cmd
@@ -100,7 +99,7 @@ func TcpHandler(m *telegram.NewMessage) error {
 	result += fmt.Sprintf("\n\n<b>Total Connections:</b> %d", count)
 	if len(result) > 4000 {
 		os.WriteFile("tmp/tcp_out.txt", []byte(output), 0644)
-		m.ReplyMedia("tmp/tcp_out.txt", &telegram.MediaOptions{Caption: fmt.Sprintf("TCP Connections (PID: %d)", pid)})
+		m.ReplyMedia("tmp/tcp_out.txt", &tg.MediaOptions{Caption: fmt.Sprintf("TCP Connections (PID: %d)", pid)})
 		os.Remove("tmp/tcp_out.txt")
 		return nil
 	}
@@ -203,7 +202,7 @@ package main
 
 import (
 	"fmt"
-	tg "github.com/amarnathcjd/gogram/telegram"
+	tg "github.com/amarnathcjd/gogram/tg"
 )
 
 %s
@@ -273,7 +272,7 @@ func resolveImports(code string) (string, []string) {
 	return code, imports
 }
 
-func EvalHandle(m *telegram.NewMessage) error {
+func EvalHandle(m *tg.NewMessage) error {
 	code := m.Args()
 	code, imports := resolveImports(code)
 
@@ -287,7 +286,7 @@ func EvalHandle(m *telegram.NewMessage) error {
 
 	resp, isfile := perfomEval(code, m, imports)
 	if isfile {
-		if _, err := m.ReplyMedia(resp, &telegram.MediaOptions{Caption: "Output"}); err != nil {
+		if _, err := m.ReplyMedia(resp, &tg.MediaOptions{Caption: "Output"}); err != nil {
 			m.Reply("Error: " + err.Error())
 		}
 		os.Remove(resp)
@@ -310,7 +309,7 @@ go 1.25.0
 require github.com/amarnathcjd/gogram v1.6.10-0.20251206151850-63c357afc3a5
 `
 
-func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, bool) {
+func perfomEval(code string, m *tg.NewMessage, imports []string) (string, bool) {
 	var importStatement string = ""
 	if len(imports) > 0 {
 		importStatement = "import (\n"
@@ -432,7 +431,7 @@ func perfomEval(code string, m *telegram.NewMessage, imports []string) (string, 
 	return "✅ <b>Eval Complete</b>\n<i>No output returned</i>", false
 }
 
-func JsonHandle(m *telegram.NewMessage) error {
+func JsonHandle(m *tg.NewMessage) error {
 	var jsonString []byte
 	if !m.IsReply() {
 		if strings.Contains(m.Args(), "-s") {
@@ -489,7 +488,7 @@ func JsonHandle(m *telegram.NewMessage) error {
 			return nil
 		}
 
-		_, err = m.ReplyMedia(tmpFile.Name(), &telegram.MediaOptions{Caption: "Message JSON"})
+		_, err = m.ReplyMedia(tmpFile.Name(), &tg.MediaOptions{Caption: "Message JSON"})
 		if err != nil {
 			m.Reply("Error: " + err.Error())
 		}
@@ -540,7 +539,7 @@ func formatMediaInfo(info string) string {
 	return formatted.String()
 }
 
-func MediaInfoHandler(m *telegram.NewMessage) error {
+func MediaInfoHandler(m *tg.NewMessage) error {
 	if !m.IsReply() {
 		m.Reply("Reply to a message to get media info")
 		return nil
@@ -607,16 +606,16 @@ func MediaInfoHandler(m *telegram.NewMessage) error {
 		return nil
 	}
 
-	msg.Edit("<b><a href='"+url+"'>Media Info Pasted</a></b>", &telegram.SendOptions{
-		ReplyMarkup: telegram.NewKeyboard().AddRow(
-			telegram.Button.URL("View", url),
+	msg.Edit("<b><a href='"+url+"'>Media Info Pasted</a></b>", &tg.SendOptions{
+		ReplyMarkup: tg.NewKeyboard().AddRow(
+			tg.Button.URL("View", url),
 		).Build(),
 		LinkPreview: true,
 	})
 	return nil
 }
 
-func LsHandler(m *telegram.NewMessage) error {
+func LsHandler(m *tg.NewMessage) error {
 	dir := m.Args()
 	if dir == "" {
 		dir = "."
@@ -725,12 +724,12 @@ func calcFileOrDirSize(path string) int64 {
 	return size
 }
 
-func GoHandler(m *telegram.NewMessage) error {
+func GoHandler(m *tg.NewMessage) error {
 	m.Reply(fmt.Sprintf(`➜ <b>Current Go Routines: %d</b>`, runtime.NumGoroutine()))
 	return nil
 }
 
-func GenStringSessionHandler(m *telegram.NewMessage) error {
+func GenStringSessionHandler(m *tg.NewMessage) error {
 	if !m.IsPrivate() {
 		m.Reply("This command can only be used in private chat")
 		return nil
@@ -739,10 +738,10 @@ func GenStringSessionHandler(m *telegram.NewMessage) error {
 	var appId = os.Getenv("APP_ID")
 	appIdInt, _ := strconv.Atoi(appId)
 
-	client, _ := telegram.NewClient(telegram.ClientConfig{
+	client, _ := tg.NewClient(tg.ClientConfig{
 		AppID:         int32(appIdInt),
 		AppHash:       os.Getenv("APP_HASH"),
-		LogLevel:      telegram.LogDisable,
+		LogLevel:      tg.LogDisable,
 		MemorySession: true,
 	})
 	defer client.Terminate()
@@ -753,7 +752,7 @@ func GenStringSessionHandler(m *telegram.NewMessage) error {
 		return nil
 	}
 
-	if ok, err := client.Login(phoneNum.Text(), &telegram.LoginOptions{
+	if ok, err := client.Login(phoneNum.Text(), &tg.LoginOptions{
 		CodeCallback: func() (string, error) {
 			_, code, err := m.Ask("Please enter the code")
 			if err != nil {
@@ -784,7 +783,7 @@ func GenStringSessionHandler(m *telegram.NewMessage) error {
 	return nil
 }
 
-func SetBotPfpHandler(m *telegram.NewMessage) error {
+func SetBotPfpHandler(m *tg.NewMessage) error {
 	if !m.IsReply() {
 		m.Reply("Reply to a photo to set it as bot profile picture")
 		return nil
@@ -814,7 +813,7 @@ func SetBotPfpHandler(m *telegram.NewMessage) error {
 		return nil
 	}
 
-	_, err = m.Client.PhotosUploadProfilePhoto(&telegram.PhotosUploadProfilePhotoParams{
+	_, err = m.Client.PhotosUploadProfilePhoto(&tg.PhotosUploadProfilePhotoParams{
 		File: fiup,
 	})
 
@@ -827,7 +826,7 @@ func SetBotPfpHandler(m *telegram.NewMessage) error {
 	return nil
 }
 
-func SpectrogramHandler(m *telegram.NewMessage) error {
+func SpectrogramHandler(m *tg.NewMessage) error {
 	if !m.IsReply() {
 		m.Reply("Reply to an audio file to generate spectrogram")
 		return nil
@@ -892,7 +891,7 @@ func SpectrogramHandler(m *telegram.NewMessage) error {
 		return nil
 	}
 
-	_, err = m.ReplyMedia(outputFile, &telegram.MediaOptions{
+	_, err = m.ReplyMedia(outputFile, &tg.MediaOptions{
 		Caption: "🎵 Audio Spectrogram",
 	})
 	if err != nil {
