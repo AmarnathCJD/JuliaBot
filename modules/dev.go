@@ -202,7 +202,7 @@ package main
 
 import (
 	"fmt"
-	tg "github.com/amarnathcjd/gogram/tg"
+	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
 %s
