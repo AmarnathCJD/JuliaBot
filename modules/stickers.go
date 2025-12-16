@@ -52,16 +52,12 @@ func GifToSticker(m *tg.NewMessage) error {
 		return nil
 	}
 
-	cmd := []string{
-		"ffmpeg",
-		"-i", fi,
-		"sticker.webm",
-	}
-
+	out := "sticker.webm"
 	defer os.Remove("gif.gif")
-	defer os.Remove("sticker.webm")
+	defer os.Remove(out)
 
-	exec.Command(cmd[0], cmd[1:]...).Run()
+	cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "format=yuv420p", "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "30", "-an", "-y", out)
+	_ = cmd.Run()
 	m.ReplyMedia("sticker.webm", &tg.MediaOptions{
 		Attributes: []tg.DocumentAttribute{
 			&tg.DocumentAttributeSticker{
@@ -190,7 +186,7 @@ func KangSticker(m *tg.NewMessage) error {
 			if packType == "webm" {
 				ext := filepath.Ext(fi)
 				out := fi + "_resized" + ext
-				cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "scale=w=512:h=512:force_original_aspect_ratio=decrease", "-y", out)
+				cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "scale=min(512,iw):min(512,ih):force_original_aspect_ratio=decrease,format=yuv420p", "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "30", "-an", "-y", out)
 				if err := cmd.Run(); err == nil {
 					defer os.Remove(out)
 					media, err := m.Client.GetSendableMedia(out, &tg.MediaMetadata{Inline: true})
@@ -279,7 +275,7 @@ func KangSticker(m *tg.NewMessage) error {
 		if packType == "webm" {
 			ext := filepath.Ext(fi)
 			out := fi + "_resized" + ext
-			cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "scale=w=512:h=512:force_original_aspect_ratio=decrease", "-y", out)
+			cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "scale=min(512,iw):min(512,ih):force_original_aspect_ratio=decrease,format=yuv420p", "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "30", "-an", "-y", out)
 			if err := cmd.Run(); err == nil {
 				defer os.Remove(out)
 				media, err := m.Client.GetSendableMedia(out, &tg.MediaMetadata{Inline: true})
