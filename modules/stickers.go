@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"main/modules/db"
@@ -74,6 +75,19 @@ func KangSticker(m *tg.NewMessage) error {
 
 	if !reply.IsMedia() {
 		m.Reply("Please reply to a sticker!")
+	}
+
+	fn := ""
+	if reply.File != nil {
+		fn = reply.File.Name
+	}
+
+	if fn != "" {
+		lfn := strings.ToLower(fn)
+		if !(strings.HasSuffix(lfn, ".mp4") || strings.HasSuffix(lfn, ".gif")) {
+			m.Reply("Invalid media: only .mp4 or .gif files are supported.")
+			return nil
+		}
 	}
 
 	var packType string
@@ -171,17 +185,47 @@ func KangSticker(m *tg.NewMessage) error {
 				return nil
 			}
 			defer os.Remove(fi)
-			media, err := m.Client.GetSendableMedia(fi, &tg.MediaMetadata{
-				Inline: true,
-			})
+
+			var mediaSendable *tg.InputMediaDocument
+			if packType == "webm" {
+				ext := filepath.Ext(fi)
+				out := fi + "_resized" + ext
+				cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "scale=w=512:h=512:force_original_aspect_ratio=decrease", "-y", out)
+				if err := cmd.Run(); err == nil {
+					defer os.Remove(out)
+					media, err := m.Client.GetSendableMedia(out, &tg.MediaMetadata{Inline: true})
+					if err != nil {
+						media, err = m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
+						if err != nil {
+							m.Reply("Failed to prepare sticker media.")
+							return nil
+						}
+					}
+					mediaSendable = media.(*tg.InputMediaDocument)
+				} else {
+					media, err := m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
+					if err != nil {
+						m.Reply("Failed to prepare sticker media.")
+						return nil
+					}
+					mediaSendable = media.(*tg.InputMediaDocument)
+				}
+			} else {
+				media, err := m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
+				if err != nil {
+					m.Reply("Failed to prepare sticker media.")
+					return nil
+				}
+				mediaSendable = media.(*tg.InputMediaDocument)
+			}
 
 			_, createErr = m.Client.StickersCreateStickerSet(&tg.StickersCreateStickerSetParams{
 				UserID:    &tg.InputUserObj{UserID: userID, AccessHash: m.Sender.AccessHash},
 				Title:     title,
 				ShortName: shortName,
 				Stickers: []*tg.InputStickerSetItem{
-					&tg.InputStickerSetItem{
-						Document: media.(*tg.InputMediaDocument).ID,
+					{
+						Document: mediaSendable.ID,
 						Emoji:    emoji,
 					},
 				},
@@ -192,7 +236,7 @@ func KangSticker(m *tg.NewMessage) error {
 				Title:     title,
 				ShortName: shortName,
 				Stickers: []*tg.InputStickerSetItem{
-					&tg.InputStickerSetItem{
+					{
 						Document: &tg.InputDocumentObj{
 							ID:            stickerFile.ID,
 							AccessHash:    stickerFile.AccessHash,
@@ -231,15 +275,68 @@ func KangSticker(m *tg.NewMessage) error {
 			return nil
 		}
 		defer os.Remove(fi)
-		media, err := m.Client.GetSendableMedia(fi, &tg.MediaMetadata{
-			Inline: true,
-		})
-		doc = media.(*tg.InputMediaDocument).ID
+
+		if packType == "webm" {
+			ext := filepath.Ext(fi)
+			out := fi + "_resized" + ext
+			cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "scale=w=512:h=512:force_original_aspect_ratio=decrease", "-y", out)
+			if err := cmd.Run(); err == nil {
+				defer os.Remove(out)
+				media, err := m.Client.GetSendableMedia(out, &tg.MediaMetadata{Inline: true})
+				if err != nil {
+					media, err = m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
+					if err != nil {
+						m.Reply("Failed to prepare sticker media.")
+						return nil
+					}
+				}
+				doc = media.(*tg.InputMediaDocument).ID
+			} else {
+				media, err := m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
+				if err != nil {
+					m.Reply("Failed to prepare sticker media.")
+					return nil
+				}
+				doc = media.(*tg.InputMediaDocument).ID
+			}
+		} else {
+			media, err := m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
+			if err != nil {
+				m.Reply("Failed to prepare sticker media.")
+				return nil
+			}
+			doc = media.(*tg.InputMediaDocument).ID
+		}
 	default:
-		doc = &tg.InputDocumentObj{
-			ID:            stickerFile.ID,
-			AccessHash:    stickerFile.AccessHash,
-			FileReference: stickerFile.FileReference,
+		fi, err := m.Client.DownloadMedia(stickerFile.fi)
+		if err != nil {
+			m.Reply("Failed to download sticker media.")
+			return nil
+		}
+		defer os.Remove(fi)
+
+		ext := filepath.Ext(fi)
+		out := fi + "_resized" + ext
+
+		cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "scale=w=512:h=512:force_original_aspect_ratio=decrease", "-y", out)
+		if err := cmd.Run(); err != nil {
+			media, err := m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
+			if err != nil {
+				m.Reply("Failed to prepare sticker media.")
+				return nil
+			}
+			doc = media.(*tg.InputMediaDocument).ID
+		} else {
+			defer os.Remove(out)
+			media, err := m.Client.GetSendableMedia(out, &tg.MediaMetadata{Inline: true})
+			if err != nil {
+				media, err = m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
+				if err != nil {
+					m.Reply("Failed to prepare sticker media.")
+					return nil
+				}
+			}
+			doc = media.(*tg.InputMediaDocument).ID
 		}
 	}
 
@@ -263,7 +360,7 @@ func KangSticker(m *tg.NewMessage) error {
 	)
 
 	if pack.StickerCount >= MaxStickersPerPack {
-		msg += fmt.Sprintf("\n\n⚠️ <b>Pack is full!</b> Next sticker will create a new pack.")
+		msg += "\n\n⚠️ <b>Pack is full!</b> Next sticker will create a new pack."
 	}
 
 	m.Reply(msg)
