@@ -141,6 +141,13 @@ func KangSticker(m *tg.NewMessage) error {
 				stickerFile.Type = packType
 			}
 		}
+		if reply.Document().MimeType == "application/x-tgsticker" {
+			packType = "tgs"
+		} else if strings.HasPrefix(reply.Document().MimeType, "video/") {
+			packType = "webm"
+		} else {
+			packType = "normal"
+		}
 	}
 
 	userID := m.SenderID()
