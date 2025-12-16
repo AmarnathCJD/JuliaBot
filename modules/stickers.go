@@ -25,7 +25,7 @@ func GifToSticker(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !r.IsMedia() || !strings.HasSuffix(r.File.Name, ".gif") {
+	if !r.IsMedia() {
 		m.Reply("<b>Error:</b> The replied message is not a GIF.")
 		return nil
 	}
