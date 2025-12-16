@@ -186,7 +186,7 @@ func KangSticker(m *tg.NewMessage) error {
 			if packType == "webm" {
 				ext := filepath.Ext(fi)
 				out := fi + "_resized" + ext
-				cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "scale=min(512,iw):min(512,ih):force_original_aspect_ratio=decrease,format=yuv420p", "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "30", "-an", "-y", out)
+				cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "scale=min(512,iw):min(512,ih):force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000,format=yuva420p", "-c:v", "libvpx-vp9", "-auto-alt-ref", "0", "-b:v", "0", "-crf", "30", "-an", "-y", out)
 				if err := cmd.Run(); err == nil {
 					defer os.Remove(out)
 					media, err := m.Client.GetSendableMedia(out, &tg.MediaMetadata{Inline: true})
@@ -275,7 +275,7 @@ func KangSticker(m *tg.NewMessage) error {
 		if packType == "webm" {
 			ext := filepath.Ext(fi)
 			out := fi + "_resized" + ext
-			cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "scale=min(512,iw):min(512,ih):force_original_aspect_ratio=decrease,format=yuv420p", "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "30", "-an", "-y", out)
+			cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "scale=min(512,iw):min(512,ih):force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000,format=yuva420p", "-c:v", "libvpx-vp9", "-auto-alt-ref", "0", "-b:v", "0", "-crf", "30", "-an", "-y", out)
 			if err := cmd.Run(); err == nil {
 				defer os.Remove(out)
 				media, err := m.Client.GetSendableMedia(out, &tg.MediaMetadata{Inline: true})
