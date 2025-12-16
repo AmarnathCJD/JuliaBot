@@ -31,6 +31,19 @@ func GifToSticker(m *tg.NewMessage) error {
 		return nil
 	}
 
+	fn := ""
+	if r.File != nil {
+		fn = r.File.Name
+	}
+
+	if fn != "" {
+		lfn := strings.ToLower(fn)
+		if !(strings.HasSuffix(lfn, ".mp4") || strings.HasSuffix(lfn, ".gif")) {
+			m.Reply("Invalid media: only .mp4 or .gif files are supported.")
+			return nil
+		}
+	}
+
 	fi, err := r.Download(&tg.DownloadOptions{
 		FileName: "gif.gif",
 	})
@@ -75,19 +88,6 @@ func KangSticker(m *tg.NewMessage) error {
 
 	if !reply.IsMedia() {
 		m.Reply("Please reply to a sticker!")
-	}
-
-	fn := ""
-	if reply.File != nil {
-		fn = reply.File.Name
-	}
-
-	if fn != "" {
-		lfn := strings.ToLower(fn)
-		if !(strings.HasSuffix(lfn, ".mp4") || strings.HasSuffix(lfn, ".gif")) {
-			m.Reply("Invalid media: only .mp4 or .gif files are supported.")
-			return nil
-		}
 	}
 
 	var packType string
