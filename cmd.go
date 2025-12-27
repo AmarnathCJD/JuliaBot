@@ -105,8 +105,10 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:stopstream", modules.StopStreamHandler)
 		c.On("callback:stream_", modules.StreamCallbackHandler)
 
-		c.On(telegram.OnNewMessage, modules.HandleAIMessage)
-
+		// c.On(telegram.OnNewMessage, modules.HandleAIMessage) // Old AI disabled
+		c.On(telegram.OnNewMessage, modules.HandleAskCommand)
+		c.On("cmd:model", modules.HandleModelCommand)
+		c.On("callback:model_", modules.HandleModelCallback)
 		//c.AddRawHandler(&telegram.UpdateBotInlineSend{}, modules.SpotifyInlineHandler)
 		c.On(telegram.OnInline, modules.SpotifyInlineSearch)
 		c.On(telegram.OnChosenInline, modules.SpotifyInlineHandler)

@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -97,14 +96,14 @@ type Msg struct {
 
 var contentFromDB string
 
-func init() {
-	// read file named x.tl
-	data, err := os.ReadFile("x.tl")
-	if err != nil {
-		contentFromDB = ""
-	}
-	contentFromDB = string(data)
-}
+// func init() {
+// 	// read file named x.tl
+// 	data, err := os.ReadFile("x.tl")
+// 	if err != nil {
+// 		contentFromDB = ""
+// 	}
+// 	contentFromDB = string(data)
+// }
 
 var MsgMap = map[string][]Msg{}
 
@@ -292,7 +291,7 @@ func ParseZAIStream(raw string) string {
 }
 
 const (
-	SYSTEM_PROMPT = `You are <b>Rusty</b>, an advanced AI assistant developed by Z.ai. 
+	SYSTEM_PROMPT1 = `You are <b>Rusty</b>, an advanced AI assistant developed by Z.ai. 
 Your primary role is to help users by providing accurate, relevant, and concise answers.
 
 Follow these rules for every normal response:
@@ -451,9 +450,9 @@ func (c *Client) NewChatSession(ctx context.Context, model string) (string, erro
 
 var AI *Client = NewClient()
 
-func init() {
-	AI.ensureAuth(context.Background())
-}
+// func init() {
+// 	AI.ensureAuth(context.Background())
+// }
 
 var chatSessions = make(map[int64]string)
 
