@@ -575,32 +575,32 @@ func NewYearHandle(m *telegram.NewMessage) error {
 	timeStr := fmt.Sprintf("%02d:%02d:%02d.%03d", hours, minutes, seconds, milliseconds)
 	msg := fmt.Sprintf("<b>New Year 2026 Countdown</b>\n<code>%d days, %s</code>", days, timeStr)
 
-	gifPath, err := generateCountdownGifFFmpeg(days, hours, minutes, seconds)
-	if err == nil {
-		defer os.Remove(gifPath)
-		fi, err := m.Client.UploadFile(gifPath)
-		if err != nil {
-			fmt.Printf("Error uploading GIF: %v\n", err)
-			m.Reply(msg)
-			return nil
-		}
+	// gifPath, err := generateCountdownGifFFmpeg(days, hours, minutes, seconds)
+	// if err == nil {
+	// 	defer os.Remove(gifPath)
+	// 	fi, err := m.Client.UploadFile(gifPath)
+	// 	if err != nil {
+	// 		fmt.Printf("Error uploading GIF: %v\n", err)
+	// 		m.Reply(msg)
+	// 		return nil
+	// 	}
 
-		gifMedia := &telegram.InputMediaUploadedDocument{
-			File:         fi,
-			Spoiler:      true,
-			NosoundVideo: true,
-			Attributes: []telegram.DocumentAttribute{
-				&telegram.DocumentAttributeAnimated{},
-			},
-			MimeType: "image/gif",
-		}
-		_, err = m.ReplyMedia(gifMedia, &telegram.MediaOptions{
-			Caption: msg,
-		})
-	} else {
-		fmt.Printf("Error generating GIF: %v\n", err)
-		m.Reply(msg)
-	}
+	// 	gifMedia := &telegram.InputMediaUploadedDocument{
+	// 		File:         fi,
+	// 		Spoiler:      true,
+	// 		NosoundVideo: true,
+	// 		Attributes: []telegram.DocumentAttribute{
+	// 			&telegram.DocumentAttributeAnimated{},
+	// 		},
+	// 		MimeType: "image/gif",
+	// 	}
+	// 	_, err = m.ReplyMedia(gifMedia, &telegram.MediaOptions{
+	// 		Caption: msg,
+	// 	})
+	// } else {
+	// 	fmt.Printf("Error generating GIF: %v\n", err)
+	m.Reply(msg)
+	// }
 	return nil
 }
 
