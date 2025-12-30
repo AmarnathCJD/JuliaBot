@@ -559,8 +559,10 @@ func PingHandle(m *telegram.NewMessage) error {
 }
 
 func NewYearHandle(m *telegram.NewMessage) error {
-	newYear := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
-	now := time.Now()
+	ist, _ := time.LoadLocation("Asia/Kolkata")
+
+	newYear := time.Date(2026, time.January, 1, 0, 0, 0, 0, ist)
+	now := time.Now().In(ist)
 
 	remaining := newYear.Sub(now)
 
