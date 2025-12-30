@@ -1,7 +1,11 @@
 package modules
 
 import (
+	"bytes"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -40,16 +44,13 @@ func GatherSystemInfo(m *telegram.NewMessage) error {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
-	// Get additional system info
 	hostInfo, _ := host.Info()
 	loadAvg, _ := load.Avg()
 
 	info := "<b>System Information</b>\n\n"
 
-	// Highlighted metrics at top
 	info += fmt.Sprintf("⚡ <b>Goroutines:</b> <code>%d</code> | <b>Process Memory:</b> <code>%s</code>\n\n", runtime.NumGoroutine(), system.ProcessMemory)
 
-	// Performance Metrics
 	info += "➜ <b><i>Performance</i></b>\n"
 	info += fmt.Sprintf("   ├ <b>CPU Usage:</b> <code>%.2f%%</code>\n", system.CPUPerc)
 	if loadAvg != nil {
@@ -59,14 +60,12 @@ func GatherSystemInfo(m *telegram.NewMessage) error {
 	info += fmt.Sprintf("   ├ <b>Heap System:</b> <code>%s</code>\n", HumanBytes(memStats.Sys))
 	info += fmt.Sprintf("   └ <b>Uptime:</b> <i>%s</i>\n\n", system.Uptime)
 
-	// System Resources
 	info += "➜ <b><i>Hardware</i></b>\n"
 	info += fmt.Sprintf("   ├ <b>CPU:</b> <i>%s</i>\n", system.CPUName)
 	info += fmt.Sprintf("   ├ <b>Cores:</b> <code>%d</code>\n", runtime.NumCPU())
 	info += fmt.Sprintf("   ├ <b>Memory:</b> <code>%s</code> / <code>%s</code> <i>(%.1f%%)</i>\n", system.MemUsed, system.MemTotal, system.MemPerc)
 	info += fmt.Sprintf("   └ <b>Disk:</b> <code>%s</code> / <code>%s</code> <i>(%.1f%%)</i>\n\n", system.DiskUsed, system.DiskTotal, system.DiskPerc)
 
-	// Runtime Information
 	info += "➜ <b><i>Runtime</i></b>\n"
 	info += fmt.Sprintf("   ├ <b>Go Version:</b> <code>%s</code>\n", runtime.Version())
 	info += fmt.Sprintf("   ├ <b>Platform:</b> <code>%s/%s</code>\n", runtime.GOOS, runtime.GOARCH)
@@ -147,14 +146,12 @@ func UserHandle(m *telegram.NewMessage) error {
 
 	var userString string
 
-	// Header with name
 	name := un.FirstName
 	if un.LastName != "" {
 		name += " " + un.LastName
 	}
 	userString += "👤 <b>" + name + "</b>"
 
-	// Status badges
 	if un.Verified {
 		userString += " ✓"
 	}
@@ -166,23 +163,18 @@ func UserHandle(m *telegram.NewMessage) error {
 	}
 	userString += "\n\n"
 
-	// Username
 	if un.Username != "" {
 		userString += "➜ 📧 <b>Username:</b> @" + un.Username + "\n"
 	}
 
-	// ID
 	userString += "➜ 🆔 <b>ID:</b> <code>" + strconv.FormatInt(un.ID, 10) + "</code>\n"
 
-	// DC Location
 	userString += "➜ 🌐 <b>DC:</b> {{dcId}}\n"
 
-	// Phone visibility
 	if un.Phone != "" {
 		userString += "➜ 📱 <b>Phone:</b> +" + un.Phone + "\n"
 	}
 
-	// Account restrictions
 	if un.Restricted {
 		userString += "➜ 🚫 <b>Restricted:</b> Yes\n"
 	}
@@ -193,12 +185,10 @@ func UserHandle(m *telegram.NewMessage) error {
 		userString += "➜ ⚠️ <b>Fake:</b> Yes\n"
 	}
 
-	// Support/official status
 	if un.Support {
 		userString += "➜ 🛟 <b>Support:</b> Yes\n"
 	}
 
-	// Bot specific features
 	if un.Bot {
 		if un.BotChatHistory {
 			userString += "➜ 📜 <b>Can Read History:</b> Yes\n"
@@ -214,12 +204,10 @@ func UserHandle(m *telegram.NewMessage) error {
 		}
 	}
 
-	// Common chats count
 	if uf.CommonChatsCount > 0 {
 		userString += "➜ 👥 <b>Common Groups:</b> " + strconv.Itoa(int(uf.CommonChatsCount)) + "\n"
 	}
 
-	// Reserved usernames
 	if len(un.Usernames) > 0 {
 		var usernames []string
 		for _, v := range un.Usernames {
@@ -228,17 +216,19 @@ func UserHandle(m *telegram.NewMessage) error {
 		userString += "\n📌 <b>Also known as:</b> " + strings.Join(usernames, ", ") + "\n"
 	}
 
-	// Birthday
 	if uf.Birthday != nil {
 		userString += "\n➜ 🎂 <b>Birthday:</b> " + parseBirthday(uf.Birthday.Day, uf.Birthday.Month, uf.Birthday.Year) + "\n"
 	}
 
-	// Bio
+	estimator := NewUserDateEstimator()
+	estimatedTS := estimator.Estimate(un.ID)
+	formattedDate, age := estimator.FormatTime(estimatedTS)
+	userString += "\n<b>Account:</b> " + age + " | <code>" + formattedDate + "</code>\n"
+
 	if uf.About != "" {
 		userString += "\n💬 <b>Bio:</b> <i>" + uf.About + "</i>\n"
 	}
 
-	// Profile link
 	userString += "\n<a href=\"tg://user?id=" + strconv.FormatInt(un.ID, 10) + "\">🔗 View Full Profile</a>"
 
 	var keyb = telegram.NewKeyboard()
@@ -353,6 +343,212 @@ func getCountryFlag(dcId int) string {
 	return ""
 }
 
+func generateCountdownGifFFmpeg(days, hours, minutes, seconds int) (string, error) {
+	tmp := os.TempDir()
+	framesDir := filepath.Join(tmp, "countdown_frames")
+	gifPath := filepath.Join(tmp, "countdown_newyear.gif")
+
+	os.MkdirAll(framesDir, 0755)
+	defer os.RemoveAll(framesDir)
+
+	fontPath, err := findFont()
+	if err != nil {
+		fontPath = "Arial"
+	}
+	fontPath = strings.ReplaceAll(fontPath, "\\", "/")
+	fontPath = strings.ReplaceAll(fontPath, ":", "\\:")
+
+	framesPerSecond := 10
+	totalSeconds := 10
+	frameCount := framesPerSecond * totalSeconds
+	for i := 0; i < frameCount; i++ {
+		// Calculate which second we're on
+		secondOffset := i / framesPerSecond
+		_ = i % framesPerSecond // subframe for animation variation
+
+		s := seconds - secondOffset
+		m := minutes
+		h := hours
+		d := days
+
+		for s < 0 {
+			s += 60
+			m--
+		}
+		for m < 0 {
+			m += 60
+			h--
+		}
+		for h < 0 {
+			h += 24
+			d--
+		}
+		if d < 0 {
+			d = 0
+			h = 0
+			m = 0
+			s = 0
+		}
+
+		countdownText := fmt.Sprintf("%dd %02dh %02dm %02ds", d, h, m, s)
+		framePath := filepath.Join(framesDir, fmt.Sprintf("frame_%03d.png", i))
+
+		// Smooth animated sparkle offsets
+		off := i * 2
+		y1 := 30 + (i%20)*3
+		y2 := 80 + ((i+5)%25)*2
+		y3 := 50 + ((i+10)%15)*3
+		y4 := 120 + ((i+15)%20)*2
+		sz1 := 5 + (i % 5)
+		sz2 := 6 + ((i + 2) % 4)
+		sz3 := 4 + ((i + 4) % 4)
+
+		filter := fmt.Sprintf(
+			"[0:v]"+
+				"geq=r='12+10*(Y/H)':g='5+18*(Y/H)':b='25+35*(Y/H)',"+
+				// Thick top border
+				"drawbox=x=0:y=0:w=iw:h=5:color=#ffd700@0.95:t=fill,"+
+				"drawbox=x=0:y=5:w=iw:h=3:color=#ffaa00@0.6:t=fill,"+
+				// Thick bottom border
+				"drawbox=x=0:y=ih-5:w=iw:h=5:color=#ffd700@0.95:t=fill,"+
+				"drawbox=x=0:y=ih-8:w=iw:h=3:color=#ffaa00@0.6:t=fill,"+
+				// Left side accent line
+				"drawbox=x=0:y=0:w=4:h=ih:color=#ffd700@0.4:t=fill,"+
+				// Right side accent line
+				"drawbox=x=iw-4:y=0:w=4:h=ih:color=#ffd700@0.4:t=fill,"+
+
+				// TOP LEFT sparkle cluster
+				"drawbox=x=%d:y=%d:w=%d:h=%d:color=#ffd700:t=fill,"+
+				"drawbox=x=%d:y=%d:w=%d:h=%d:color=#ffffff@0.9:t=fill,"+
+				"drawbox=x=%d:y=%d:w=%d:h=%d:color=#ffd700@0.8:t=fill,"+
+				"drawbox=x=%d:y=%d:w=%d:h=%d:color=#ffffff@0.7:t=fill,"+
+
+				// TOP RIGHT sparkle cluster
+				"drawbox=x=iw-%d:y=%d:w=%d:h=%d:color=#ffd700:t=fill,"+
+				"drawbox=x=iw-%d:y=%d:w=%d:h=%d:color=#ffffff@0.9:t=fill,"+
+				"drawbox=x=iw-%d:y=%d:w=%d:h=%d:color=#ffd700@0.8:t=fill,"+
+				"drawbox=x=iw-%d:y=%d:w=%d:h=%d:color=#ffffff@0.7:t=fill,"+
+
+				// MIDDLE LEFT floating sparkles
+				"drawbox=x=%d:y=%d:w=%d:h=%d:color=#ffd700@0.85:t=fill,"+
+				"drawbox=x=%d:y=%d:w=4:h=4:color=#ffffff@0.6:t=fill,"+
+
+				// MIDDLE RIGHT floating sparkles
+				"drawbox=x=iw-%d:y=%d:w=%d:h=%d:color=#ffd700@0.85:t=fill,"+
+				"drawbox=x=iw-%d:y=%d:w=4:h=4:color=#ffffff@0.6:t=fill,"+
+
+				// BOTTOM sparkles
+				"drawbox=x=%d:y=ih-%d:w=%d:h=%d:color=#ffd700@0.7:t=fill,"+
+				"drawbox=x=iw-%d:y=ih-%d:w=%d:h=%d:color=#ffd700@0.7:t=fill,"+
+				"drawbox=x=%d:y=ih-%d:w=5:h=5:color=#ffffff@0.5:t=fill,"+
+				"drawbox=x=iw-%d:y=ih-%d:w=5:h=5:color=#ffffff@0.5:t=fill,"+
+
+				// CENTER scattered sparkles
+				"drawbox=x=%d:y=%d:w=4:h=4:color=#ffd700@0.6:t=fill,"+
+				"drawbox=x=iw-%d:y=%d:w=4:h=4:color=#ffd700@0.6:t=fill,"+
+
+				// Shadow text (big)
+				"drawtext=fontfile='%s':text='%s':fontsize=72:fontcolor=#1a0a00@0.7:x=(w-text_w)/2+4:y=(h-text_h)/2-25+4,"+
+				// Main countdown text (big golden)
+				"drawtext=fontfile='%s':text='%s':fontsize=72:fontcolor=#ffd700:x=(w-text_w)/2:y=(h-text_h)/2-25,"+
+				// Subtitle shadow
+				"drawtext=fontfile='%s':text='NEW YEAR 2026':fontsize=28:fontcolor=#1a0a00@0.5:x=(w-text_w)/2+2:y=h-62,"+
+				// Subtitle gold
+				"drawtext=fontfile='%s':text='NEW YEAR 2026':fontsize=28:fontcolor=#ffe066:x=(w-text_w)/2:y=h-60"+
+				"[out]",
+
+			// Top left cluster
+			25+off, y1, sz1, sz1,
+			50+off, y2, sz2, sz2,
+			90+off, y3, sz1+2, sz1+2,
+			130+off, y1+30, sz3, sz3,
+
+			// Top right cluster
+			30+off, y1, sz1, sz1,
+			60+off, y2, sz2, sz2,
+			100+off, y3, sz1+2, sz1+2,
+			140+off, y1+30, sz3, sz3,
+
+			// Middle left
+			40+off, y4, sz2, sz2,
+			80+off, y4+40,
+
+			// Middle right
+			45+off, y4, sz2, sz2,
+			90+off, y4+40,
+
+			// Bottom
+			60+off, 50+y1/2, sz1, sz1,
+			70+off, 50+y1/2, sz1, sz1,
+			200+off, 60,
+			220+off, 60,
+
+			// Center scattered
+			350+off, y4,
+			360+off, y4+20,
+
+			// Text
+			fontPath, countdownText,
+			fontPath, countdownText,
+			fontPath,
+			fontPath,
+		)
+
+		cmd := exec.Command(
+			"ffmpeg", "-y",
+			"-f", "lavfi",
+			"-i", "color=c=#0f0520:s=900x400:d=1",
+			"-filter_complex", filter,
+			"-map", "[out]",
+			"-frames:v", "1",
+			framePath,
+		)
+
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			return "", fmt.Errorf("frame %d failed: %v - %s", i, err, stderr.String())
+		}
+	}
+
+	var stderr bytes.Buffer
+	cmdGif := exec.Command(
+		"ffmpeg", "-y",
+		"-framerate", "24",
+		"-i", filepath.Join(framesDir, "frame_%03d.png"),
+		"-vf", "split[s0][s1];[s0]palettegen=max_colors=256[p];[s1][p]paletteuse=dither=bayer",
+		"-loop", "0",
+		gifPath,
+	)
+	cmdGif.Stderr = &stderr
+	if err := cmdGif.Run(); err != nil {
+		return "", fmt.Errorf("gif creation failed: %v - %s", err, stderr.String())
+	}
+
+	return gifPath, nil
+}
+
+func findFont() (string, error) {
+	paths := []string{
+		`C:/Windows/Fonts/arial.ttf`,
+		`C:/Windows/Fonts/Arial.ttf`,
+		`C:/Windows/Fonts/segoeui.ttf`,
+		`C:/Windows/Fonts/consola.ttf`,
+		`/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf`,
+		`/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf`,
+		`/usr/share/fonts/TTF/DejaVuSans.ttf`,
+		`/System/Library/Fonts/Helvetica.ttc`,
+		`/System/Library/Fonts/SFNSText.ttf`,
+	}
+
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("no font found")
+}
+
 var st = time.Now()
 
 func PingHandle(m *telegram.NewMessage) error {
@@ -362,11 +558,56 @@ func PingHandle(m *telegram.NewMessage) error {
 	return err
 }
 
+func NewYearHandle(m *telegram.NewMessage) error {
+	newYear := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Now()
+
+	remaining := newYear.Sub(now)
+
+	days := int(remaining.Hours()) / 24
+	hours := int(remaining.Hours()) % 24
+	minutes := int(remaining.Minutes()) % 60
+	seconds := int(remaining.Seconds()) % 60
+	milliseconds := remaining.Milliseconds() % 1000
+
+	timeStr := fmt.Sprintf("%02d:%02d:%02d.%03d", hours, minutes, seconds, milliseconds)
+	msg := fmt.Sprintf("<b>New Year 2026 Countdown</b>\n<code>%d days, %s</code>", days, timeStr)
+
+	gifPath, err := generateCountdownGifFFmpeg(days, hours, minutes, seconds)
+	if err == nil {
+		defer os.Remove(gifPath)
+		fi, err := m.Client.UploadFile(gifPath)
+		if err != nil {
+			fmt.Printf("Error uploading GIF: %v\n", err)
+			m.Reply(msg)
+			return nil
+		}
+
+		gifMedia := &telegram.InputMediaUploadedDocument{
+			File:         fi,
+			Spoiler:      true,
+			NosoundVideo: true,
+			Attributes: []telegram.DocumentAttribute{
+				&telegram.DocumentAttributeAnimated{},
+			},
+			MimeType: "image/gif",
+		}
+		_, err = m.ReplyMedia(gifMedia, &telegram.MediaOptions{
+			Caption: msg,
+		})
+	} else {
+		fmt.Printf("Error generating GIF: %v\n", err)
+		m.Reply(msg)
+	}
+	return nil
+}
+
 func init() {
 	Mods.AddModule("Start", `<b>Here are the commands available in Start module:</b>
 
 <code>/start</code> - check if the bot is alive
 <code>/ping</code> - check the bot's response time
+<code>/new</code> - time left until New Year's Eve 2026
 <code>/systeminfo</code> - get system information
 <code>/info [user_id]</code> - get user information`)
 }

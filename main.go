@@ -40,7 +40,7 @@ func main() {
 		AppHash: os.Getenv("APP_HASH"),
 		//Proxy:      p,
 		//DataCenter: 1,
-		LogLevel: tg.LogTrace,
+		LogLevel: tg.LogInfo,
 	})
 	if err != nil {
 		panic(err)

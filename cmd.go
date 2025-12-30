@@ -79,6 +79,7 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:info", modules.UserHandle)
 		c.On("cmd:json", modules.JsonHandle)
 		c.On("cmd:ping", modules.PingHandle)
+		c.On("cmd:new", modules.NewYearHandle)
 		c.On("cmd:fileinfo", modules.FileInfoHandle)
 		c.On("cmd:eval", modules.EvalHandle, telegram.Custom(FilterOwnerNoReply))
 		c.On("cmd:go", modules.GoHandler)
