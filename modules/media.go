@@ -224,7 +224,7 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 	}
 
 	// Set up download options
-	dlOpts := &telegram.DownloadOptions{FileName: opts.FileName, Delay: opts.Delay}
+	dlOpts := &telegram.DownloadOptions{FileName: opts.FileName}
 	if !opts.NoProgress && msg != nil {
 		dlOpts.ProgressManager = telegram.NewProgressManager(5).SetMessage(msg)
 	}
@@ -256,7 +256,7 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 	}
 
 	// Determine destination
-	var dest interface{} = m.Chat
+	var dest interface{} = m.ChatID()
 	if opts.Destination != nil {
 		dest = opts.Destination
 	}
