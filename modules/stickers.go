@@ -390,18 +390,18 @@ func RemoveKangedSticker(m *tg.NewMessage) error {
 		return nil
 	}
 
-	var stickerFile *tg.InputDocument
-	// if reply.Media() != nil {
-	// 	if doc, ok := reply.Media().(*tg.MessageMediaDocument); ok {
-	// 		if document, ok := doc.Document.(*tg.Document); ok {
-	// 			stickerFile = &tg.InputDocument{
-	// 				ID:            document.ID,
-	// 				AccessHash:    document.AccessHash,
-	// 				FileReference: document.FileReference,
-	// 			}
-	// 		}
-	// 	}
-	// }
+	var stickerFile tg.InputDocument
+	if reply.Media() != nil {
+		if doc, ok := reply.Media().(*tg.MessageMediaDocument); ok {
+			if document, ok := doc.Document.(*tg.DocumentObj); ok {
+				stickerFile = &tg.InputDocumentObj{
+					ID:            document.ID,
+					AccessHash:    document.AccessHash,
+					FileReference: document.FileReference,
+				}
+			}
+		}
+	}
 
 	if stickerFile == nil {
 		m.Reply("Unable to extract sticker file!")
@@ -417,30 +417,14 @@ func RemoveKangedSticker(m *tg.NewMessage) error {
 	}
 
 	var removed bool
-	var packName string
 
-	// for packType, packList := range packs {
-	// 	for _, pack := range packList {
-	// 		_, removeErr := m.Client.StickersRemoveStickerFromSet(&tg.InputDocumentObj{
-	// 			ID:            stickerFile.ID,
-	// 			AccessHash:    stickerFile.AccessHash,
-	// 			FileReference: stickerFile.FileReference,
-	// 		})
-
-	// 		if removeErr == nil {
-	// 			removed = true
-	// 			packName = pack.Title
-	// 			db.DecrementPackCount(userID, pack)
-	// 			break
-	// 		}
-	// 	}
-	// 	if removed {
-	// 		break
-	// 	}
-	// }
+	_, err = m.Client.StickersRemoveStickerFromSet(stickerFile)
+	if err == nil {
+		removed = true
+	}
 
 	if removed {
-		m.Reply(fmt.Sprintf("✅ Removed sticker from <b>%s</b>", packName))
+		m.Reply("✅ Removed sticker from your pack!")
 		return nil
 	}
 

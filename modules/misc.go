@@ -63,10 +63,13 @@ func PasteBinHandler(m *telegram.NewMessage) error {
 		err      error
 	)
 
-	url, provider, err = postToSpaceBin(content)
+	url, provider, err = postToPatbin(content)
 	if err != nil {
-		m.Reply("Error posting to " + provider)
-		return nil
+		url, provider, err = postToSpaceBin(content)
+		if err != nil {
+			m.Reply("Error posting to paste services")
+			return nil
+		}
 	}
 
 	b := telegram.Button
@@ -78,6 +81,49 @@ func PasteBinHandler(m *telegram.NewMessage) error {
 	})
 
 	return nil
+}
+
+// postToPatbin posts content to patbin.fun
+func postToPatbin(content string) (string, string, error) {
+	payload := fmt.Sprintf(`{"content":%q,"title":"","language":"text","is_public":true}`, content)
+
+	req, err := http.NewRequest("POST", "https://patbin.fun/api/paste", bytes.NewBufferString(payload))
+	if err != nil {
+		return "", "", fmt.Errorf("error creating request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", fmt.Errorf("error making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", fmt.Errorf("error reading response: %w", err)
+	}
+
+	// Parse the ID from JSON response {"id":"xxx",...}
+	// Simple extraction without full JSON parsing
+	idStart := bytes.Index(body, []byte(`"id":"`))
+	if idStart == -1 {
+		return "", "", fmt.Errorf("id not found in response")
+	}
+	idStart += 6
+	idEnd := bytes.Index(body[idStart:], []byte(`"`))
+	if idEnd == -1 {
+		return "", "", fmt.Errorf("id end not found in response")
+	}
+
+	pasteID := string(body[idStart : idStart+idEnd])
+	return "https://patbin.fun/" + pasteID, "Patbin", nil
 }
 
 func postToSpaceBin(content string) (string, string, error) {

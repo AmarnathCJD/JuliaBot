@@ -68,7 +68,7 @@ func SetTimerHandler(m *telegram.NewMessage) error {
 		sendTimerNotification(timerID)
 	})
 
-	m.Reply(fmt.Sprintf("⏰ Timer set for <b>%s</b>", formatDuration(duration)))
+	m.Reply(fmt.Sprintf("Timer set for <b>%s</b>", formatDuration(duration)))
 	return nil
 }
 
@@ -81,7 +81,7 @@ func sendTimerNotification(timerID string) {
 		return
 	}
 
-	text := "⏰ <b>Timer Alert!</b>"
+	text := "<b>Timer Alert!</b>"
 	if timer.message != "" {
 		text += "\n" + timer.message
 	}
@@ -136,14 +136,14 @@ func TimerCallbackHandler(cb *telegram.CallbackQuery) error {
 		time.AfterFunc(snoozeDuration, func() {
 			sendTimerNotification(timerID)
 		})
-		cb.Edit("⏰ <b>Snoozed for 5 minutes</b>")
+		cb.Edit("<b>Snoozed for 5 minutes</b>")
 		cb.Answer("Snoozed!")
 
 	case "dismiss":
 		activeTimersMu.Lock()
 		delete(activeTimers, timerID)
 		activeTimersMu.Unlock()
-		cb.Edit("✅ <b>Timer dismissed</b>")
+		cb.Edit("<b>Timer dismissed</b>")
 		cb.Answer("Dismissed!")
 	}
 

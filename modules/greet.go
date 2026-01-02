@@ -8,12 +8,14 @@ import (
 
 var GREET_ENABLED = false
 
+const GREET_MESSAGE = "Hey <b>%s</b>, Welcome to the group!"
+
 func UserJoinHandle(m *telegram.ParticipantUpdate) error {
-	if m.IsBanned() {
-		m.Client.SendMessage(m.ChannelID(), "User Boom Banned.")
-	}
+	// if m.IsBanned() {
+	// 	m.Client.SendMessage(m.ChannelID(), "User Boom Banned.")
+	// }
 	if (m.IsJoined() || m.IsAdded()) && GREET_ENABLED {
-		fmt.Println(m.Client.SendMessage(m.ChannelID(), "Welcome to the group <b>"+m.User.FirstName+"!</b>"))
+		m.Client.SendMessage(m.ChannelID(), fmt.Sprintf(GREET_MESSAGE, m.User.FirstName))
 	}
 
 	return nil

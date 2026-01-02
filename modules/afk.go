@@ -208,3 +208,54 @@ func IsSticker(m tg.MessageMedia) bool {
 
 	return false
 }
+
+func SedHandler(m *tg.NewMessage) error {
+	text := m.Text()
+	if len(text) < 4 {
+		return nil
+	}
+
+	if text[0] != 's' {
+		return nil
+	}
+
+	delimiter := text[1]
+	if delimiter != '/' && delimiter != '\\' {
+		return nil
+	}
+
+	parts := strings.Split(text[2:], string(delimiter))
+	if len(parts) < 2 {
+		return nil
+	}
+
+	find := parts[0]
+	replace := parts[1]
+
+	if find == "" {
+		return nil
+	}
+
+	if !m.IsReply() {
+		return nil
+	}
+
+	replyMsg, err := m.GetReplyMessage()
+	if err != nil {
+		return nil
+	}
+
+	originalText := replyMsg.Text()
+	if originalText == "" {
+		return nil
+	}
+
+	if !strings.Contains(originalText, find) {
+		return nil
+	}
+
+	newText := strings.Replace(originalText, find, replace, -1)
+	m.Reply(newText)
+
+	return nil
+}

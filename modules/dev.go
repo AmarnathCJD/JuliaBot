@@ -1,7 +1,6 @@
 package modules
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -66,133 +65,6 @@ func ShellHandle(m *tg.NewMessage) error {
 
 	m.Reply(`<pre language="bash">` + result + `</pre>`)
 	return nil
-}
-
-func TcpHandler(m *tg.NewMessage) error {
-	pid := os.Getpid()
-
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/C", fmt.Sprintf("netstat -ano | findstr %d", pid))
-	} else {
-		cmd = exec.Command("bash", "-c", fmt.Sprintf("ss -tnp 2>/dev/null | grep 'pid=%d' || cat /proc/%d/net/tcp 2>/dev/null", pid, pid))
-	}
-
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-	cmd.Run()
-
-	output := strings.TrimSpace(out.String())
-	count := strings.Count(output, "\n") + 1
-
-	if output == "" {
-		tcpConns := parseProcNetTcp(pid)
-		if len(tcpConns) == 0 {
-			m.Reply("<code>No active TCP connections</code>")
-			return nil
-		}
-		output = strings.Join(tcpConns, "\n")
-	}
-
-	result := fmt.Sprintf("<b>TCP Connections (PID: %d)</b>\n\n<b>%s</b>", pid, output)
-	result += fmt.Sprintf("\n\n<b>Total Connections:</b> %d", count)
-	if len(result) > 4000 {
-		os.WriteFile("tmp/tcp_out.txt", []byte(output), 0644)
-		m.ReplyMedia("tmp/tcp_out.txt", &tg.MediaOptions{Caption: fmt.Sprintf("TCP Connections (PID: %d)", pid)})
-		os.Remove("tmp/tcp_out.txt")
-		return nil
-	}
-
-	m.Reply(result)
-	return nil
-}
-
-func parseProcNetTcp(pid int) []string {
-	var connections []string
-
-	fdPath := fmt.Sprintf("/proc/%d/fd", pid)
-	fds, err := os.ReadDir(fdPath)
-	if err != nil {
-		return connections
-	}
-
-	socketInodes := make(map[string]bool)
-	for _, fd := range fds {
-		link, err := os.Readlink(filepath.Join(fdPath, fd.Name()))
-		if err != nil {
-			continue
-		}
-		if strings.HasPrefix(link, "socket:[") {
-			inode := strings.TrimPrefix(strings.TrimSuffix(link, "]"), "socket:[")
-			socketInodes[inode] = true
-		}
-	}
-
-	tcpFile, err := os.Open("/proc/net/tcp")
-	if err != nil {
-		return connections
-	}
-	defer tcpFile.Close()
-
-	scanner := bufio.NewScanner(tcpFile)
-	scanner.Scan()
-
-	stateMap := map[string]string{
-		"01": "ESTABLISHED",
-		"02": "SYN_SENT",
-		"03": "SYN_RECV",
-		"04": "FIN_WAIT1",
-		"05": "FIN_WAIT2",
-		"06": "TIME_WAIT",
-		"07": "CLOSE",
-		"08": "CLOSE_WAIT",
-		"09": "LAST_ACK",
-		"0A": "LISTEN",
-		"0B": "CLOSING",
-	}
-
-	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		if len(fields) < 10 {
-			continue
-		}
-
-		inode := fields[9]
-		if !socketInodes[inode] {
-			continue
-		}
-
-		localAddr := parseHexAddr(fields[1])
-		remoteAddr := parseHexAddr(fields[2])
-		state := stateMap[fields[3]]
-		if state == "" {
-			state = fields[3]
-		}
-
-		connections = append(connections, fmt.Sprintf("%s → %s [%s]", localAddr, remoteAddr, state))
-	}
-
-	return connections
-}
-
-func parseHexAddr(hexAddr string) string {
-	parts := strings.Split(hexAddr, ":")
-	if len(parts) != 2 {
-		return hexAddr
-	}
-
-	ip := parts[0]
-	if len(ip) == 8 {
-		b1, _ := strconv.ParseUint(ip[6:8], 16, 8)
-		b2, _ := strconv.ParseUint(ip[4:6], 16, 8)
-		b3, _ := strconv.ParseUint(ip[2:4], 16, 8)
-		b4, _ := strconv.ParseUint(ip[0:2], 16, 8)
-		port, _ := strconv.ParseUint(parts[1], 16, 16)
-		return fmt.Sprintf("%d.%d.%d.%d:%d", b1, b2, b3, b4, port)
-	}
-
-	return hexAddr
 }
 
 // --------- Eval function ------------
@@ -388,7 +260,7 @@ func perfomEval(code string, m *tg.NewMessage, imports []string) (string, bool) 
 	stderr := strings.TrimSpace(stdErr.String())
 
 	if ctx.Err() == context.DeadlineExceeded {
-		return "⏱️ <b>Timeout</b>\n<i>Execution exceeded 60 seconds</i>", false
+		return "Timeout", false
 	}
 
 	if stdout == "" && stderr == "" {
@@ -620,60 +492,100 @@ func LsHandler(m *tg.NewMessage) error {
 	if dir == "" {
 		dir = "."
 	}
-	cmd := exec.Command("ls", dir)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
-	fileTypeEmoji := map[string]string{
-		"file":   "📄",
-		"dir":    "📁",
-		"video":  "🎥",
-		"audio":  "🎵",
-		"image":  "🖼️",
-		"go":     "📜",
-		"python": "🐍",
-		"txt":    "📝",
-	}
 
+	absPath, _ := filepath.Abs(dir)
+
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		m.Reply("<code>Error:</code> <b>" + err.Error() + "</b>")
+		m.Reply("❌ <b>Error:</b> <code>" + err.Error() + "</code>")
 		return nil
 	}
 
-	files := strings.Split(strings.TrimSpace(out.String()), "\n")
-	var sizeTotal int64
-
-	var resp string
-	for _, file := range files {
-		fileType := "file"
-		if strings.Contains(file, ".") {
-			fp := strings.Split(file, ".")
-			fileType = fp[len(fp)-1]
-		}
-		switch fileType {
-		case "mp4", "mkv", "webm", "avi", "flv", "mov", "wmv", "3gp":
-			fileType = "video"
-		case "mp3", "wav", "flac", "ogg", "m4a", "wma":
-			fileType = "audio"
-		case "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff":
-			fileType = "image"
-		case "go":
-			fileType = "go"
-		case "py":
-			fileType = "python"
-		case "txt":
-			fileType = "txt"
-		default:
-			fileType = "file"
-		}
-		size := calcFileOrDirSize(filepath.Join(dir, file))
-		sizeTotal += size
-		resp += fileTypeEmoji[fileType] + " " + file + " " + "(" + sizeToHuman(size) + ")" + "\n"
+	fileTypeEmoji := map[string]string{
+		"file":   "📄",
+		"dir":    "📁",
+		"video":  "🎬",
+		"audio":  "🎵",
+		"image":  "🖼",
+		"go":     "📄",
+		"python": "🐍",
+		"txt":    "📝",
+		"json":   "📋",
+		"zip":    "📦",
+		"exe":    "⚙️",
 	}
 
-	resp += "\nTotal: " + sizeToHuman(sizeTotal)
+	var resp strings.Builder
+	resp.WriteString("📂 <b>" + absPath + "</b>\n")
+	resp.WriteString("━━━━━━━━━━━━━━━━━━━━\n\n")
 
-	m.Reply("<pre lang='bash'>" + resp + "</pre>")
+	var sizeTotal int64
+	var fileCount, dirCount int
+
+	var dirs, files []os.DirEntry
+	for _, entry := range entries {
+		if entry.IsDir() {
+			dirs = append(dirs, entry)
+		} else {
+			files = append(files, entry)
+		}
+	}
+
+	for _, entry := range dirs {
+		name := entry.Name()
+		size := calcFileOrDirSize(filepath.Join(dir, name))
+		sizeTotal += size
+		dirCount++
+		resp.WriteString(fileTypeEmoji["dir"] + " <code>" + name + "/</code>  <i>" + sizeToHuman(size) + "</i>\n")
+	}
+
+	for _, entry := range files {
+		name := entry.Name()
+		fileType := "file"
+
+		if idx := strings.LastIndex(name, "."); idx != -1 {
+			ext := strings.ToLower(name[idx+1:])
+			switch ext {
+			case "mp4", "mkv", "webm", "avi", "flv", "mov", "wmv", "3gp":
+				fileType = "video"
+			case "mp3", "wav", "flac", "ogg", "m4a", "wma", "opus":
+				fileType = "audio"
+			case "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "svg":
+				fileType = "image"
+			case "go", "mod", "sum":
+				fileType = "go"
+			case "py", "pyw":
+				fileType = "python"
+			case "txt", "md", "log":
+				fileType = "txt"
+			case "json", "yaml", "yml", "toml", "xml":
+				fileType = "json"
+			case "zip", "rar", "7z", "tar", "gz":
+				fileType = "zip"
+			case "exe", "msi", "dll":
+				fileType = "exe"
+			}
+		}
+
+		emoji := fileTypeEmoji[fileType]
+		if emoji == "" {
+			emoji = fileTypeEmoji["file"]
+		}
+
+		info, _ := entry.Info()
+		var size int64
+		if info != nil {
+			size = info.Size()
+		}
+		sizeTotal += size
+		fileCount++
+		resp.WriteString(emoji + " <code>" + name + "</code>  <i>" + sizeToHuman(size) + "</i>\n")
+	}
+
+	resp.WriteString("\n━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Fprintf(&resp, "📊 <b>%d</b> files, <b>%d</b> folders • <b>%s</b> total", fileCount, dirCount, sizeToHuman(sizeTotal))
+
+	m.Reply(resp.String())
 	return nil
 }
 
@@ -725,7 +637,36 @@ func calcFileOrDirSize(path string) int64 {
 }
 
 func GoHandler(m *tg.NewMessage) error {
-	m.Reply(fmt.Sprintf(`➜ <b>Current Go Routines: %d</b>`, runtime.NumGoroutine()))
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+
+	heapAlloc := float64(memStats.HeapAlloc) / 1024 / 1024
+	heapSys := float64(memStats.HeapSys) / 1024 / 1024
+	heapInuse := float64(memStats.HeapInuse) / 1024 / 1024
+	stackInuse := float64(memStats.StackInuse) / 1024 / 1024
+	numGC := memStats.NumGC
+
+	resp := fmt.Sprintf(`<b>🔷 Go Runtime Stats</b>
+━━━━━━━━━━━━━━━━━━━━
+
+<b>Goroutines:</b> <code>%d</code>
+
+<b>📊 Heap Memory</b>
+  • Allocated: <code>%.2f MB</code>
+  • System: <code>%.2f MB</code>
+  • In Use: <code>%.2f MB</code>
+
+<b>📚 Stack:</b> <code>%.2f MB</code>
+<b>♻️ GC Cycles:</b> <code>%d</code>`,
+		runtime.NumGoroutine(),
+		heapAlloc,
+		heapSys,
+		heapInuse,
+		stackInuse,
+		numGC,
+	)
+
+	m.Reply(resp)
 	return nil
 }
 

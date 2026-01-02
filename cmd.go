@@ -57,10 +57,17 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:ban", modules.BanUserHandle)
 		c.On("cmd:unban", modules.UnbanUserHandle)
 		c.On("cmd:kick", modules.KickUserHandle)
+		c.On("cmd:fullpromote", modules.FullPromoteHandle)
+		c.On("cmd:tban", modules.TbanUserHandle)
+		c.On("cmd:tmute", modules.TmuteUserHandle)
+		c.On("cmd:mute", modules.MuteUserHandle)
+		c.On("cmd:unmute", modules.UnmuteUserHandle)
+		c.On("cmd:sban", modules.SbanUserHandle)
+		c.On("cmd:smute", modules.SmuteUserHandle)
+		c.On("cmd:skick", modules.SkickUserHandle)
 
 		c.On("cmd:restart", modules.RestartHandle, telegram.Custom(FilterOwner))
 		c.On("cmd:id", modules.IDHandle)
-		c.On("cmd:tcp", modules.TcpHandler, telegram.Custom(FilterOwnerAndAuth))
 
 		c.On("cmd:vid", downloaders.YTCustomHandler)
 		c.On("cmd:spot(:?ify)? (.*)", modules.SpotifyHandler)
@@ -163,6 +170,7 @@ func initFunc(c *telegram.Client) {
 		//c.On(telegram.OnNewMessage, modules.AIHandler)
 
 		c.On(telegram.OnNewMessage, modules.AFKHandler)
+		c.On(telegram.OnNewMessage, modules.SedHandler)
 		c.On("command:audio", modules.ConvertToAudioHandle)
 
 		modules.Mods.Init(c)

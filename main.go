@@ -35,7 +35,7 @@ func main() {
 	// 	panic(err)
 	// }
 	client, err := tg.NewClient(tg.ClientConfig{
-		Session: "userxyz",
+		//Session: "userxyz",
 		AppID:   int32(appId),
 		AppHash: os.Getenv("APP_HASH"),
 		//Proxy:      p,
@@ -48,8 +48,6 @@ func main() {
 
 	// client.SetProxy(p)
 	client.Conn()
-	//client.SendMessage("gogrammers", "Hi")
-	//client.AuthPrompt()
 	client.Log.SetOutput(wr)
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 
@@ -63,10 +61,7 @@ func main() {
 	}()
 
 	initFunc(client)
-	// client.OnRaw(&tg.UpdateGroupCall{}, func(m tg.Update, c *tg.Client) error {
-	// 	fmt.Println(client.JSON(m))
-	// 	return nil
-	// })
+
 	client.OnCommand("senders", func(m *tg.NewMessage) error {
 		x := client.GetExportedSendersStatus()
 		var result string

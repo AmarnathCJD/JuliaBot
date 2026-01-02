@@ -12,7 +12,7 @@ import (
 )
 
 type MirrorOptions struct {
-	Destination   interface{}
+	Destination   any
 	NoProgress    bool
 	ForceDocument bool
 	NoThumb       bool
@@ -246,7 +246,9 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 	}
 
 	if !opts.NoProgress && msg != nil {
-		//mediaOpts.Upload.ProgressManager = telegram.NewProgressManager(5).SetMessage(msg)
+		mediaOpts.Upload = &telegram.UploadOptions{
+			ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+		}
 	}
 
 	if !opts.NoThumb {
@@ -256,7 +258,7 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 	}
 
 	// Determine destination
-	var dest interface{} = m.ChatID()
+	var dest any = m.ChatID()
 	if opts.Destination != nil {
 		dest = opts.Destination
 	}
