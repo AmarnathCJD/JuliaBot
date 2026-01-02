@@ -646,18 +646,18 @@ func GoHandler(m *tg.NewMessage) error {
 	stackInuse := float64(memStats.StackInuse) / 1024 / 1024
 	numGC := memStats.NumGC
 
-	resp := fmt.Sprintf(`<b>🔷 Go Runtime Stats</b>
+	resp := fmt.Sprintf(`<b>Go Runtime Stats</b>
 ━━━━━━━━━━━━━━━━━━━━
 
-<b>Goroutines:</b> <code>%d</code>
+<b>Goroutines</b>: <code>%d</code>
 
-<b>📊 Heap Memory</b>
+<b>Heap Memory</b>
   • Allocated: <code>%.2f MB</code>
-  • System: <code>%.2f MB</code>
+  • System: <code>%.2f MB</code>	
   • In Use: <code>%.2f MB</code>
 
-<b>📚 Stack:</b> <code>%.2f MB</code>
-<b>♻️ GC Cycles:</b> <code>%d</code>`,
+<b>Stack</b>: <code>%.2f MB</code>
+<b>GC Cycles</b>: <code>%d</code>`,
 		runtime.NumGoroutine(),
 		heapAlloc,
 		heapSys,

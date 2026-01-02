@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"main/modules/db"
 	"net/http"
 	"os"
 	"strconv"
-
-	//"time"
 
 	tg "github.com/amarnathcjd/gogram/telegram"
 	_ "github.com/joho/godotenv/autoload"
@@ -72,5 +71,6 @@ func main() {
 		return nil
 	})
 	client.Idle()
+	db.CloseDB()
 	client.Logger.Info("Bot stopped")
 }

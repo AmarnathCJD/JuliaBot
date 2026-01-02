@@ -4,15 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"sync"
 
 	bolt "go.etcd.io/bbolt"
-)
-
-var (
-	stickerDB     *bolt.DB
-	stickerDBOnce sync.Once
-	dbPath        = "stickers.db"
 )
 
 type PackInfo struct {
@@ -23,31 +16,25 @@ type PackInfo struct {
 	PackNumber   int    `json:"pack_number"`
 }
 
-func InitStickerDB() error {
-	var err error
-	stickerDBOnce.Do(func() {
-		stickerDB, err = bolt.Open(dbPath, 0600, nil)
+func ensureStickerBuckets(db *bolt.DB) error {
+	return db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("sticker_users"))
 		if err != nil {
-			return
-		}
-
-		err = stickerDB.Update(func(tx *bolt.Tx) error {
-			_, err := tx.CreateBucketIfNotExists([]byte("users"))
-			if err != nil {
-				return err
-			}
-			_, err = tx.CreateBucketIfNotExists([]byte("packs"))
 			return err
-		})
+		}
+		_, err = tx.CreateBucketIfNotExists([]byte("sticker_packs"))
+		return err
 	})
-	return err
 }
 
 func GetUserPacks(userID int64) (map[string][]*PackInfo, error) {
-	if stickerDB == nil {
-		if err := InitStickerDB(); err != nil {
-			return nil, err
-		}
+	db, err := GetDB()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := ensureStickerBuckets(db); err != nil {
+		return nil, err
 	}
 
 	packs := make(map[string][]*PackInfo)
@@ -55,8 +42,12 @@ func GetUserPacks(userID int64) (map[string][]*PackInfo, error) {
 	packs["webm"] = []*PackInfo{}
 	packs["tgs"] = []*PackInfo{}
 
-	err := stickerDB.View(func(tx *bolt.Tx) error {
-		userBucket := tx.Bucket([]byte("users")).Bucket([]byte(strconv.FormatInt(userID, 10)))
+	err = db.View(func(tx *bolt.Tx) error {
+		usersBucket := tx.Bucket([]byte("sticker_users"))
+		if usersBucket == nil {
+			return nil
+		}
+		userBucket := usersBucket.Bucket([]byte(strconv.FormatInt(userID, 10)))
 		if userBucket == nil {
 			return nil
 		}
@@ -83,15 +74,23 @@ func GetUserPacks(userID int64) (map[string][]*PackInfo, error) {
 }
 
 func GetActivePack(userID int64, packType string) (*PackInfo, error) {
-	if stickerDB == nil {
-		if err := InitStickerDB(); err != nil {
-			return nil, err
-		}
+	db, err := GetDB()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := ensureStickerBuckets(db); err != nil {
+		return nil, err
 	}
 
 	var pack *PackInfo
-	err := stickerDB.View(func(tx *bolt.Tx) error {
-		userBucket := tx.Bucket([]byte("users")).Bucket([]byte(strconv.FormatInt(userID, 10)))
+	err = db.View(func(tx *bolt.Tx) error {
+		usersBucket := tx.Bucket([]byte("sticker_users"))
+		if usersBucket == nil {
+			return nil
+		}
+
+		userBucket := usersBucket.Bucket([]byte(strconv.FormatInt(userID, 10)))
 		if userBucket == nil {
 			return nil
 		}
@@ -121,14 +120,17 @@ func GetActivePack(userID int64, packType string) (*PackInfo, error) {
 }
 
 func SavePack(userID int64, pack *PackInfo) error {
-	if stickerDB == nil {
-		if err := InitStickerDB(); err != nil {
-			return err
-		}
+	db, err := GetDB()
+	if err != nil {
+		return err
 	}
 
-	return stickerDB.Update(func(tx *bolt.Tx) error {
-		usersBucket := tx.Bucket([]byte("users"))
+	if err := ensureStickerBuckets(db); err != nil {
+		return err
+	}
+
+	return db.Update(func(tx *bolt.Tx) error {
+		usersBucket := tx.Bucket([]byte("sticker_users"))
 		userBucket, err := usersBucket.CreateBucketIfNotExists([]byte(strconv.FormatInt(userID, 10)))
 		if err != nil {
 			return err
@@ -162,15 +164,23 @@ func DecrementPackCount(userID int64, pack *PackInfo) error {
 }
 
 func GetPackByShortName(userID int64, shortName string) (*PackInfo, error) {
-	if stickerDB == nil {
-		if err := InitStickerDB(); err != nil {
-			return nil, err
-		}
+	db, err := GetDB()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := ensureStickerBuckets(db); err != nil {
+		return nil, err
 	}
 
 	var pack *PackInfo
-	err := stickerDB.View(func(tx *bolt.Tx) error {
-		userBucket := tx.Bucket([]byte("users")).Bucket([]byte(strconv.FormatInt(userID, 10)))
+	err = db.View(func(tx *bolt.Tx) error {
+		usersBucket := tx.Bucket([]byte("sticker_users"))
+		if usersBucket == nil {
+			return fmt.Errorf("no packs found")
+		}
+
+		userBucket := usersBucket.Bucket([]byte(strconv.FormatInt(userID, 10)))
 		if userBucket == nil {
 			return fmt.Errorf("no packs found")
 		}
@@ -200,8 +210,6 @@ func GetPackByShortName(userID int64, shortName string) (*PackInfo, error) {
 }
 
 func CloseStickerDB() error {
-	if stickerDB != nil {
-		return stickerDB.Close()
-	}
+
 	return nil
 }

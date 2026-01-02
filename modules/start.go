@@ -2,7 +2,10 @@ package modules
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +15,7 @@ import (
 	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
+	tg "github.com/amarnathcjd/gogram/telegram"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/load"
 )
@@ -604,6 +608,54 @@ func NewYearHandle(m *telegram.NewMessage) error {
 	return nil
 }
 
+type UDResponse struct {
+	List []struct {
+		Definition string `json:"definition"`
+		Example    string `json:"example"`
+		Word       string `json:"word"`
+		Author     string `json:"author"`
+	} `json:"list"`
+}
+
+func UDHandler(m *tg.NewMessage) error {
+	term := m.Args()
+	if term == "" {
+		m.Reply("Usage: /ud <term>")
+		return nil
+	}
+
+	resp, err := http.Get("http://api.urbandictionary.com/v0/define?term=" + url.QueryEscape(term))
+	if err != nil {
+		m.Reply("Failed to fetch Urban Dictionary")
+		return nil
+	}
+	defer resp.Body.Close()
+
+	var res UDResponse
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return nil
+	}
+
+	if len(res.List) == 0 {
+		m.Reply("No definition found")
+		return nil
+	}
+
+	def := res.List[0]
+	definition := strings.ReplaceAll(def.Definition, "[", "")
+	definition = strings.ReplaceAll(definition, "]", "")
+	example := strings.ReplaceAll(def.Example, "[", "")
+	example = strings.ReplaceAll(example, "]", "")
+
+	if len(definition) > 1000 {
+		definition = definition[:1000] + "..."
+	}
+
+	msg := fmt.Sprintf("<b>%s</b>\n\n%s\n\n<i>%s</i>", def.Word, definition, example)
+	m.Reply(msg)
+	return nil
+}
+
 func init() {
 	Mods.AddModule("Start", `<b>Here are the commands available in Start module:</b>
 
@@ -611,5 +663,8 @@ func init() {
 <code>/ping</code> - check the bot's response time
 <code>/new</code> - time left until New Year's Eve 2026
 <code>/systeminfo</code> - get system information
-<code>/info [user_id]</code> - get user information`)
+<code>/info [user_id]</code> - get user information
+<code>/ud [term]</code> - Urban Dictionary lookup
+<code>/translate [lang] [-r]: Translate reply. -r replaces original.</code>
+<code>/new: count down to Next New Years.`)
 }

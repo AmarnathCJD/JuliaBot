@@ -2,6 +2,7 @@ package modules
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/amarnathcjd/gogram/telegram"
@@ -22,7 +23,7 @@ func (m *Modules) AddModule(name, help string) {
 
 func (m *Modules) GetHelp(name string) string {
 	for _, v := range m.Mod {
-		if v.Name == name {
+		if strings.EqualFold(v.Name, name) {
 			return v.Help
 		}
 	}
@@ -31,8 +32,10 @@ func (m *Modules) GetHelp(name string) string {
 
 func (m *Modules) Init(c *telegram.Client) {
 	for _, v := range m.Mod {
-		c.On("callback:help_"+v.Name, func(c *telegram.CallbackQuery) error {
-			return HelpModule(v.Name, v.Help)(c)
+		modName := v.Name
+		modHelp := v.Help
+		c.On("callback:help_"+strings.ToLower(modName), func(c *telegram.CallbackQuery) error {
+			return HelpModuleCallback(modName, modHelp)(c)
 		})
 	}
 }
@@ -40,34 +43,87 @@ func (m *Modules) Init(c *telegram.Client) {
 var Mods = Modules{}
 
 func HelpHandle(m *telegram.NewMessage) error {
-	var b = telegram.Button
+	b := telegram.Button
 
 	if !m.IsPrivate() {
-		m.Reply("DM me for help!",
+		m.Reply("Use /help in private chat for detailed help.",
 			&telegram.SendOptions{
-				ReplyMarkup: b.Keyboard(b.Row(b.URL("Click Here", "t.me/"+m.Client.Me().Username+"?start=help"))),
+				ReplyMarkup: b.Keyboard(b.Row(b.URL("Open Private Chat", "t.me/"+m.Client.Me().Username+"?start=help"))),
 			})
 		return nil
 	}
 
+	// Sort modules alphabetically
+	sortedMods := make([]Mod, len(Mods.Mod))
+	copy(sortedMods, Mods.Mod)
+	sort.Slice(sortedMods, func(i, j int) bool {
+		return sortedMods[i].Name < sortedMods[j].Name
+	})
+
 	var buttons []telegram.KeyboardButton
-	for _, v := range Mods.Mod {
-		buttons = append(buttons, b.Data(v.Name+" "+getRandomEmoticon(), strings.ToLower("help_"+v.Name)))
+	for _, v := range sortedMods {
+		buttons = append(buttons, b.Data(v.Name, "help_"+strings.ToLower(v.Name)))
 	}
 
-	m.Reply("Hello! I'm <b>Julia</b> created by <b>@amarnathcjd</b>. To demonstrate the capabilities of <b><a href='github.com/amarnathcjd/gogram'>gogram</a></b> library. Here are the available commands:\n\n",
+	helpText := `<b>Julia Bot</b>
+<i>A feature-rich Telegram bot built with gogram</i>
+
+Select a module below to view its commands and usage.
+
+<b>Available Modules:</b> ` + fmt.Sprintf("%d", len(Mods.Mod))
+
+	m.Reply(helpText,
 		&telegram.SendOptions{
-			ReplyMarkup: telegram.NewKeyboard().NewColumn(2, buttons...).Build(),
+			ReplyMarkup: telegram.NewKeyboard().NewColumn(3, buttons...).AddRow(
+				b.URL("Source Code", "https://github.com/amarnathcjd/gogram"),
+			).Build(),
 		})
 
 	return nil
 }
 
-func HelpModule(name, help string) func(*telegram.CallbackQuery) error {
-	fmt.Println("HelpModule: ", name)
+func HelpModuleCallback(name, help string) func(*telegram.CallbackQuery) error {
 	return func(c *telegram.CallbackQuery) error {
-		c.Answer("Loading...")
-		c.Edit(help)
+		c.Answer("Loading " + name + "...")
+
+		b := telegram.Button
+		helpWithBack := help + "\n\n<i>Use /help to see all modules</i>"
+
+		c.Edit(helpWithBack, &telegram.SendOptions{
+			ReplyMarkup: telegram.NewKeyboard().AddRow(
+				b.Data("Back to Menu", "help_back"),
+			).Build(),
+		})
 		return nil
 	}
+}
+
+func HelpBackCallback(c *telegram.CallbackQuery) error {
+	b := telegram.Button
+
+	sortedMods := make([]Mod, len(Mods.Mod))
+	copy(sortedMods, Mods.Mod)
+	sort.Slice(sortedMods, func(i, j int) bool {
+		return sortedMods[i].Name < sortedMods[j].Name
+	})
+
+	var buttons []telegram.KeyboardButton
+	for _, v := range sortedMods {
+		buttons = append(buttons, b.Data(v.Name, "help_"+strings.ToLower(v.Name)))
+	}
+
+	helpText := `<b>Julia Bot</b>
+<i>A feature-rich Telegram bot built with gogram</i>
+
+Select a module below to view its commands and usage.
+
+<b>Available Modules:</b> ` + fmt.Sprintf("%d", len(Mods.Mod))
+
+	c.Edit(helpText, &telegram.SendOptions{
+		ReplyMarkup: telegram.NewKeyboard().NewColumn(3, buttons...).AddRow(
+			b.URL("Source Code", "https://github.com/amarnathcjd/gogram"),
+		).Build(),
+	})
+
+	return nil
 }

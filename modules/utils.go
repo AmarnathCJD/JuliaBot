@@ -169,18 +169,24 @@ func IsUserAdmin(bot *telegram.Client, userID int, chatID int, right string) boo
 	}
 
 	if member.Status == telegram.Admin || member.Status == telegram.Creator {
-		if right == "promote" {
-			if member.Rights.AddAdmins {
-				return true
-			}
-		} else if right == "ban" {
-			if member.Rights.BanUsers {
-				return true
-			}
-		} else if right == "delete" {
-			if member.Rights.DeleteMessages {
-				return true
-			}
+		if member.Status == telegram.Creator {
+			return true
+		}
+		switch right {
+		case "promote":
+			return member.Rights.AddAdmins
+		case "ban":
+			return member.Rights.BanUsers
+		case "delete":
+			return member.Rights.DeleteMessages
+		case "change_info", "info":
+			return member.Rights.ChangeInfo
+		case "pin":
+			return member.Rights.PinMessages
+		case "invite":
+			return member.Rights.InviteUsers
+		case "":
+			return true
 		}
 	}
 	return false

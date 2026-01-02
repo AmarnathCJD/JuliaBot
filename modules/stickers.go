@@ -156,11 +156,6 @@ func KangSticker(m *tg.NewMessage) error {
 		username = fmt.Sprintf("user%d", userID)
 	}
 
-	if err := db.InitStickerDB(); err != nil {
-		m.Reply("Database error: " + err.Error())
-		return nil
-	}
-
 	pack, err := db.GetActivePack(userID, packType)
 
 	var shortName, title string
@@ -171,7 +166,7 @@ func KangSticker(m *tg.NewMessage) error {
 		packs, _ := db.GetUserPacks(userID)
 		packNumber := len(packs[packType]) + 1
 
-		shortName = fmt.Sprintf("%s_%s_%d_by_%s", username, packType, packNumber, m.Client.Me().Username)
+		shortName = fmt.Sprintf("x%s_%s_%d_by_%s", username, packType, packNumber, m.Client.Me().Username)
 		title = fmt.Sprintf("%s's %s Stickers #%d", username, strings.Title(packType), packNumber)
 
 		pack = &db.PackInfo{

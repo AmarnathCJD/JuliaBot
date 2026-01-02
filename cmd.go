@@ -173,6 +173,49 @@ func initFunc(c *telegram.Client) {
 		c.On(telegram.OnNewMessage, modules.SedHandler)
 		c.On("command:audio", modules.ConvertToAudioHandle)
 
+		// Notes module
+		c.On("cmd:save", modules.SaveNoteHandler)
+		c.On("cmd:note", modules.GetNoteHandler)
+		c.On("cmd:notes", modules.ListNotesHandler)
+		c.On("cmd:listnotes", modules.ListNotesHandler)
+		c.On("cmd:clear", modules.ClearNoteHandler)
+		c.On("cmd:clearallnotes", modules.ClearAllNotesHandler)
+		c.On("callback:clearallnotes_", modules.ClearAllNotesCallback)
+		c.On("callback:cancelnotes_", modules.ClearAllNotesCallback)
+		c.On("message:^#", modules.NoteHashHandler)
+
+		// Blacklist module
+		c.On("cmd:addbl", modules.AddBlacklistHandler)
+		c.On("cmd:addblacklist", modules.AddBlacklistHandler)
+		c.On("cmd:rmbl", modules.RemoveBlacklistHandler)
+		c.On("cmd:rmblacklist", modules.RemoveBlacklistHandler)
+		c.On("cmd:listbl", modules.ListBlacklistHandler)
+		c.On("cmd:blacklist", modules.ListBlacklistHandler)
+		c.On("cmd:setblaction", modules.SetBlacklistActionHandler)
+		c.On("cmd:clearbl", modules.ClearBlacklistHandler)
+		c.On("callback:clearbl_", modules.ClearBlacklistCallback)
+		c.On("callback:cancelbl_", modules.ClearBlacklistCallback)
+		c.On(telegram.OnNewMessage, modules.BlacklistWatcher)
+
+		// Filters module
+		c.On("cmd:filter", modules.FilterHandler)
+		c.On("cmd:stop", modules.StopFilterHandler)
+		c.On("cmd:filters", modules.ListFiltersHandler)
+		c.On("cmd:stopall", modules.StopAllFiltersHandler)
+		c.On("callback:stopall_", modules.StopAllFiltersCallback)
+		c.On("callback:cancelfilters_", modules.StopAllFiltersCallback)
+		c.On(telegram.OnNewMessage, modules.FilterWatcher)
+
+		// Rules module
+		c.On("cmd:setrules", modules.SetRulesHandler)
+		c.On("cmd:rules", modules.GetRulesHandler)
+		c.On("cmd:clearrules", modules.ClearRulesHandler)
+		c.On("callback:rules_", modules.RulesButtonCallback)
+
+		c.On("callback:help_back", modules.HelpBackCallback)
+		c.On("cmd:tr", modules.TranslateHandler)
+		c.On("cmd:ud", modules.UDHandler)
+
 		modules.Mods.Init(c)
 	}
 }
