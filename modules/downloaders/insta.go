@@ -54,7 +54,7 @@ func convertMediaFormat(inputPath, inputExt string) (string, error) {
 	if strings.ToLower(inputExt) == ".heic" || strings.ToLower(inputExt) == ".heif" {
 		outputExt = ".jpg"
 		outputPath = strings.TrimSuffix(inputPath, inputExt) + outputExt
-	} else if strings.ToLower(inputExt) == ".mp2" || strings.ToLower(inputExt) == ".m2ts" || strings.ToLower(inputExt) == ".mts" {
+	} else if strings.ToLower(inputExt) == ".mp2" || strings.ToLower(inputExt) == ".m2ts" || strings.ToLower(inputExt) == ".f4v" {
 		outputExt = ".mp4"
 		outputPath = strings.TrimSuffix(inputPath, inputExt) + outputExt
 	}
@@ -238,7 +238,7 @@ func downloadMediaFiles(mediaURLs []string, isVideoList bool) ([]string, error) 
 			continue
 		}
 
-		if ext == ".mp2" || ext == ".m2ts" || ext == ".mts" || ext == ".heic" || ext == ".heif" {
+		if ext == ".mp2" || ext == ".m2ts" || ext == ".mts" || ext == ".heic" || ext == ".heif" || ext == ".f4v" {
 			convertedPath, err := convertMediaFormat(filePath, ext)
 			if err != nil {
 				fmt.Printf("Skipping file due to conversion failure: %s\n", filePath)
