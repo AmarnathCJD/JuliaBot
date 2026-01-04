@@ -545,10 +545,17 @@ func WelcomeHandler(p *tg.ParticipantUpdate) error {
 		return nil
 	}
 
-	chatID := p.ChannelID()
+	chatID := p.ChatID()
 	user := p.User
 
-	welcomeMsg, _ := db.GetWelcome(chatID)
+	if user == nil {
+		return nil
+	}
+
+	welcomeMsg, err := db.GetWelcome(chatID)
+	if err != nil {
+		return nil
+	}
 	captchaSettings, _ := db.GetCaptchaSettings(chatID)
 
 	if welcomeMsg != nil && welcomeMsg.DeletePrevious {
@@ -556,31 +563,39 @@ func WelcomeHandler(p *tg.ParticipantUpdate) error {
 			p.Client.DeleteMessages(chatID, []int32{int32(lastID)})
 		}
 	}
-
 	if captchaSettings != nil && captchaSettings.Enabled {
 		handleCaptcha(p.Client, chatID, user, captchaSettings)
 	}
 
-	if welcomeMsg == nil || (!welcomeMsg.Enabled && welcomeMsg.Content == "" && welcomeMsg.FileID == "") {
-		return nil
+	// Use default welcome if none configured
+	content := ""
+	fileID := ""
+	buttons := ""
+	autoDelete := 0
+	if welcomeMsg != nil {
+		content = welcomeMsg.Content
+		fileID = welcomeMsg.FileID
+		buttons = welcomeMsg.Buttons
+		autoDelete = welcomeMsg.AutoDeleteSec
 	}
 
-	if !welcomeMsg.Enabled {
-		return nil
+	// Default welcome message
+	if content == "" && fileID == "" {
+		content = "Hey {mention}, welcome to {chatname}!"
 	}
 
 	channel, _ := p.Client.GetChannel(chatID)
-	text := formatWelcomeText(welcomeMsg.Content, user, channel)
+	text := formatWelcomeText(content, user, channel)
 
 	var keyboard *tg.ReplyInlineMarkup
-	if welcomeMsg.Buttons != "" {
-		_, buttons := parseButtons(welcomeMsg.Buttons)
-		keyboard = buildKeyboard(buttons)
+	if buttons != "" {
+		_, btns := parseButtons(buttons)
+		keyboard = buildKeyboard(btns)
 	}
 
 	var sentMsg tg.NewMessage
-	if welcomeMsg.FileID != "" {
-		media, err := tg.ResolveBotFileID(welcomeMsg.FileID)
+	if fileID != "" {
+		media, err := tg.ResolveBotFileID(fileID)
 		if err == nil {
 			msg, err := p.Client.SendMedia(chatID, media, &tg.MediaOptions{Caption: text, ReplyMarkup: keyboard})
 			if err == nil {
@@ -601,9 +616,9 @@ func WelcomeHandler(p *tg.ParticipantUpdate) error {
 	if sentMsg.ID > 0 {
 		db.SetLastWelcomeID(chatID, int(sentMsg.ID))
 
-		if welcomeMsg.AutoDeleteSec > 0 {
+		if autoDelete > 0 {
 			go func() {
-				time.Sleep(time.Duration(welcomeMsg.AutoDeleteSec) * time.Second)
+				time.Sleep(time.Duration(autoDelete) * time.Second)
 				p.Client.DeleteMessages(chatID, []int32{int32(sentMsg.ID)})
 			}()
 		}
@@ -617,23 +632,33 @@ func GoodbyeHandler(p *tg.ParticipantUpdate) error {
 		return nil
 	}
 
-	chatID := p.ChannelID()
+	chatID := p.ChatID()
 	user := p.User
 
-	goodbyeMsg, _ := db.GetGoodbye(chatID)
-	if goodbyeMsg == nil || (!goodbyeMsg.Enabled && goodbyeMsg.Content == "" && goodbyeMsg.FileID == "") {
+	if user == nil {
 		return nil
 	}
 
-	if !goodbyeMsg.Enabled {
-		return nil
+	goodbyeMsg, _ := db.GetGoodbye(chatID)
+
+	// Use default goodbye if none configured
+	content := ""
+	fileID := ""
+	if goodbyeMsg != nil {
+		content = goodbyeMsg.Content
+		fileID = goodbyeMsg.FileID
+	}
+
+	// Default goodbye message
+	if content == "" && fileID == "" {
+		content = "{first} has left the chat."
 	}
 
 	channel, _ := p.Client.GetChannel(chatID)
-	text := formatWelcomeText(goodbyeMsg.Content, user, channel)
+	text := formatWelcomeText(content, user, channel)
 
-	if goodbyeMsg.FileID != "" {
-		media, err := tg.ResolveBotFileID(goodbyeMsg.FileID)
+	if fileID != "" {
+		media, err := tg.ResolveBotFileID(fileID)
 		if err == nil {
 			p.Client.SendMedia(chatID, media, &tg.MediaOptions{Caption: text})
 		}
