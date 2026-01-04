@@ -51,7 +51,6 @@ func main() {
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 
 	client.Logger.Info("Bot is running as @%s", client.Me().Username)
-
 	go func() {
 		log.Println("Pprof server starting on :9009")
 		if err := http.ListenAndServe(":9009", nil); err != nil {

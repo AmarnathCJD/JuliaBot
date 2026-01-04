@@ -11,14 +11,18 @@ type WelcomeMessage struct {
 	Content        string `json:"content"`
 	MediaType      string `json:"media_type,omitempty"`
 	FileID         string `json:"file_id,omitempty"`
+	Buttons        string `json:"buttons,omitempty"`
 	DeletePrevious bool   `json:"delete_previous"`
 	AutoDeleteSec  int    `json:"auto_delete_sec"`
+	Enabled        bool   `json:"enabled"`
 }
 
 type CaptchaSettings struct {
-	Enabled   bool   `json:"enabled"`
-	Mode      string `json:"mode"` // "button", "math"
-	TimeLimit int    `json:"time_limit"`
+	Enabled      bool   `json:"enabled"`
+	Mode         string `json:"mode"` // "button", "math", "text"
+	TimeLimit    int    `json:"time_limit"`
+	MuteNewUsers bool   `json:"mute_new_users"`
+	KickTimeout  bool   `json:"kick_timeout"`
 }
 
 func ensureWelcomeBuckets(db *bolt.DB) error {

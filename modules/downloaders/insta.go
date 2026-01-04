@@ -45,86 +45,162 @@ func callSnapServer(downloadURL, accessToken string) (*SnapResponse, error) {
 	return &result, nil
 }
 
-// convertMediaFormat converts unsupported media formats to supported ones using ffmpeg
 func convertMediaFormat(inputPath, inputExt string) (string, error) {
-	outputExt := ".jpg"
-	outputPath := strings.TrimSuffix(inputPath, inputExt) + outputExt
+	ext := strings.ToLower(inputExt)
+	outputPath := strings.TrimSuffix(inputPath, inputExt)
 
-	// Determine output format based on input
-	if strings.ToLower(inputExt) == ".heic" || strings.ToLower(inputExt) == ".heif" {
-		outputExt = ".jpg"
-		outputPath = strings.TrimSuffix(inputPath, inputExt) + outputExt
-	} else if strings.ToLower(inputExt) == ".mp2" || strings.ToLower(inputExt) == ".m2ts" || strings.ToLower(inputExt) == ".f4v" {
-		outputExt = ".mp4"
-		outputPath = strings.TrimSuffix(inputPath, inputExt) + outputExt
+	var cmd *exec.Cmd
+	switch ext {
+	case ".heic", ".heif":
+		outputPath += ".jpg"
+		cmd = exec.Command("ffmpeg",
+			"-i", inputPath,
+			"-y", outputPath,
+		)
+
+	case ".f4v", ".m4v", ".flv", ".wmv", ".avi", ".mkv", ".webm", ".mov", ".m2ts", ".mts", ".mp2":
+		outputPath += ".mp4"
+		cmd = exec.Command("ffmpeg",
+			"-i", inputPath,
+			"-c:v", "libx264",
+			"-preset", "fast",
+			"-crf", "23",
+			"-c:a", "aac",
+			"-b:a", "128k",
+			"-movflags", "+faststart",
+			"-pix_fmt", "yuv420p",
+			"-y", outputPath,
+		)
+
+	default:
+		outputPath += ".mp4"
+		cmd = exec.Command("ffmpeg",
+			"-i", inputPath,
+			"-y", outputPath,
+		)
 	}
 
-	// Run ffmpeg conversion
-	cmd := exec.Command("ffmpeg", "-i", inputPath, "-y", outputPath)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
 
 	err := cmd.Run()
 	if err != nil {
-		fmt.Printf("FFmpeg conversion failed for %s: %v\n", inputPath, err)
+		fmt.Printf("FFmpeg conversion failed for %s: %v\nFFmpeg stderr: %s\n", inputPath, err, stderr.String())
+
+		if ext == ".f4v" || ext == ".m4v" || ext == ".mov" {
+			fallbackPath := strings.TrimSuffix(inputPath, inputExt) + "_fallback.mp4"
+			fallbackCmd := exec.Command("ffmpeg",
+				"-i", inputPath,
+				"-c:v", "copy",
+				"-c:a", "aac",
+				"-movflags", "+faststart",
+				"-y", fallbackPath,
+			)
+
+			var fallbackStderr bytes.Buffer
+			fallbackCmd.Stderr = &fallbackStderr
+			fallbackCmd.Stdout = io.Discard
+
+			fallbackErr := fallbackCmd.Run()
+			if fallbackErr == nil {
+				os.Remove(inputPath)
+				return fallbackPath, nil
+			}
+
+			recoveryPath := strings.TrimSuffix(inputPath, inputExt) + "_recovery.mp4"
+			recoveryCmd := exec.Command("ffmpeg",
+				"-err_detect", "ignore_err",
+				"-i", inputPath,
+				"-c:v", "libx264",
+				"-preset", "ultrafast",
+				"-crf", "28",
+				"-c:a", "aac",
+				"-b:a", "96k",
+				"-movflags", "+faststart",
+				"-pix_fmt", "yuv420p",
+				"-y", recoveryPath,
+			)
+
+			var recoveryStderr bytes.Buffer
+			recoveryCmd.Stderr = &recoveryStderr
+			recoveryCmd.Stdout = io.Discard
+
+			recoveryErr := recoveryCmd.Run()
+			if recoveryErr == nil {
+				os.Remove(inputPath)
+				return recoveryPath, nil
+			}
+			fmt.Printf("FFmpeg fallback/recovery also failed for %s: %v\nStderr: %s\n", inputPath, recoveryErr, recoveryStderr.String())
+		}
 		return "", err
 	}
 
-	// Remove input file after successful conversion
 	os.Remove(inputPath)
-	fmt.Printf("Converted %s to %s\n", inputPath, outputPath)
 
 	return outputPath, nil
 }
 
-// detectMediaByMagicBytes detects media type by checking file magic bytes
 func detectMediaByMagicBytes(data []byte) string {
 	if len(data) < 12 {
 		return ""
 	}
 
-	// Check for HEIF/HEIC (ftyp at offset 4)
-	if len(data) >= 12 {
-		if string(data[4:8]) == "ftyp" {
-			// Check the brand after ftyp
-			brand := string(data[8:12])
-			if strings.Contains(brand, "heic") || strings.Contains(brand, "heix") ||
-				strings.Contains(brand, "hevc") || strings.Contains(brand, "hevx") ||
-				strings.Contains(brand, "mif1") {
-				return ".heif"
-			}
+	if len(data) >= 12 && string(data[4:8]) == "ftyp" {
+		brand := strings.ToLower(string(data[8:12]))
+		if strings.Contains(brand, "heic") || strings.Contains(brand, "heix") ||
+			strings.Contains(brand, "hevc") || strings.Contains(brand, "hevx") ||
+			strings.Contains(brand, "mif1") {
+			return ".heif"
 		}
+		if strings.Contains(brand, "f4v") || strings.Contains(brand, "f4p") ||
+			strings.Contains(brand, "f4a") || strings.Contains(brand, "f4b") {
+			return ".f4v"
+		}
+		if strings.Contains(brand, "m4v") || strings.Contains(brand, "m4vh") ||
+			strings.Contains(brand, "m4vp") {
+			return ".m4v"
+		}
+		if strings.Contains(brand, "flv") {
+			return ".flv"
+		}
+		if strings.Contains(brand, "qt") || brand == "mqt " {
+			return ".mov"
+		}
+		return ".mp4"
 	}
 
-	// Check for JPEG (FFD8FF)
 	if len(data) >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
 		return ".jpg"
 	}
 
-	// Check for PNG (89504E47)
 	if len(data) >= 4 && string(data[0:4]) == "\x89PNG" {
 		return ".png"
 	}
 
-	// Check for GIF (474946)
 	if len(data) >= 3 && string(data[0:3]) == "GIF" {
 		return ".gif"
 	}
 
-	// Check for MP4 (ftyp at offset 4)
-	if len(data) >= 12 && string(data[4:8]) == "ftyp" {
-		return ".mp4"
-	}
-
-	// Check for WebP (RIFF...WEBP)
 	if len(data) >= 12 && string(data[0:4]) == "RIFF" && string(data[8:12]) == "WEBP" {
 		return ".webp"
+	}
+
+	if len(data) >= 4 && string(data[0:3]) == "FLV" && data[3] == 0x01 {
+		return ".flv"
+	}
+
+	if len(data) >= 12 && string(data[0:4]) == "RIFF" && string(data[8:11]) == "AVI" {
+		return ".avi"
+	}
+
+	if len(data) >= 4 && data[0] == 0x47 {
+		return ".mts"
 	}
 
 	return ""
 }
 
-// checkContentType checks if URL is actually an image by HEAD request
 func checkContentType(url string) (bool, string) {
 	resp, err := http.Head(url)
 	if err != nil {
@@ -150,7 +226,6 @@ func checkContentType(url string) (bool, string) {
 	return false, ""
 }
 
-// downloadMediaFiles downloads URLs and returns local file paths
 func downloadMediaFiles(mediaURLs []string, isVideoList bool) ([]string, error) {
 	var filePaths []string
 	var mu sync.Mutex
@@ -238,7 +313,17 @@ func downloadMediaFiles(mediaURLs []string, isVideoList bool) ([]string, error) 
 			continue
 		}
 
-		if ext == ".mp2" || ext == ".m2ts" || ext == ".mts" || ext == ".heic" || ext == ".heif" || ext == ".f4v" {
+		needsConversion := func(e string) bool {
+			convertFormats := []string{".mp2", ".m2ts", ".mts", ".heic", ".heif", ".f4v", ".m4v", ".flv", ".wmv", ".avi", ".mkv", ".webm", ".mov"}
+			for _, f := range convertFormats {
+				if e == f {
+					return true
+				}
+			}
+			return false
+		}
+
+		if needsConversion(ext) {
 			convertedPath, err := convertMediaFormat(filePath, ext)
 			if err != nil {
 				fmt.Printf("Skipping file due to conversion failure: %s\n", filePath)

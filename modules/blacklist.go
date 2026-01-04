@@ -21,40 +21,33 @@ func AddBlacklistHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	args := m.Args()
-	if args == "" {
-		m.Reply("Usage: /addbl <word/phrase>\n\nYou can add multiple words separated by new lines")
+	word := strings.TrimSpace(strings.ToLower(m.Args()))
+	if word == "" {
+		m.Reply("Usage: /addbl <word/phrase>")
 		return nil
 	}
 
-	words := strings.Split(args, "\n")
-	if len(words) == 1 {
-		words = strings.Split(args, ",")
-	}
-
-	added := 0
-	for _, word := range words {
-		word = strings.TrimSpace(strings.ToLower(word))
-		if word == "" {
-			continue
-		}
-
-		entry := &db.BlacklistEntry{
-			Word:    word,
-			AddedBy: m.SenderID(),
-		}
-
-		if err := db.AddBlacklist(m.ChatID(), entry); err == nil {
-			added++
-		}
-	}
-
-	if added == 0 {
-		m.Reply("No words were added to the blacklist")
+	if len(word) < 2 {
+		m.Reply("Blacklisted word must be at least 2 characters")
 		return nil
 	}
 
-	m.Reply(fmt.Sprintf("Added <b>%d</b> word(s) to the blacklist", added))
+	if db.IsBlacklisted(m.ChatID(), word) {
+		m.Reply(fmt.Sprintf("<code>%s</code> is already in the blacklist", word))
+		return nil
+	}
+
+	entry := &db.BlacklistEntry{
+		Word:    word,
+		AddedBy: m.SenderID(),
+	}
+
+	if err := db.AddBlacklist(m.ChatID(), entry); err != nil {
+		m.Reply("Failed to add to blacklist")
+		return nil
+	}
+
+	m.Reply(fmt.Sprintf("Added <code>%s</code> to the blacklist", word))
 	return nil
 }
 

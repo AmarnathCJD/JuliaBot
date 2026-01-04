@@ -79,7 +79,8 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:upd", modules.UpdateSourceCodeHandle, telegram.Custom(FilterOwnerNoReply))
 		c.On("cmd:gban", modules.Gban, telegram.Custom(FilterOwner))
 		c.On("cmd:ungban", modules.Ungban, telegram.Custom(FilterOwner))
-		c.On("cmd:greet", modules.ModifyGreetStatus)
+		c.On("cmd:greet", modules.WelcomeToggleHandler)
+		c.On("cmd:welcome", modules.WelcomeToggleHandler)
 		c.On("cmd:start", modules.StartHandle)
 		c.On("cmd:help", modules.HelpHandle)
 		c.On("cmd:sys", modules.GatherSystemInfo)
@@ -140,7 +141,8 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:ytc", downloaders.YTCustomHandler)
 		c.On("callback:ytdl_(.*)", downloaders.YTCallbackHandler)
 
-		c.On(telegram.OnParticipant, modules.UserJoinHandle)
+		c.On(telegram.OnParticipant, modules.WelcomeHandler)
+		c.On(telegram.OnParticipant, modules.GoodbyeHandler)
 		c.OnCommand("gif", modules.GifToSticker)
 		c.OnCommand("kang", modules.KangSticker)
 		c.OnCommand("rmkang", modules.RemoveKangedSticker)
@@ -211,6 +213,36 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:rules", modules.GetRulesHandler)
 		c.On("cmd:clearrules", modules.ClearRulesHandler)
 		c.On("callback:rules_", modules.RulesButtonCallback)
+
+		// Warns module
+		c.On("cmd:warn", modules.WarnUserHandler)
+		c.On("cmd:warns", modules.ListWarnsHandler)
+		c.On("cmd:rmwarn", modules.RemoveWarnHandler)
+		c.On("cmd:resetwarns", modules.ResetWarnsHandler)
+		c.On("cmd:setwarnlimit", modules.SetWarnLimitHandler)
+		c.On("cmd:setwarnaction", modules.SetWarnActionHandler)
+		c.On("cmd:warnsettings", modules.WarnSettingsHandler)
+		c.On("callback:rmwarn_", modules.RemoveWarnCallback)
+
+		// Welcome/Goodbye module
+		c.On("cmd:setwelcome", modules.SetWelcomeHandler)
+		c.On("cmd:setgoodbye", modules.SetGoodbyeHandler)
+		c.On("cmd:goodbye", modules.GoodbyeToggleHandler)
+		c.On("cmd:clearwelcome", modules.ClearWelcomeHandler)
+		c.On("cmd:cleargoodbye", modules.ClearGoodbyeHandler)
+		c.On("cmd:cleanwelcome", modules.CleanServiceHandler)
+		c.On("cmd:wautodelete", modules.WelcomeAutoDeleteHandler)
+		c.On("cmd:welcomesettings", modules.WelcomeSettingsHandler)
+		c.On("cmd:greetings", modules.WelcomeSettingsHandler)
+
+		// Captcha
+		c.On("cmd:captcha", modules.SetCaptchaHandler)
+		c.On("cmd:setcaptchamode", modules.SetCaptchaModeHandler)
+		c.On("cmd:setcaptchatime", modules.SetCaptchaTimeHandler)
+		c.On("cmd:captchamute", modules.CaptchaMuteHandler)
+		c.On("cmd:captchakick", modules.CaptchaKickHandler)
+		c.On("callback:captcha_verify_", modules.CaptchaVerifyCallback)
+		c.On(telegram.OnNewMessage, modules.CaptchaMathHandler)
 
 		c.On("callback:help_back", modules.HelpBackCallback)
 		c.On("cmd:tr", modules.TranslateHandler)
