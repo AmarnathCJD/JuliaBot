@@ -17,14 +17,6 @@ type WelcomeMessage struct {
 	Enabled        bool   `json:"enabled"`
 }
 
-type CaptchaSettings struct {
-	Enabled      bool   `json:"enabled"`
-	Mode         string `json:"mode"` // "button", "math", "text"
-	TimeLimit    int    `json:"time_limit"`
-	MuteNewUsers bool   `json:"mute_new_users"`
-	KickTimeout  bool   `json:"kick_timeout"`
-}
-
 func ensureWelcomeBuckets(db *bolt.DB) error {
 	return db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte("welcome"))
@@ -128,54 +120,6 @@ func GetGoodbye(chatID int64) (*WelcomeMessage, error) {
 		return json.Unmarshal(data, msg)
 	})
 	return msg, err
-}
-
-func SetCaptchaSettings(chatID int64, settings *CaptchaSettings) error {
-	db, err := GetDB()
-	if err != nil {
-		return err
-	}
-	if err := ensureWelcomeBuckets(db); err != nil {
-		return err
-	}
-
-	return db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("welcome"))
-		cb, err := b.CreateBucketIfNotExists([]byte(strconv.FormatInt(chatID, 10)))
-		if err != nil {
-			return err
-		}
-		data, err := json.Marshal(settings)
-		if err != nil {
-			return err
-		}
-		return cb.Put([]byte("captcha"), data)
-	})
-}
-
-func GetCaptchaSettings(chatID int64) (*CaptchaSettings, error) {
-	db, err := GetDB()
-	if err != nil {
-		return nil, err
-	}
-	if err := ensureWelcomeBuckets(db); err != nil {
-		return nil, err
-	}
-
-	settings := &CaptchaSettings{}
-	err = db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("welcome"))
-		cb := b.Bucket([]byte(strconv.FormatInt(chatID, 10)))
-		if cb == nil {
-			return nil
-		}
-		data := cb.Get([]byte("captcha"))
-		if data == nil {
-			return nil
-		}
-		return json.Unmarshal(data, settings)
-	})
-	return settings, err
 }
 
 func SetLastWelcomeID(chatID int64, msgID int) error {

@@ -3,29 +3,13 @@ package modules
 import (
 	"fmt"
 	"main/modules/db"
-	"math/rand"
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
-
-var (
-	pendingCaptcha   = make(map[string]*captchaSession)
-	captchaMutex     sync.RWMutex
-	mathCaptchaCache = make(map[string]int)
-)
-
-type captchaSession struct {
-	ChatID    int64
-	UserID    int64
-	MessageID int
-	ExpiresAt time.Time
-	Answer    string
-}
 
 func formatWelcomeText(text string, user *tg.UserObj, chat *tg.Channel) string {
 	if user == nil {
@@ -353,193 +337,6 @@ func ClearGoodbyeHandler(m *tg.NewMessage) error {
 	return nil
 }
 
-func SetCaptchaHandler(m *tg.NewMessage) error {
-	if m.IsPrivate() {
-		m.Reply("Captcha can only be configured in groups")
-		return nil
-	}
-
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
-		m.Reply("You need Ban Users permission to configure captcha")
-		return nil
-	}
-
-	args := strings.ToLower(strings.TrimSpace(m.Args()))
-	settings, _ := db.GetCaptchaSettings(m.ChatID())
-	if settings == nil {
-		settings = &db.CaptchaSettings{Mode: "button", TimeLimit: 120}
-	}
-
-	if args == "" {
-		status := "disabled"
-		if settings.Enabled {
-			status = "enabled"
-		}
-		m.Reply(fmt.Sprintf(`<b>Captcha Settings</b>
-
-Status: <b>%s</b>
-Mode: <b>%s</b>
-Time Limit: <b>%d seconds</b>
-Mute New Users: <b>%v</b>
-Kick on Timeout: <b>%v</b>
-
-<b>Commands:</b>
- /captcha on/off - Toggle captcha
- /setcaptchamode <mode> - Set mode (button/math)
- /setcaptchatime <seconds> - Set time limit
- /captchamute on/off - Mute until verified
- /captchakick on/off - Kick on timeout`, status, settings.Mode, settings.TimeLimit, settings.MuteNewUsers, settings.KickTimeout))
-		return nil
-	}
-
-	switch args {
-	case "on", "enable", "yes":
-		settings.Enabled = true
-		db.SetCaptchaSettings(m.ChatID(), settings)
-		m.Reply("Captcha enabled")
-	case "off", "disable", "no":
-		settings.Enabled = false
-		db.SetCaptchaSettings(m.ChatID(), settings)
-		m.Reply("Captcha disabled")
-	default:
-		m.Reply("Usage: /captcha on/off")
-	}
-	return nil
-}
-
-func SetCaptchaModeHandler(m *tg.NewMessage) error {
-	if m.IsPrivate() {
-		m.Reply("Captcha can only be configured in groups")
-		return nil
-	}
-
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
-		m.Reply("You need Ban Users permission to configure captcha")
-		return nil
-	}
-
-	args := strings.ToLower(strings.TrimSpace(m.Args()))
-	settings, _ := db.GetCaptchaSettings(m.ChatID())
-	if settings == nil {
-		settings = &db.CaptchaSettings{Mode: "button", TimeLimit: 120}
-	}
-
-	switch args {
-	case "button":
-		settings.Mode = "button"
-		db.SetCaptchaSettings(m.ChatID(), settings)
-		m.Reply("Captcha mode set to <b>button</b> - User must click a button to verify")
-	case "math":
-		settings.Mode = "math"
-		db.SetCaptchaSettings(m.ChatID(), settings)
-		m.Reply("Captcha mode set to <b>math</b> - User must solve a simple math problem")
-	default:
-		m.Reply("Available modes:\n - <code>button</code> - Click to verify\n - <code>math</code> - Solve a math problem")
-	}
-	return nil
-}
-
-func SetCaptchaTimeHandler(m *tg.NewMessage) error {
-	if m.IsPrivate() {
-		m.Reply("Captcha can only be configured in groups")
-		return nil
-	}
-
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
-		m.Reply("You need Ban Users permission to configure captcha")
-		return nil
-	}
-
-	args := strings.TrimSpace(m.Args())
-	seconds, err := strconv.Atoi(args)
-	if err != nil || seconds < 30 || seconds > 600 {
-		m.Reply("Time limit must be between 30 and 600 seconds")
-		return nil
-	}
-
-	settings, _ := db.GetCaptchaSettings(m.ChatID())
-	if settings == nil {
-		settings = &db.CaptchaSettings{Mode: "button", TimeLimit: 120}
-	}
-
-	settings.TimeLimit = seconds
-	db.SetCaptchaSettings(m.ChatID(), settings)
-	m.Reply(fmt.Sprintf("Captcha time limit set to <b>%d seconds</b>", seconds))
-	return nil
-}
-
-func CaptchaMuteHandler(m *tg.NewMessage) error {
-	if m.IsPrivate() {
-		m.Reply("Captcha can only be configured in groups")
-		return nil
-	}
-
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
-		m.Reply("You need Ban Users permission to configure captcha")
-		return nil
-	}
-
-	args := strings.ToLower(strings.TrimSpace(m.Args()))
-	settings, _ := db.GetCaptchaSettings(m.ChatID())
-	if settings == nil {
-		settings = &db.CaptchaSettings{Mode: "button", TimeLimit: 120}
-	}
-
-	switch args {
-	case "on", "yes", "enable":
-		settings.MuteNewUsers = true
-		db.SetCaptchaSettings(m.ChatID(), settings)
-		m.Reply("New users will be muted until they pass captcha")
-	case "off", "no", "disable":
-		settings.MuteNewUsers = false
-		db.SetCaptchaSettings(m.ChatID(), settings)
-		m.Reply("New users will not be muted")
-	default:
-		status := "disabled"
-		if settings.MuteNewUsers {
-			status = "enabled"
-		}
-		m.Reply(fmt.Sprintf("Mute new users: <b>%s</b>\n\nUsage: /captchamute on/off", status))
-	}
-	return nil
-}
-
-func CaptchaKickHandler(m *tg.NewMessage) error {
-	if m.IsPrivate() {
-		m.Reply("Captcha can only be configured in groups")
-		return nil
-	}
-
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
-		m.Reply("You need Ban Users permission to configure captcha")
-		return nil
-	}
-
-	args := strings.ToLower(strings.TrimSpace(m.Args()))
-	settings, _ := db.GetCaptchaSettings(m.ChatID())
-	if settings == nil {
-		settings = &db.CaptchaSettings{Mode: "button", TimeLimit: 120}
-	}
-
-	switch args {
-	case "on", "yes", "enable":
-		settings.KickTimeout = true
-		db.SetCaptchaSettings(m.ChatID(), settings)
-		m.Reply("Users who fail captcha will be kicked")
-	case "off", "no", "disable":
-		settings.KickTimeout = false
-		db.SetCaptchaSettings(m.ChatID(), settings)
-		m.Reply("Users who fail captcha will not be kicked")
-	default:
-		status := "disabled"
-		if settings.KickTimeout {
-			status = "enabled"
-		}
-		m.Reply(fmt.Sprintf("Kick on timeout: <b>%s</b>\n\nUsage: /captchakick on/off", status))
-	}
-	return nil
-}
-
 func WelcomeHandler(p *tg.ParticipantUpdate) error {
 	if !p.IsJoined() && !p.IsAdded() {
 		return nil
@@ -556,15 +353,11 @@ func WelcomeHandler(p *tg.ParticipantUpdate) error {
 	if err != nil {
 		return nil
 	}
-	captchaSettings, _ := db.GetCaptchaSettings(chatID)
 
 	if welcomeMsg != nil && welcomeMsg.DeletePrevious {
 		if lastID, _ := db.GetLastWelcomeID(chatID); lastID > 0 {
 			p.Client.DeleteMessages(chatID, []int32{int32(lastID)})
 		}
-	}
-	if captchaSettings != nil && captchaSettings.Enabled {
-		handleCaptcha(p.Client, chatID, user, captchaSettings)
 	}
 
 	// Use default welcome if none configured
@@ -669,167 +462,6 @@ func GoodbyeHandler(p *tg.ParticipantUpdate) error {
 	return nil
 }
 
-func handleCaptcha(client *tg.Client, chatID int64, user *tg.UserObj, settings *db.CaptchaSettings) {
-	if settings.MuteNewUsers {
-		peer, _ := client.ResolvePeer(user.ID)
-		client.EditBanned(chatID, peer, &tg.BannedOptions{Mute: true})
-	}
-
-	sessionKey := fmt.Sprintf("%d_%d", chatID, user.ID)
-
-	captchaMutex.Lock()
-	if _, exists := pendingCaptcha[sessionKey]; exists {
-		captchaMutex.Unlock()
-		return
-	}
-	captchaMutex.Unlock()
-
-	var msg *tg.NewMessage
-	var answer string
-
-	switch settings.Mode {
-	case "math":
-		a := rand.Intn(10) + 1
-		b := rand.Intn(10) + 1
-		answer = strconv.Itoa(a + b)
-		mathCaptchaCache[sessionKey] = a + b
-
-		text := fmt.Sprintf("<b>%s</b>, please solve this to verify you are human:\n\nWhat is <b>%d + %d</b>?\n\nYou have %d seconds.",
-			user.FirstName, a, b, settings.TimeLimit)
-
-		msg, _ = client.SendMessage(chatID, text)
-
-	default:
-		b := tg.Button
-		keyboard := tg.NewKeyboard().AddRow(
-			b.Data("I am human", fmt.Sprintf("captcha_verify_%d", user.ID)),
-		).Build()
-
-		text := fmt.Sprintf("<b>%s</b>, please click the button below to verify you are not a bot.\n\nYou have %d seconds.",
-			user.FirstName, settings.TimeLimit)
-
-		msg, _ = client.SendMessage(chatID, text, &tg.SendOptions{ReplyMarkup: keyboard})
-		answer = "button"
-	}
-
-	if msg != nil {
-		session := &captchaSession{
-			ChatID:    chatID,
-			UserID:    user.ID,
-			MessageID: int(msg.ID),
-			ExpiresAt: time.Now().Add(time.Duration(settings.TimeLimit) * time.Second),
-			Answer:    answer,
-		}
-
-		captchaMutex.Lock()
-		pendingCaptcha[sessionKey] = session
-		captchaMutex.Unlock()
-
-		go func() {
-			time.Sleep(time.Duration(settings.TimeLimit) * time.Second)
-			captchaMutex.Lock()
-			sess, exists := pendingCaptcha[sessionKey]
-			if exists {
-				delete(pendingCaptcha, sessionKey)
-				delete(mathCaptchaCache, sessionKey)
-			}
-			captchaMutex.Unlock()
-
-			if exists && sess.MessageID > 0 {
-				client.DeleteMessages(chatID, []int32{int32(sess.MessageID)})
-
-				if settings.KickTimeout {
-					peer, _ := client.ResolvePeer(user.ID)
-					client.KickParticipant(chatID, peer)
-					client.SendMessage(chatID, fmt.Sprintf("<b>%s</b> was removed for not completing verification", user.FirstName))
-				}
-			}
-		}()
-	}
-}
-
-func CaptchaVerifyCallback(c *tg.CallbackQuery) error {
-	data := c.DataString()
-
-	if !strings.HasPrefix(data, "captcha_verify_") {
-		return nil
-	}
-
-	userIDStr := strings.TrimPrefix(data, "captcha_verify_")
-	targetUserID, _ := strconv.ParseInt(userIDStr, 10, 64)
-
-	if c.SenderID != targetUserID {
-		c.Answer("This verification is not for you", &tg.CallbackOptions{Alert: true})
-		return nil
-	}
-
-	sessionKey := fmt.Sprintf("%d_%d", c.ChatID, c.SenderID)
-
-	captchaMutex.Lock()
-	_, exists := pendingCaptcha[sessionKey]
-	if exists {
-		delete(pendingCaptcha, sessionKey)
-	}
-	captchaMutex.Unlock()
-
-	if !exists {
-		c.Answer("Verification expired or already completed", &tg.CallbackOptions{Alert: true})
-		return nil
-	}
-
-	captchaSettings, _ := db.GetCaptchaSettings(c.ChatID)
-	if captchaSettings != nil && captchaSettings.MuteNewUsers {
-		peer, _ := c.Client.ResolvePeer(c.SenderID)
-		c.Client.EditBanned(c.ChatID, peer, &tg.BannedOptions{Unmute: true})
-	}
-
-	c.Delete()
-	c.Answer("Verification successful. Welcome!", &tg.CallbackOptions{Alert: true})
-
-	return nil
-}
-
-func CaptchaMathHandler(m *tg.NewMessage) error {
-	if m.IsPrivate() {
-		return nil
-	}
-
-	sessionKey := fmt.Sprintf("%d_%d", m.ChatID(), m.SenderID())
-
-	captchaMutex.RLock()
-	session, exists := pendingCaptcha[sessionKey]
-	expectedAnswer, hasMath := mathCaptchaCache[sessionKey]
-	captchaMutex.RUnlock()
-
-	if !exists || !hasMath {
-		return nil
-	}
-
-	answer, err := strconv.Atoi(strings.TrimSpace(m.Text()))
-	if err != nil {
-		return nil
-	}
-
-	if answer == expectedAnswer {
-		captchaMutex.Lock()
-		delete(pendingCaptcha, sessionKey)
-		delete(mathCaptchaCache, sessionKey)
-		captchaMutex.Unlock()
-
-		m.Client.DeleteMessages(m.ChatID(), []int32{int32(session.MessageID)})
-
-		captchaSettings, _ := db.GetCaptchaSettings(m.ChatID())
-		if captchaSettings != nil && captchaSettings.MuteNewUsers {
-			peer, _ := m.Client.ResolvePeer(m.SenderID())
-			m.Client.EditBanned(m.ChatID(), peer, &tg.BannedOptions{Unmute: true})
-		}
-
-		m.Reply("Correct! Welcome to the group.")
-	}
-
-	return nil
-}
-
 func WelcomeSettingsHandler(m *tg.NewMessage) error {
 	if m.IsPrivate() {
 		m.Reply("Welcome settings can only be viewed in groups")
@@ -838,7 +470,6 @@ func WelcomeSettingsHandler(m *tg.NewMessage) error {
 
 	welcomeMsg, _ := db.GetWelcome(m.ChatID())
 	goodbyeMsg, _ := db.GetGoodbye(m.ChatID())
-	captchaSettings, _ := db.GetCaptchaSettings(m.ChatID())
 
 	welcomeStatus := "not set"
 	if welcomeMsg != nil && (welcomeMsg.Content != "" || welcomeMsg.FileID != "") {
@@ -858,28 +489,10 @@ func WelcomeSettingsHandler(m *tg.NewMessage) error {
 		}
 	}
 
-	captchaStatus := "disabled"
-	captchaMode := "button"
-	captchaTime := 120
-	if captchaSettings != nil {
-		if captchaSettings.Enabled {
-			captchaStatus = "enabled"
-		}
-		if captchaSettings.Mode != "" {
-			captchaMode = captchaSettings.Mode
-		}
-		if captchaSettings.TimeLimit > 0 {
-			captchaTime = captchaSettings.TimeLimit
-		}
-	}
-
 	m.Reply(fmt.Sprintf(`<b>Greetings Settings</b>
 
 <b>Welcome:</b> %s
 <b>Goodbye:</b> %s
-<b>Captcha:</b> %s
- - Mode: %s
- - Time: %ds
 
 <b>Commands:</b>
  /setwelcome - Set welcome message
@@ -887,8 +500,7 @@ func WelcomeSettingsHandler(m *tg.NewMessage) error {
  /welcome on/off - Toggle welcome
  /goodbye on/off - Toggle goodbye
  /clearwelcome - Clear welcome
- /cleargoodbye - Clear goodbye
- /captcha - Captcha settings`, welcomeStatus, goodbyeStatus, captchaStatus, captchaMode, captchaTime))
+ /cleargoodbye - Clear goodbye`, welcomeStatus, goodbyeStatus))
 	return nil
 }
 
@@ -1000,12 +612,7 @@ Welcome new users and say goodbye to leaving users.
  - /goodbye on/off - Toggle goodbye messages
  - /cleargoodbye - Clear goodbye message
 
-<b>Captcha Commands:</b>
- - /captcha on/off - Toggle captcha
- - /setcaptchamode <mode> - Set mode (button/math)
- - /setcaptchatime <sec> - Set time limit
- - /captchamute on/off - Mute until verified
- - /captchakick on/off - Kick on timeout
+
 
 <b>Variables:</b>
  {first}, {last}, {fullname}, {username}

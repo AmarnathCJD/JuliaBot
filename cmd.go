@@ -110,9 +110,6 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:finfo", modules.FileInfoHandle)
 		c.On("cmd:setrtmp", modules.SetRTMPHandler)
 		c.On("cmd:stream", modules.StreamHandler)
-		c.On("cmd:streams", modules.ListStreamsHandler)
-		c.On("cmd:stopstream", modules.StopStreamHandler)
-		c.On("callback:stream_", modules.StreamCallbackHandler)
 
 		// c.On(telegram.OnNewMessage, modules.HandleAIMessage) // Old AI disabled
 		c.On(telegram.OnNewMessage, modules.HandleAskCommand)
@@ -235,18 +232,13 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:welcomesettings", modules.WelcomeSettingsHandler)
 		c.On("cmd:greetings", modules.WelcomeSettingsHandler)
 
-		// Captcha
-		c.On("cmd:captcha", modules.SetCaptchaHandler)
-		c.On("cmd:setcaptchamode", modules.SetCaptchaModeHandler)
-		c.On("cmd:setcaptchatime", modules.SetCaptchaTimeHandler)
-		c.On("cmd:captchamute", modules.CaptchaMuteHandler)
-		c.On("cmd:captchakick", modules.CaptchaKickHandler)
-		c.On("callback:captcha_verify_", modules.CaptchaVerifyCallback)
-		c.On(telegram.OnNewMessage, modules.CaptchaMathHandler)
-
 		c.On("callback:help_back", modules.HelpBackCallback)
 		c.On("cmd:tr", modules.TranslateHandler)
 		c.On("cmd:ud", modules.UDHandler)
+
+		c.On("cmd:nightmode", modules.NightModeHandler)
+		c.On("cmd:tempnote", modules.SaveTempNoteHandler)
+		c.On("callback:verify_op_", modules.AdminVerifyCallback)
 
 		modules.Mods.Init(c)
 	}

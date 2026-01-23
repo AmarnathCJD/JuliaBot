@@ -1,6 +1,8 @@
 package modules
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -248,88 +250,100 @@ func DemoteUserHandle(m *tg.NewMessage) error {
 }
 
 func BanUserHandle(m *tg.NewMessage) error {
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
-		m.Reply("You need to be an admin to use this command")
-		return nil
-	}
-	if !CanBot(m.Client, m.Channel, "ban") {
-		m.Reply("I need the 'Ban Users' right to ban users")
-		return nil
-	}
-
 	user, reason, err := GetUserFromContext(m)
 	if err != nil {
 		m.Reply("Error: " + err.Error())
 		return nil
 	}
 
-	done, err := m.Client.EditBanned(m.ChatID(), user, &tg.BannedOptions{Ban: true})
-	if err != nil || !done {
-		m.Reply(parseAdminError(err, "ban user"))
+	targetID := m.Client.GetPeerID(user)
+	if !checkAdmin(m, "ban", fmt.Sprintf("ban_%d", targetID)) {
 		return nil
+	}
+
+	return performBan(m.Client, m.ChatID(), user, reason)
+}
+
+func performBan(client *tg.Client, chatID int64, user tg.InputPeer, reason string) error {
+	channel, _ := client.GetChannel(chatID)
+	if !CanBot(client, channel, "ban") {
+		return errors.New("I need 'Ban Users' permission")
+	}
+
+	done, err := client.EditBanned(chatID, user, &tg.BannedOptions{Ban: true})
+	if err != nil || !done {
+		return err
 	}
 
 	msg := "User banned"
 	if reason != "" {
 		msg += "\n<b>Reason:</b> " + reason
 	}
-	m.Reply(msg)
+	client.SendMessage(chatID, msg)
 	return nil
 }
 
 func UnbanUserHandle(m *tg.NewMessage) error {
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
-		m.Reply("You need to be an admin to use this command")
-		return nil
-	}
-	if !CanBot(m.Client, m.Channel, "ban") {
-		m.Reply("I need the 'Ban Users' right to unban users")
-		return nil
-	}
-
 	user, _, err := GetUserFromContext(m)
 	if err != nil {
 		m.Reply("Error: " + err.Error())
 		return nil
 	}
 
-	done, err := m.Client.EditBanned(m.ChatID(), user, &tg.BannedOptions{Unban: true})
-	if err != nil || !done {
-		m.Reply(parseAdminError(err, "unban user"))
+	targetID := m.Client.GetPeerID(user)
+	if !checkAdmin(m, "ban", fmt.Sprintf("unban_%d", targetID)) {
 		return nil
 	}
 
-	m.Reply("User unbanned")
+	return performUnban(m.Client, m.ChatID(), user)
+}
+
+func performUnban(client *tg.Client, chatID int64, user tg.InputPeer) error {
+	channel, _ := client.GetChannel(chatID)
+	if !CanBot(client, channel, "ban") {
+		return errors.New("I need 'Ban Users' permission")
+	}
+
+	done, err := client.EditBanned(chatID, user, &tg.BannedOptions{Unban: true})
+	if err != nil || !done {
+		return err
+	}
+
+	client.SendMessage(chatID, "User unbanned")
 	return nil
 }
 
 func KickUserHandle(m *tg.NewMessage) error {
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
-		m.Reply("You need to be an admin to use this command")
-		return nil
-	}
-	if !CanBot(m.Client, m.Channel, "ban") {
-		m.Reply("I need the 'Ban Users' right to kick users")
-		return nil
-	}
-
 	user, reason, err := GetUserFromContext(m)
 	if err != nil {
 		m.Reply("Error: " + err.Error())
 		return nil
 	}
 
-	done, err := m.Client.KickParticipant(m.ChatID(), user)
-	if err != nil || !done {
-		m.Reply(parseAdminError(err, "kick user"))
+	targetID := m.Client.GetPeerID(user)
+	if !checkAdmin(m, "ban", fmt.Sprintf("kick_%d", targetID)) {
 		return nil
+	}
+
+	return performKick(m.Client, m.ChatID(), user, reason)
+}
+
+func performKick(client *tg.Client, chatID int64, user tg.InputPeer, reason string) error {
+	channel, _ := client.GetChannel(chatID)
+	if !CanBot(client, channel, "ban") {
+		return errors.New("I need 'Ban Users' permission")
+	}
+
+	done, err := client.KickParticipant(chatID, user)
+	if err != nil || !done {
+		return err
 	}
 
 	msg := "User kicked"
 	if reason != "" {
 		msg += "\n<b>Reason:</b> " + reason
 	}
-	m.Reply(msg)
+	client.SendMessage(chatID, msg)
 	return nil
 }
 
@@ -377,15 +391,6 @@ func FullPromoteHandle(m *tg.NewMessage) error {
 }
 
 func TbanUserHandle(m *tg.NewMessage) error {
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
-		m.Reply("You need to be an admin to use this command")
-		return nil
-	}
-	if !CanBot(m.Client, m.Channel, "ban") {
-		m.Reply("I need the 'Ban Users' right to ban users")
-		return nil
-	}
-
 	user, args, err := GetUserFromContext(m)
 	if err != nil {
 		m.Reply(err.Error())
@@ -394,13 +399,14 @@ func TbanUserHandle(m *tg.NewMessage) error {
 
 	parts := strings.Fields(args)
 	if len(parts) == 0 {
-		m.Reply("Usage: /tban <user> <duration> [reason]\nExample: /tban @user 1h Spamming")
+		m.Reply("Usage: /tban <user> <duration> [reason]")
 		return nil
 	}
 
-	duration, err := parseAdminDuration(parts[0])
-	if err != nil || duration == 0 {
-		m.Reply("Invalid duration. Use formats like: 30m, 1h, 2d")
+	targetID := m.Client.GetPeerID(user)
+	op := fmt.Sprintf("tban_%d_%s", targetID, parts[0])
+
+	if !checkAdmin(m, "ban", op) {
 		return nil
 	}
 
@@ -409,31 +415,35 @@ func TbanUserHandle(m *tg.NewMessage) error {
 		reason = strings.Join(parts[1:], " ")
 	}
 
+	return performTban(m.Client, m.ChatID(), user, parts[0], reason)
+}
+
+func performTban(client *tg.Client, chatID int64, user tg.InputPeer, durationStr, reason string) error {
+	channel, _ := client.GetChannel(chatID)
+	if !CanBot(client, channel, "ban") {
+		return errors.New("I need 'Ban Users' permission")
+	}
+
+	duration, err := parseAdminDuration(durationStr)
+	if err != nil || duration == 0 {
+		return errors.New("Invalid duration")
+	}
+
 	untilDate := int32(time.Now().Add(duration).Unix())
-	done, err := m.Client.EditBanned(m.ChatID(), user, &tg.BannedOptions{Ban: true, TillDate: untilDate})
+	done, err := client.EditBanned(chatID, user, &tg.BannedOptions{Ban: true, TillDate: untilDate})
 	if err != nil || !done {
-		m.Reply(parseAdminError(err, "ban user"))
-		return nil
+		return err
 	}
 
 	msg := "User temporarily banned for " + duration.String()
 	if reason != "" {
 		msg += "\n<b>Reason:</b> " + reason
 	}
-	m.Reply(msg)
+	client.SendMessage(chatID, msg)
 	return nil
 }
 
 func TmuteUserHandle(m *tg.NewMessage) error {
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
-		m.Reply("You need to be an admin to use this command")
-		return nil
-	}
-	if !CanBot(m.Client, m.Channel, "ban") {
-		m.Reply("I need the 'Ban Users' right to mute users")
-		return nil
-	}
-
 	user, args, err := GetUserFromContext(m)
 	if err != nil {
 		m.Reply(err.Error())
@@ -442,13 +452,14 @@ func TmuteUserHandle(m *tg.NewMessage) error {
 
 	parts := strings.Fields(args)
 	if len(parts) == 0 {
-		m.Reply("Usage: /tmute <user> <duration> [reason]\nExample: /tmute @user 1h")
+		m.Reply("Usage: /tmute <user> <duration> [reason]")
 		return nil
 	}
 
-	duration, err := parseAdminDuration(parts[0])
-	if err != nil || duration == 0 {
-		m.Reply("Invalid duration. Use formats like: 30m, 1h, 2d")
+	targetID := m.Client.GetPeerID(user)
+	op := fmt.Sprintf("tmute_%d_%s", targetID, parts[0])
+
+	if !checkAdmin(m, "ban", op) {
 		return nil
 	}
 
@@ -457,77 +468,98 @@ func TmuteUserHandle(m *tg.NewMessage) error {
 		reason = strings.Join(parts[1:], " ")
 	}
 
+	return performTmute(m.Client, m.ChatID(), user, parts[0], reason)
+}
+
+func performTmute(client *tg.Client, chatID int64, user tg.InputPeer, durationStr, reason string) error {
+	channel, _ := client.GetChannel(chatID)
+	if !CanBot(client, channel, "ban") {
+		return errors.New("I need 'Ban Users' permission")
+	}
+
+	duration, err := parseAdminDuration(durationStr)
+	if err != nil || duration == 0 {
+		return errors.New("Invalid duration")
+	}
+
 	untilDate := int32(time.Now().Add(duration).Unix())
-	done, err := m.Client.EditBanned(m.ChatID(), user, &tg.BannedOptions{
+	done, err := client.EditBanned(chatID, user, &tg.BannedOptions{
 		Mute:     true,
 		TillDate: untilDate,
 	})
 	if err != nil || !done {
-		m.Reply(parseAdminError(err, "mute user"))
-		return nil
+		return err
 	}
 
 	msg := "User temporarily muted for " + duration.String()
 	if reason != "" {
 		msg += "\n<b>Reason:</b> " + reason
 	}
-	m.Reply(msg)
+	client.SendMessage(chatID, msg)
 	return nil
 }
 
 func MuteUserHandle(m *tg.NewMessage) error {
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
-		m.Reply("You need to be an admin to use this command")
-		return nil
-	}
-	if !CanBot(m.Client, m.Channel, "ban") {
-		m.Reply("I need the 'Ban Users' right to mute users")
-		return nil
-	}
-
 	user, reason, err := GetUserFromContext(m)
 	if err != nil {
-		m.Reply(err.Error())
+		m.Reply("Error: " + err.Error())
 		return nil
 	}
 
-	done, err := m.Client.EditBanned(m.ChatID(), user, &tg.BannedOptions{Mute: true})
-	if err != nil || !done {
-		m.Reply(parseAdminError(err, "mute user"))
+	targetID := m.Client.GetPeerID(user)
+	if !checkAdmin(m, "ban", fmt.Sprintf("mute_%d", targetID)) {
 		return nil
+	}
+
+	return performMute(m.Client, m.ChatID(), user, reason)
+}
+
+func performMute(client *tg.Client, chatID int64, user tg.InputPeer, reason string) error {
+	channel, _ := client.GetChannel(chatID)
+	if !CanBot(client, channel, "ban") {
+		return errors.New("I need 'Ban Users' permission")
+	}
+
+	done, err := client.EditBanned(chatID, user, &tg.BannedOptions{Mute: true})
+	if err != nil || !done {
+		return err
 	}
 
 	msg := "User muted"
 	if reason != "" {
 		msg += "\n<b>Reason:</b> " + reason
 	}
-	m.Reply(msg)
+	client.SendMessage(chatID, msg)
 	return nil
 }
 
 func UnmuteUserHandle(m *tg.NewMessage) error {
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
-		m.Reply("You need to be an admin to use this command")
-		return nil
-	}
-	if !CanBot(m.Client, m.Channel, "ban") {
-		m.Reply("I need the 'Ban Users' right to unmute users")
-		return nil
-	}
-
 	user, _, err := GetUserFromContext(m)
 	if err != nil {
-		m.Reply(err.Error())
+		m.Reply("Error: " + err.Error())
 		return nil
 	}
 
-	done, err := m.Client.EditBanned(m.ChatID(), user, &tg.BannedOptions{Unmute: true})
+	targetID := m.Client.GetPeerID(user)
+	if !checkAdmin(m, "ban", fmt.Sprintf("unmute_%d", targetID)) {
+		return nil
+	}
+
+	return performUnmute(m.Client, m.ChatID(), user)
+}
+
+func performUnmute(client *tg.Client, chatID int64, user tg.InputPeer) error {
+	channel, _ := client.GetChannel(chatID)
+	if !CanBot(client, channel, "ban") {
+		return errors.New("I need 'Ban Users' permission")
+	}
+
+	done, err := client.EditBanned(chatID, user, &tg.BannedOptions{Unmute: true})
 	if err != nil || !done {
-		m.Reply(parseAdminError(err, "unmute user"))
-		return nil
+		return err
 	}
 
-	m.Reply("User unmuted")
+	client.SendMessage(chatID, "User unmuted")
 	return nil
 }
 
@@ -585,5 +617,97 @@ func SkickUserHandle(m *tg.NewMessage) error {
 	}
 
 	m.Client.KickParticipant(m.ChatID(), user)
+	return nil
+}
+
+const AnonBotID = 1087968824
+
+func checkAdmin(m *tg.NewMessage, right, callbackData string) bool {
+	senderID := int(m.SenderID())
+	chatID := int(m.ChatID())
+
+	if IsUserAdmin(m.Client, senderID, chatID, right) {
+		return true
+	}
+
+	if senderID == AnonBotID || int64(senderID) == m.ChatID() {
+		b := tg.Button
+		kb := tg.NewKeyboard().AddRow(b.Data("Verify Admin Rights", "verify_op_"+callbackData)).Build()
+		m.Reply("Click to verify admin privileges to perform this action.", &tg.SendOptions{ReplyMarkup: kb})
+		return false
+	}
+
+	m.Reply("You need to be an admin to use this command")
+	return false
+}
+
+func AdminVerifyCallback(c *tg.CallbackQuery) error {
+	data := c.DataString()
+	if !strings.HasPrefix(data, "verify_op_") {
+		return nil
+	}
+
+	op := strings.TrimPrefix(data, "verify_op_")
+	parts := strings.Split(op, "_")
+	if len(parts) < 2 {
+		c.Answer("Invalid callback data", &tg.CallbackOptions{Alert: true})
+		return nil
+	}
+
+	action := parts[0]
+	// right is assumed check for "ban" for now as most supported commands are ban/kick/mute
+	right := "ban"
+
+	if !IsUserAdmin(c.Client, int(c.SenderID), int(c.ChatID), right) {
+		c.Answer("You don't have permission!", &tg.CallbackOptions{Alert: true})
+		return nil
+	}
+
+	targetIDStr := parts[1]
+	targetID, err := strconv.Atoi(targetIDStr)
+	if err != nil {
+		c.Answer("Invalid target peer", &tg.CallbackOptions{Alert: true})
+		return nil
+	}
+
+	user, err := c.Client.ResolvePeer(targetID)
+	if err != nil {
+		c.Answer("Could not resolve user", &tg.CallbackOptions{Alert: true})
+		return nil
+	}
+
+	var opErr error
+	switch action {
+	case "ban":
+		opErr = performBan(c.Client, c.ChatID, user, "")
+	case "unban":
+		opErr = performUnban(c.Client, c.ChatID, user)
+	case "kick":
+		opErr = performKick(c.Client, c.ChatID, user, "")
+	case "mute":
+		opErr = performMute(c.Client, c.ChatID, user, "")
+	case "unmute":
+		opErr = performUnmute(c.Client, c.ChatID, user)
+	case "tban":
+		if len(parts) < 3 {
+			opErr = errors.New("missing duration")
+		} else {
+			opErr = performTban(c.Client, c.ChatID, user, parts[2], "")
+		}
+	case "tmute":
+		if len(parts) < 3 {
+			opErr = errors.New("missing duration")
+		} else {
+			opErr = performTmute(c.Client, c.ChatID, user, parts[2], "")
+		}
+	}
+
+	if opErr != nil {
+		c.Answer("Error: "+opErr.Error(), &tg.CallbackOptions{Alert: true})
+	} else {
+		c.Answer("Action executed")
+		c.Delete()
+	}
+
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/amarnathcjd/gogram/telegram"
 )
@@ -234,5 +235,55 @@ func MathHandler(m *telegram.NewMessage) error {
 	}
 
 	m.Reply(fmt.Sprintf("Evaluated: <code>%s</code>", result))
+	return nil
+}
+
+func NightModeHandler(m *telegram.NewMessage) error {
+	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+		m.Reply("You need Change Info rights to use this command")
+		return nil
+	}
+
+	args := m.Args()
+	if args == "" {
+		m.Reply("Usage: /nightmode on/off")
+		return nil
+	}
+
+	var enable bool
+	switch strings.ToLower(args) {
+	case "on":
+		enable = true
+	case "off":
+		enable = false
+	default:
+		m.Reply("Usage: /nightmode on/off")
+		return nil
+	}
+
+	chat, err := m.Client.GetChat(m.ChatID())
+	if err != nil {
+		m.Reply("Error fetching chat info")
+		return nil
+	}
+
+	current := chat.DefaultBannedRights
+	if current == nil {
+		current = &telegram.ChatBannedRights{}
+	}
+
+	current.SendMessages = enable
+
+	_, err = m.Client.MessagesEditChatDefaultBannedRights(m.Peer, current)
+	if err != nil {
+		m.Reply("Failed to toggle night mode: " + err.Error())
+		return nil
+	}
+
+	if enable {
+		m.Reply("Night mode enabled. Messages are restricted.")
+	} else {
+		m.Reply("Night mode disabled. Messages allowed.")
+	}
 	return nil
 }

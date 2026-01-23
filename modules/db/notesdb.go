@@ -3,17 +3,19 @@ package db
 import (
 	"encoding/json"
 	"strconv"
+	"time"
 
 	bolt "go.etcd.io/bbolt"
 )
 
 type Note struct {
-	Name      string `json:"name"`
-	Content   string `json:"content"`
-	MediaType string `json:"media_type,omitempty"`
-	FileID    string `json:"file_id,omitempty"`
-	AdminOnly bool   `json:"admin_only"`
-	CreatedBy int64  `json:"created_by"`
+	Name      string    `json:"name"`
+	Content   string    `json:"content"`
+	MediaType string    `json:"media_type,omitempty"`
+	FileID    string    `json:"file_id,omitempty"`
+	AdminOnly bool      `json:"admin_only"`
+	CreatedBy int64     `json:"created_by"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 func ensureNotesBuckets(db *bolt.DB) error {
@@ -75,7 +77,18 @@ func GetNote(chatID int64, name string) (*Note, error) {
 		}
 
 		note = &Note{}
-		return json.Unmarshal(data, note)
+		err := json.Unmarshal(data, note)
+		if err != nil {
+			return err
+		}
+
+		if !note.ExpiresAt.IsZero() && time.Now().After(note.ExpiresAt) {
+			chatBucket.Delete([]byte(name))
+			note = nil
+			return nil
+		}
+
+		return nil
 	})
 
 	return note, err

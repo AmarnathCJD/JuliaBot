@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
@@ -315,6 +316,98 @@ func ClearAllNotesCallback(c *tg.CallbackQuery) error {
 	return nil
 }
 
+func SaveTempNoteHandler(m *tg.NewMessage) error {
+	if m.IsPrivate() {
+		m.Reply("Notes can only be saved in groups")
+		return nil
+	}
+
+	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+		m.Reply("You need Change Info permission to save notes")
+		return nil
+	}
+
+	args := m.Args()
+	if args == "" {
+		m.Reply("Usage: /tempnote <duration> <name> [content]")
+		return nil
+	}
+
+	parts := strings.SplitN(args, " ", 3)
+	if len(parts) < 2 {
+		m.Reply("Usage: /tempnote <duration> <name> [content]")
+		return nil
+	}
+
+	durationStr := parts[0]
+	noteName := strings.ToLower(strings.TrimSpace(parts[1]))
+	content := ""
+	if len(parts) > 2 {
+		content = parts[2]
+	}
+
+	duration, err := time.ParseDuration(durationStr)
+	if err != nil {
+		m.Reply("Invalid duration. Examples: 10m, 1h, 30s")
+		return nil
+	}
+
+	if !regexp.MustCompile(`^[a-z0-9_]+$`).MatchString(noteName) {
+		m.Reply("Note name can only contain lowercase letters, numbers, and underscores")
+		return nil
+	}
+
+	note := &db.Note{
+		Name:      noteName,
+		CreatedBy: m.SenderID(),
+		ExpiresAt: time.Now().Add(duration),
+	}
+
+	if m.IsReply() {
+		reply, _ := m.GetReplyMessage()
+		if reply.IsMedia() {
+			if reply.Photo() != nil {
+				note.MediaType = "photo"
+				note.FileID = reply.File.FileID
+			} else if reply.Document() != nil {
+				note.MediaType = "document"
+				note.FileID = reply.File.FileID
+			} else if reply.Video() != nil {
+				note.MediaType = "video"
+				note.FileID = reply.File.FileID
+			} else if reply.Audio() != nil {
+				note.MediaType = "audio"
+				note.FileID = reply.File.FileID
+			} else if reply.Sticker() != nil {
+				note.MediaType = "sticker"
+				note.FileID = reply.File.FileID
+			} else if reply.Animation() != nil {
+				note.MediaType = "animation"
+				note.FileID = reply.File.FileID
+			}
+		}
+		if content == "" {
+			note.Content = reply.RawText()
+		} else {
+			note.Content = content
+		}
+	} else {
+		if content == "" {
+			m.Reply("Please provide content or reply to a message")
+			return nil
+		}
+		note.Content = content
+	}
+
+	if err := db.SaveNote(m.ChatID(), note); err != nil {
+		m.Reply("Failed to save note")
+		return nil
+	}
+
+	m.Reply(fmt.Sprintf("Temporary note <code>#%s</code> saved (Expires in %s)", noteName, duration))
+	return nil
+}
+
 func init() {
 	Mods.AddModule("Notes", `<b>Notes Module</b>
 
@@ -322,6 +415,7 @@ Save and retrieve notes in your group.
 
 <b>Commands:</b>
  - /save <name> [content] - Save a note (reply to msg or provide content)
+ - /tempnote <duration> <name> [content] - Save a self-destructing note
  - /note <name> - Get a note
  - #notename - Quick way to get a note
  - /notes or /listnotes - List all notes
