@@ -52,6 +52,6 @@ RUN mkdir -p /app/.cache/go-build /app/.cache/go-mod /app/tmp
 
 COPY --from=builder /app/tmp/go.mod /app/tmp/
 COPY --from=builder /app/tmp/main.go /app/tmp/
-RUN cd /app/tmp && go mod tidy && go get -u github.com/amarnathcjd/gogram@dev
+RUN cd /app/tmp && go mod tidy && go get -u github.com/amarnathcjd/gogram@filetest
 
 ENTRYPOINT ["/app/julia"]
