@@ -28,7 +28,9 @@ RUN apk add --no-cache \
     mediainfo \
     wget \
     tar \
-    yt-dlp
+    yt-dlp \
+    speedtest-cli \
+    aria2
 
 ENV GOLANG_VERSION=1.25.0
 
@@ -37,8 +39,6 @@ RUN wget https://go.dev/dl/go${GOLANG_VERSION}.linux-amd64.tar.gz -O /tmp/go.tar
     rm /tmp/go.tar.gz
 
 ENV PATH="/usr/local/go/bin:${PATH}"
- 
-RUN apk add --no-cache "$PKG_A"
 
 COPY --from=builder /app/julia /app/cover_gen.sh ./
 COPY --from=builder /app/assets /app/assets
@@ -52,6 +52,6 @@ RUN mkdir -p /app/.cache/go-build /app/.cache/go-mod /app/tmp
 
 COPY --from=builder /app/tmp/go.mod /app/tmp/
 COPY --from=builder /app/tmp/main.go /app/tmp/
-RUN cd /app/tmp && go mod tidy && go get -u github.com/amarnathcjd/gogram@filetest
+RUN cd /app/tmp && go mod tidy && go get -u github.com/amarnathcjd/gogram@8c0d0ff
 
 ENTRYPOINT ["/app/julia"]
