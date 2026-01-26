@@ -11,6 +11,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+RUN go get -u github.com/amarnathcjd/gogram@9a6ed44
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-w -s" -o julia
 
 RUN apk del .build-deps
