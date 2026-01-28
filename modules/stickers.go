@@ -429,7 +429,7 @@ func RemoveKangedSticker(m *tg.NewMessage) error {
 
 func PackInfoHandle(m *tg.NewMessage) error {
 	if !m.IsReply() {
-		m.Reply("Reply to a sticker to get pack creator info!\nUsage: <code>/pack</code>")
+		m.Reply("Reply to a sticker to get pack info!")
 		return nil
 	}
 
@@ -444,49 +444,65 @@ func PackInfoHandle(m *tg.NewMessage) error {
 		return nil
 	}
 
-	var stickerSetID int64
+	var stickerAttr *tg.DocumentAttributeSticker
 	if reply.Media() != nil {
 		if doc, ok := reply.Media().(*tg.MessageMediaDocument); ok {
 			if document, ok := doc.Document.(*tg.DocumentObj); ok {
 				for _, attr := range document.Attributes {
-					if stickerAttr, ok := attr.(*tg.DocumentAttributeSticker); ok {
-						if stickerAttr.Stickerset != nil {
-							// Get the sticker set ID
-							switch s := stickerAttr.Stickerset.(type) {
-							case *tg.InputStickerSetID:
-								stickerSetID = s.ID
-							}
-						}
+					if sticker, ok := attr.(*tg.DocumentAttributeSticker); ok {
+						stickerAttr = sticker
+						break
 					}
 				}
 			}
 		}
 	}
 
-	if stickerSetID == 0 {
-		m.Reply("❌ Could not extract sticker set information!")
+	if stickerAttr == nil || stickerAttr.Stickerset == nil {
+		m.Reply("This is not a valid sticker or doesn't belong to a pack!")
 		return nil
 	}
 
-	// Extract creator ID by bit shifting right by 32
-	creatorID := stickerSetID >> 32
+	// Get the sticker set
+	result, err := m.Client.MessagesGetStickerSet(stickerAttr.Stickerset, 0)
+	if err != nil {
+		m.Reply("Failed to get sticker pack info.")
+		return nil
+	}
+	resp := result.(*tg.MessagesStickerSetObj)
 
-	// Try to get user name from cache
-	userInfo := ""
-	user, err := m.Client.GetUser(creatorID)
-	if err == nil && user != nil {
-		if user.FirstName != "" {
-			userInfo = fmt.Sprintf(" (@%s)", user.FirstName)
+	var creatorID, internalID int64
+	stickerSetID := resp.Set.ID
+	sid := stickerSetID
+	creatorID = sid >> 32
+
+	if ((sid >> 24) & 0xFF) == 0 {
+		internalID = sid & 0xFFFFFFFF
+	}
+
+	text := fmt.Sprintf("🧩 <b>Sticker Pack Info</b>\n\n👤 <b>Creator ID:</b> <code>%d</code>\n", creatorID)
+
+	if internalID != 0 {
+		text += fmt.Sprintf("🆔 <b>Increment set ID:</b> <code>%d</code>\n", internalID)
+	} else {
+		text += "🆔 <b>Increment set ID:</b> <code>Unavailable</code>\n"
+	}
+
+	if creatorID > 0 {
+		user, err := m.Client.GetUser(creatorID)
+		if err == nil && user != nil {
+			userName := user.FirstName
 			if user.LastName != "" {
-				userInfo = fmt.Sprintf(" (@%s %s)", user.FirstName, user.LastName)
+				userName += " " + user.LastName
+			}
+			if user.Username != "" {
+				text += fmt.Sprintf("👤 <b>Creator Name:</b> <a href='https://t.me/%s'>%s</a>", user.Username, userName)
+			} else {
+				text += fmt.Sprintf("👤 <b>Creator Name:</b> %s", userName)
 			}
 		}
 	}
 
-	m.Reply(fmt.Sprintf(
-		"<b>Sticker Pack Creator:</b>\n"+
-			"<code>%d</code>%s",
-		creatorID, userInfo,
-	))
+	m.Reply(text)
 	return nil
 }
