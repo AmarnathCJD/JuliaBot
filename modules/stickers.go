@@ -426,3 +426,67 @@ func RemoveKangedSticker(m *tg.NewMessage) error {
 	m.Reply("❌ Sticker not found in your packs or you don't own this sticker.")
 	return nil
 }
+
+func PackInfoHandle(m *tg.NewMessage) error {
+	if !m.IsReply() {
+		m.Reply("Reply to a sticker to get pack creator info!\nUsage: <code>/pack</code>")
+		return nil
+	}
+
+	reply, err := m.GetReplyMessage()
+	if err != nil {
+		m.Reply("Failed to get replied message.")
+		return nil
+	}
+
+	if !reply.IsMedia() {
+		m.Reply("Please reply to a sticker!")
+		return nil
+	}
+
+	var stickerSetID int64
+	if reply.Media() != nil {
+		if doc, ok := reply.Media().(*tg.MessageMediaDocument); ok {
+			if document, ok := doc.Document.(*tg.DocumentObj); ok {
+				for _, attr := range document.Attributes {
+					if stickerAttr, ok := attr.(*tg.DocumentAttributeSticker); ok {
+						if stickerAttr.Stickerset != nil {
+							// Get the sticker set ID
+							switch s := stickerAttr.Stickerset.(type) {
+							case *tg.InputStickerSetID:
+								stickerSetID = s.ID
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if stickerSetID == 0 {
+		m.Reply("❌ Could not extract sticker set information!")
+		return nil
+	}
+
+	// Extract creator ID by bit shifting right by 32
+	creatorID := stickerSetID >> 32
+
+	// Try to get user name from cache
+	userInfo := ""
+	user, err := m.Client.GetUser(creatorID)
+	if err == nil && user != nil {
+		if user.FirstName != "" {
+			userInfo = fmt.Sprintf(" (@%s)", user.FirstName)
+			if user.LastName != "" {
+				userInfo = fmt.Sprintf(" (@%s %s)", user.FirstName, user.LastName)
+			}
+		}
+	}
+
+	m.Reply(fmt.Sprintf(
+		"<b>Sticker Pack Creator:</b>\n"+
+			"<code>%d</code>%s",
+		creatorID, userInfo,
+	))
+	return nil
+}
