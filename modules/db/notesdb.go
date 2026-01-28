@@ -16,6 +16,7 @@ type Note struct {
 	AdminOnly bool      `json:"admin_only"`
 	CreatedBy int64     `json:"created_by"`
 	ExpiresAt time.Time `json:"expires_at"`
+	Buttons   string    `json:"buttons,omitempty"`
 }
 
 func ensureNotesBuckets(db *bolt.DB) error {

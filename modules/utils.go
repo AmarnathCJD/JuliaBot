@@ -214,6 +214,9 @@ func GetUserFromContext(m *telegram.NewMessage) (telegram.InputPeer, string, err
 		if err != nil {
 			return nil, "", err
 		}
+		if reply.SenderChat != nil && reply.SenderChat.ID != 0 {
+			return &telegram.InputPeerChannel{ChannelID: reply.SenderChat.ID, AccessHash: reply.SenderChat.AccessHash}, "", nil
+		}
 		peer, err := m.Client.ResolvePeer(reply.Sender)
 		if err != nil {
 			return nil, "", err
@@ -418,4 +421,29 @@ func polyeval(coeffs []float64, x float64) float64 {
 		result += c * math.Pow(x, float64(i))
 	}
 	return result
+}
+
+func GetPeerDisplayName(client *telegram.Client, peer telegram.InputPeer) string {
+	switch p := peer.(type) {
+	case *telegram.InputPeerUser:
+		user, err := client.GetUser(p.UserID)
+		if err == nil && user != nil {
+			return user.FirstName
+		}
+		return "User"
+	case *telegram.InputPeerChannel:
+		channel, err := client.GetChannel(p.ChannelID)
+		if err == nil && channel != nil {
+			return channel.Title
+		}
+		return "Channel"
+	case *telegram.InputPeerChat:
+		chat, err := client.GetChat(p.ChatID)
+		if err == nil && chat != nil {
+			return chat.Title
+		}
+		return "Chat"
+	default:
+		return "User"
+	}
 }

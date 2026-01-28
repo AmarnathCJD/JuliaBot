@@ -92,40 +92,114 @@ var dcLocationMap = map[int]string{
 	5: "Singapore, SG",
 }
 
+func chatPhotoDcID(photo telegram.ChatPhoto) int {
+	if photo == nil {
+		return 0
+	}
+	switch p := photo.(type) {
+	case *telegram.ChatPhotoObj:
+		return int(p.DcID)
+	default:
+		return 0
+	}
+}
+
+func formatDCInfo(dcId int) string {
+	dcLoc := dcLocationMap[dcId]
+	if dcLoc == "" {
+		dcLoc = "Unknown"
+	}
+	dcFlag := getCountryFlag(dcId)
+	if dcFlag == "" {
+		dcFlag = "-"
+	}
+	return fmt.Sprintf("<code>DC%d</code>\n<b>Location:</b> %s\n<b>Flag:</b> %s", dcId, dcLoc, dcFlag)
+}
+
+func replyChannelInfo(m *telegram.NewMessage, title string, channelPeerID string, username string, photo telegram.ChatPhoto) {
+	msg := "<b>Channel Info</b>\n\n"
+	msg += fmt.Sprintf("<b>Title:</b> %s\n", title)
+	if username != "" {
+		msg += fmt.Sprintf("<b>Username:</b> @%s\n", strings.TrimPrefix(username, "@"))
+	}
+	msg += fmt.Sprintf("<b>ID:</b> <code>%s</code>\n", channelPeerID)
+	msg += "<b>DC:</b> {{dcInfo}}\n"
+	msg = strings.ReplaceAll(msg, "{{dcInfo}}", formatDCInfo(chatPhotoDcID(photo)))
+	m.Reply(msg)
+}
+
+func replyGroupInfo(m *telegram.NewMessage, title string, chatID int64, photo telegram.ChatPhoto) {
+	msg := "<b>Group Info</b>\n\n"
+	msg += fmt.Sprintf("<b>Title:</b> %s\n", title)
+	msg += fmt.Sprintf("<b>ID:</b> <code>-%d</code>\n", chatID)
+	msg += "<b>DC:</b> {{dcInfo}}\n"
+	msg = strings.ReplaceAll(msg, "{{dcInfo}}", formatDCInfo(chatPhotoDcID(photo)))
+	m.Reply(msg)
+}
+
 func UserHandle(m *telegram.NewMessage) error {
 	var userID int64 = 0
 	var userHash int64 = 0
 	if m.IsReply() {
 		r, _ := m.GetReplyMessage()
+		if r.SenderChat != nil && r.SenderChat.ID != 0 {
+			replyChannelInfo(m, r.SenderChat.Title, fmt.Sprintf("-100%d", r.SenderChat.ID), "", r.SenderChat.Photo)
+			return nil
+		}
+
 		userID = r.SenderID()
 		if r.Sender == nil {
 			m.Reply("Error: User not found")
 			return nil
 		}
 		userHash = r.Sender.AccessHash
-	} else if len(m.Args()) > 0 {
-		i, ok := strconv.Atoi(m.Args())
-		if ok != nil {
-			user, err := m.Client.ResolveUsername(m.Args())
-			if err != nil {
-				m.Reply("Error: " + err.Error())
+	} else if strings.TrimSpace(m.Args()) != "" {
+		arg := strings.TrimSpace(m.Args())
+
+		// Handle peer IDs like -1001234567890 (channels).
+		if strings.HasPrefix(arg, "-100") {
+			rest := strings.TrimPrefix(arg, "-100")
+			if cid, err := strconv.ParseInt(rest, 10, 64); err == nil && cid > 0 {
+				ch, err := m.Client.GetChannel(cid)
+				if err != nil {
+					m.Reply("Error: unable to fetch channel by -100 ID (need access hash). Try @username or reply/forward from that channel.")
+					return nil
+				}
+				replyChannelInfo(m, ch.Title, arg, ch.Username, ch.Photo)
 				return nil
 			}
-			ux, ok := user.(*telegram.UserObj)
-			if !ok {
-				m.Reply("Error: User not found")
+		}
+
+		// Try username (user/group/channel).
+		if ent, err := m.Client.ResolveUsername(arg); err == nil {
+			switch v := ent.(type) {
+			case *telegram.UserObj:
+				userID = v.ID
+				userHash = v.AccessHash
+			case *telegram.ChatObj:
+				replyGroupInfo(m, v.Title, v.ID, v.Photo)
+				return nil
+			case *telegram.Channel:
+				replyChannelInfo(m, v.Title, fmt.Sprintf("-100%d", v.ID), v.Username, v.Photo)
+				return nil
+			default:
+				m.Reply("Error: unsupported username target")
 				return nil
 			}
-			userID = ux.ID
-			userHash = ux.AccessHash
 		} else {
-			userID = int64(i)
-			user, err := m.Client.GetUser(int64(i))
-			if err != nil {
-				m.Reply("Error: " + err.Error())
+			// Not a username: try numeric user ID.
+			if i, err := strconv.ParseInt(arg, 10, 64); err == nil {
+				userID = i
+				user, err := m.Client.GetUser(i)
+				if err != nil {
+					m.Reply("Error: " + err.Error())
+					return nil
+				}
+				userHash = user.AccessHash
+			} else {
+				m.Reply("Error: invalid user/channel argument")
 				return nil
 			}
-			userHash = user.AccessHash
 		}
 	} else {
 		userID = m.SenderID()
@@ -148,92 +222,95 @@ func UserHandle(m *telegram.NewMessage) error {
 	uf := user.FullUser
 	un := user.Users[0].(*telegram.UserObj)
 
-	var userString string
-
-	name := un.FirstName
-	if un.LastName != "" {
-		name += " " + un.LastName
+	name := strings.TrimSpace(strings.TrimSpace(un.FirstName + " " + un.LastName))
+	if name == "" {
+		name = "(no name)"
 	}
-	userString += "👤 <b>" + name + "</b>"
 
+	userString := "<b>User Info</b>\n\n"
+	userString += fmt.Sprintf("<b>Name:</b> %s\n", name)
+	if un.Username != "" {
+		userString += fmt.Sprintf("<b>Username:</b> @%s\n", un.Username)
+	}
+	userString += fmt.Sprintf("<b>ID:</b> <code>%d</code>\n", un.ID)
+	userString += "<b>DC:</b> {{dcInfo}}\n"
+	if un.Phone != "" {
+		userString += fmt.Sprintf("<b>Phone:</b> +%s\n", un.Phone)
+	}
+
+	flags := []string{}
 	if un.Verified {
-		userString += " ✓"
+		flags = append(flags, "verified")
 	}
 	if un.Premium {
-		userString += " ⭐"
+		flags = append(flags, "premium")
 	}
 	if un.Bot {
-		userString += " 🤖"
+		flags = append(flags, "bot")
 	}
-	userString += "\n\n"
-
-	if un.Username != "" {
-		userString += "➜ 📧 <b>Username:</b> @" + un.Username + "\n"
+	if un.Support {
+		flags = append(flags, "support")
 	}
-
-	userString += "➜ 🆔 <b>ID:</b> <code>" + strconv.FormatInt(un.ID, 10) + "</code>\n"
-
-	userString += "➜ 🌐 <b>DC:</b> {{dcId}}\n"
-
-	if un.Phone != "" {
-		userString += "➜ 📱 <b>Phone:</b> +" + un.Phone + "\n"
-	}
-
 	if un.Restricted {
-		userString += "➜ 🚫 <b>Restricted:</b> Yes\n"
+		flags = append(flags, "restricted")
 	}
 	if un.Scam {
-		userString += "➜ ⚠️ <b>Scam:</b> Yes\n"
+		flags = append(flags, "scam")
 	}
 	if un.Fake {
-		userString += "➜ ⚠️ <b>Fake:</b> Yes\n"
+		flags = append(flags, "fake")
 	}
-
-	if un.Support {
-		userString += "➜ 🛟 <b>Support:</b> Yes\n"
+	if len(flags) > 0 {
+		userString += fmt.Sprintf("<b>Flags:</b> %s\n", strings.Join(flags, ", "))
 	}
 
 	if un.Bot {
+		botCaps := []string{}
 		if un.BotChatHistory {
-			userString += "➜ 📜 <b>Can Read History:</b> Yes\n"
+			botCaps = append(botCaps, "can read history")
 		}
 		if un.BotInlineGeo {
-			userString += "➜ 📍 <b>Inline Geo:</b> Yes\n"
+			botCaps = append(botCaps, "inline geo")
 		}
 		if un.BotAttachMenu {
-			userString += "➜ 📎 <b>Attach Menu:</b> Yes\n"
+			botCaps = append(botCaps, "attach menu")
 		}
 		if un.BotInlinePlaceholder != "" {
-			userString += "➜ 💭 <b>Inline Placeholder:</b> " + un.BotInlinePlaceholder + "\n"
+			botCaps = append(botCaps, "inline placeholder: "+un.BotInlinePlaceholder)
+		}
+		if len(botCaps) > 0 {
+			userString += fmt.Sprintf("<b>Bot:</b> %s\n", strings.Join(botCaps, "; "))
 		}
 	}
 
 	if uf.CommonChatsCount > 0 {
-		userString += "➜ 👥 <b>Common Groups:</b> " + strconv.Itoa(int(uf.CommonChatsCount)) + "\n"
+		userString += fmt.Sprintf("<b>Common groups:</b> %d\n", uf.CommonChatsCount)
 	}
 
 	if len(un.Usernames) > 0 {
-		var usernames []string
+		alts := []string{}
 		for _, v := range un.Usernames {
-			usernames = append(usernames, "@"+v.Username)
+			alts = append(alts, "@"+v.Username)
 		}
-		userString += "\n📌 <b>Also known as:</b> " + strings.Join(usernames, ", ") + "\n"
+		userString += "\n<b>Also known as:</b>\n"
+		userString += strings.Join(alts, ", ") + "\n"
 	}
 
 	if uf.Birthday != nil {
-		userString += "\n➜ 🎂 <b>Birthday:</b> " + parseBirthday(uf.Birthday.Day, uf.Birthday.Month, uf.Birthday.Year) + "\n"
+		userString += "\n<b>Birthday:</b> " + parseBirthday(uf.Birthday.Day, uf.Birthday.Month, uf.Birthday.Year) + "\n"
 	}
 
 	estimator := NewUserDateEstimator()
 	estimatedTS := estimator.Estimate(un.ID)
 	formattedDate, age := estimator.FormatTime(estimatedTS)
-	userString += "\n<b>Account:</b> " + age + " | <code>" + formattedDate + "</code>\n"
+	userString += "\n<b>Account:</b> " + age + "\n"
+	userString += "<b>Created:</b> <code>" + formattedDate + "</code>\n"
 
 	if uf.About != "" {
-		userString += "\n💬 <b>Bio:</b> <i>" + uf.About + "</i>\n"
+		userString += "\n<b>Bio:</b>\n<i>" + uf.About + "</i>\n"
 	}
 
-	userString += "\n<a href=\"tg://user?id=" + strconv.FormatInt(un.ID, 10) + "\">🔗 View Full Profile</a>"
+	userString += "\n<a href=\"tg://user?id=" + strconv.FormatInt(un.ID, 10) + "\">View full profile</a>"
 
 	var keyb = telegram.NewKeyboard()
 	sendableUser, err := m.Client.GetSendableUser(un)
@@ -319,15 +396,13 @@ func UserHandle(m *telegram.NewMessage) error {
 			}
 		}
 
-		dcFlag := getCountryFlag(dcId)
-		mediaOpt.Caption = strings.ReplaceAll(userString, "{{dcId}}", fmt.Sprintf("DC%d - %s %s", dcId, dcLocationMap[dcId], dcFlag))
+		mediaOpt.Caption = strings.ReplaceAll(userString, "{{dcInfo}}", formatDCInfo(dcId))
 		_, err := m.ReplyMedia(inp, mediaOpt)
 		if err != nil {
 			m.Reply(userString, sendOpt)
 		}
 	} else {
-		dcFlag := getCountryFlag(dcId)
-		userString = strings.ReplaceAll(userString, "{{dcId}}", fmt.Sprintf("DC%d - %s %s", dcId, dcLocationMap[dcId], dcFlag))
+		userString = strings.ReplaceAll(userString, "{{dcInfo}}", formatDCInfo(dcId))
 		m.Reply(userString, sendOpt)
 	}
 	return nil

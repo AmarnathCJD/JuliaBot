@@ -13,6 +13,7 @@ type Filter struct {
 	MediaType string `json:"media_type,omitempty"`
 	FileID    string `json:"file_id,omitempty"`
 	AddedBy   int64  `json:"added_by"`
+	Buttons   string `json:"buttons,omitempty"`
 }
 
 func ensureFiltersBuckets(db *bolt.DB) error {

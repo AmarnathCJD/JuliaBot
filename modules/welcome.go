@@ -421,6 +421,7 @@ func WelcomeHandler(p *tg.ParticipantUpdate) error {
 }
 
 func GoodbyeHandler(p *tg.ParticipantUpdate) error {
+	return nil
 	if !p.IsLeft() && !p.IsKicked() {
 		return nil
 	}

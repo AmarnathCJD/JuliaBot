@@ -21,9 +21,39 @@ func AddBlacklistHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
+	if m.IsReply() {
+		reply, err := m.GetReplyMessage()
+		if err == nil && reply.IsMedia() && reply.File != nil {
+			fileID := reply.File.FileID
+			if fileID == "" {
+				m.Reply("Unable to get file ID from this media")
+				return nil
+			}
+
+			if db.IsBlacklisted(m.ChatID(), fileID) {
+				m.Reply("This media is already blacklisted")
+				return nil
+			}
+
+			entry := &db.BlacklistEntry{
+				Word:    fileID,
+				FileID:  fileID,
+				AddedBy: m.SenderID(),
+			}
+
+			if err := db.AddBlacklist(m.ChatID(), entry); err != nil {
+				m.Reply("Failed to add media to blacklist")
+				return nil
+			}
+
+			m.Reply("Media added to blacklist. Any matching media will be deleted.")
+			return nil
+		}
+	}
+
 	word := strings.TrimSpace(strings.ToLower(m.Args()))
 	if word == "" {
-		m.Reply("Usage: /addbl <word/phrase>")
+		m.Reply("Usage: /addbl <word/phrase> or reply to media with /addbl")
 		return nil
 	}
 
@@ -62,9 +92,33 @@ func RemoveBlacklistHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
+	if m.IsReply() {
+		reply, err := m.GetReplyMessage()
+		if err == nil && reply.IsMedia() && reply.File != nil {
+			fileID := reply.File.FileID
+			if fileID == "" {
+				m.Reply("Unable to get file ID from this media")
+				return nil
+			}
+
+			if !db.IsBlacklisted(m.ChatID(), fileID) {
+				m.Reply("This media is not in the blacklist")
+				return nil
+			}
+
+			if err := db.RemoveBlacklist(m.ChatID(), fileID); err != nil {
+				m.Reply("Failed to remove media from blacklist")
+				return nil
+			}
+
+			m.Reply("Media removed from blacklist")
+			return nil
+		}
+	}
+
 	word := strings.TrimSpace(strings.ToLower(m.Args()))
 	if word == "" {
-		m.Reply("Usage: /rmbl <word>")
+		m.Reply("Usage: /rmbl <word> or reply to media")
 		return nil
 	}
 
@@ -105,13 +159,24 @@ func ListBlacklistHandler(m *tg.NewMessage) error {
 	}
 
 	var resp strings.Builder
-	resp.WriteString("<b>Blacklisted words:</b>\n\n")
+	resp.WriteString("<b>Blacklisted items:</b>\n\n")
 
+	wordCount := 0
+	mediaCount := 0
 	for i, entry := range entries {
-		resp.WriteString(fmt.Sprintf("%d. <code>%s</code>\n", i+1, entry.Word))
+		if entry.FileID != "" {
+			resp.WriteString(fmt.Sprintf("%d. [Media File]\n", i+1))
+			mediaCount++
+		} else {
+			resp.WriteString(fmt.Sprintf("%d. <code>%s</code>\n", i+1, entry.Word))
+			wordCount++
+		}
 	}
 
-	resp.WriteString(fmt.Sprintf("\nTotal: <b>%d</b> words", len(entries)))
+	resp.WriteString(fmt.Sprintf("\nTotal: <b>%d</b> items", len(entries)))
+	if wordCount > 0 && mediaCount > 0 {
+		resp.WriteString(fmt.Sprintf(" (%d words, %d media)", wordCount, mediaCount))
+	}
 	resp.WriteString(fmt.Sprintf("\nAction: <b>%s</b>", actionStr))
 
 	m.Reply(resp.String())
@@ -206,7 +271,7 @@ Usage: /setblaction <action> [duration]
 }
 
 func BlacklistWatcher(m *tg.NewMessage) error {
-	if m.IsPrivate() || m.Text() == "" {
+	if m.IsPrivate() {
 		return nil
 	}
 
@@ -215,13 +280,26 @@ func BlacklistWatcher(m *tg.NewMessage) error {
 		return nil
 	}
 
-	msgLower := strings.ToLower(m.Text())
-
 	var matchedWord string
-	for _, entry := range entries {
-		if strings.Contains(msgLower, entry.Word) {
-			matchedWord = entry.Word
-			break
+
+	// Check media files first
+	if m.IsMedia() && m.File != nil && m.File.FileID != "" {
+		for _, entry := range entries {
+			if entry.FileID != "" && entry.FileID == m.File.FileID {
+				matchedWord = "media"
+				break
+			}
+		}
+	}
+
+	// Check text if no media match
+	if matchedWord == "" && m.Text() != "" {
+		msgLower := strings.ToLower(m.Text())
+		for _, entry := range entries {
+			if entry.FileID == "" && strings.Contains(msgLower, entry.Word) {
+				matchedWord = entry.Word
+				break
+			}
 		}
 	}
 
@@ -339,17 +417,18 @@ func ClearBlacklistCallback(c *tg.CallbackQuery) error {
 func init() {
 	Mods.AddModule("Blacklist", `<b>Blacklist Module</b>
 
-Block specific words/phrases in your group.
+Block specific words/phrases or media in your group.
 
 <b>Commands:</b>
  - /addbl <word> - Add word to blacklist
+ - /addbl [reply to media] - Add media to blacklist
  - /addblacklist <word> - Same as above
  - /rmbl <word> - Remove word from blacklist
  - /rmblacklist <word> - Same as above
- - /listbl - List all blacklisted words
+ - /listbl - List all blacklisted items
  - /blacklist - Same as above
  - /setblaction <action> - Set action for violations
- - /clearbl - Clear all blacklisted words
+ - /clearbl - Clear all blacklisted items
 
 <b>Actions:</b>
  - delete - Delete message (default)

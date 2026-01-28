@@ -24,6 +24,7 @@ type BlacklistSettings struct {
 
 type BlacklistEntry struct {
 	Word    string `json:"word"`
+	FileID  string `json:"file_id,omitempty"`
 	AddedBy int64  `json:"added_by"`
 }
 
