@@ -51,10 +51,10 @@ func main() {
 	client.LoginBot(os.Getenv("BOT_TOKEN"))
 
 	client.Logger.Info("Bot is running as @%s", client.Me().Username)
-	x := "![😒](tg://emoji?id=6134147226441614765) ɪᴛ ᴡᴀs ᴀ ɢʀᴇᴀᴛ ᴊᴏᴜʀɴᴇʏ ᴡɪᴛʜ ʏ'ᴀʟʟ, ᴛʜᴀɴᴋs ғᴏʀ ᴇᴠᴇʀʏᴛʜɪɴɢ... ![😗](tg://emoji?id=6134366475932141065)![❄️](tg://emoji?id=5231492061718390437) ʜᴀᴘᴘʏ ɴᴇᴡ ʏᴇᴀʀ ᴇᴠᴇ ![❄️](tg://emoji?id=5231492061718390437)"
-	client.SendMessage("gogrammers", x, &tg.SendOptions{
-		ParseMode: tg.MarkDown,
-	})
+	// x := "![😒](tg://emoji?id=6134147226441614765) ɪᴛ ᴡᴀs ᴀ ɢʀᴇᴀᴛ ᴊᴏᴜʀɴᴇʏ ᴡɪᴛʜ ʏ'ᴀʟʟ, ᴛʜᴀɴᴋs ғᴏʀ ᴇᴠᴇʀʏᴛʜɪɴɢ... ![😗](tg://emoji?id=6134366475932141065)![❄️](tg://emoji?id=5231492061718390437) ʜᴀᴘᴘʏ ɴᴇᴡ ʏᴇᴀʀ ᴇᴠᴇ ![❄️](tg://emoji?id=5231492061718390437)"
+	// client.SendMessage("gogrammers", x, &tg.SendOptions{
+	// 	ParseMode: tg.MarkDown,
+	// })
 	go func() {
 		log.Println("Pprof server starting on :9009")
 		if err := http.ListenAndServe(":9009", nil); err != nil {
