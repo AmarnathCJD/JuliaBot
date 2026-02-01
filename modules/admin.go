@@ -196,7 +196,7 @@ func parseAdminDuration(s string) (time.Duration, error) {
 }
 
 func PromoteUserHandle(m *tg.NewMessage) error {
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "promote") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "promote") {
 		m.Reply("You don't have permission to do that here.")
 		return nil
 	}
@@ -307,7 +307,7 @@ func IDHandle(message *tg.NewMessage) error {
 }
 
 func DemoteUserHandle(m *tg.NewMessage) error {
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "promote") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "promote") {
 		m.Reply("You don't have permission to do that here.")
 		return nil
 	}
@@ -448,7 +448,7 @@ func performKick(client *tg.Client, chatID int64, user tg.InputPeer, reason stri
 }
 
 func FullPromoteHandle(m *tg.NewMessage) error {
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "promote") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "promote") {
 		m.Reply("You don't have permission to do that here.")
 		return nil
 	}
@@ -689,7 +689,7 @@ func performUnmute(client *tg.Client, chatID int64, user tg.InputPeer) (string, 
 func SbanUserHandle(m *tg.NewMessage) error {
 	m.Delete()
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
 		replyTemp(m, "You don't have permission to do that here.", 5)
 		return nil
 	}
@@ -715,7 +715,7 @@ func SbanUserHandle(m *tg.NewMessage) error {
 func SmuteUserHandle(m *tg.NewMessage) error {
 	m.Delete()
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
 		replyTemp(m, "You don't have permission to do that here.", 5)
 		return nil
 	}
@@ -741,7 +741,7 @@ func SmuteUserHandle(m *tg.NewMessage) error {
 func SkickUserHandle(m *tg.NewMessage) error {
 	m.Delete()
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
 		replyTemp(m, "You don't have permission to do that here.", 5)
 		return nil
 	}
@@ -765,7 +765,7 @@ func SkickUserHandle(m *tg.NewMessage) error {
 }
 
 func DeleteMessageHandle(m *tg.NewMessage) error {
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "delete") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "delete") {
 		m.Reply("You don't have permission to delete messages here.")
 		return nil
 	}
@@ -793,7 +793,7 @@ func DBanUserHandle(m *tg.NewMessage) error {
 		return nil
 	}
 	// Need both: delete + ban.
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") || !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "delete") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") || !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "delete") {
 		m.Reply("You don't have permission to do that here.")
 		return nil
 	}
@@ -828,7 +828,7 @@ func DMuteUserHandle(m *tg.NewMessage) error {
 		m.Reply(adminUsage("dmute"))
 		return nil
 	}
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") || !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "delete") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") || !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "delete") {
 		m.Reply("You don't have permission to do that here.")
 		return nil
 	}
@@ -862,7 +862,7 @@ func DKickUserHandle(m *tg.NewMessage) error {
 		m.Reply(adminUsage("dkick"))
 		return nil
 	}
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") || !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "delete") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") || !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "delete") {
 		m.Reply("You don't have permission to do that here.")
 		return nil
 	}
@@ -894,14 +894,11 @@ func DKickUserHandle(m *tg.NewMessage) error {
 const AnonBotID = 1087968824
 
 func checkAdmin(m *tg.NewMessage, right, callbackData string) bool {
-	senderID := int(m.SenderID())
-	chatID := int(m.ChatID())
-
-	if IsUserAdmin(m.Client, senderID, chatID, right) {
+	if IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), right) {
 		return true
 	}
 
-	if senderID == AnonBotID || int64(senderID) == m.ChatID() {
+	if m.SenderID() == AnonBotID || m.SenderID() == m.ChatID() {
 		b := tg.Button
 		kb := tg.NewKeyboard().AddRow(b.Data("Verify Admin Rights", "verify_op_"+callbackData)).Build()
 		m.Reply("Click to verify admin privileges to perform this action.", &tg.SendOptions{ReplyMarkup: kb})
@@ -930,11 +927,11 @@ func AdminVerifyCallback(c *tg.CallbackQuery) error {
 	requiresBan := map[string]bool{"ban": true, "unban": true, "kick": true, "mute": true, "unmute": true, "tban": true, "tmute": true, "dban": true, "dmute": true, "dkick": true}
 	requiresDelete := map[string]bool{"dban": true, "dmute": true, "dkick": true}
 
-	if requiresBan[action] && !IsUserAdmin(c.Client, int(c.SenderID), int(c.ChatID), "ban") {
+	if requiresBan[action] && !IsUserAdmin(c.Client, c.SenderID, c.ChatID, "ban") {
 		c.Answer("You don't have permission to do that here.", &tg.CallbackOptions{Alert: true})
 		return nil
 	}
-	if requiresDelete[action] && !IsUserAdmin(c.Client, int(c.SenderID), int(c.ChatID), "delete") {
+	if requiresDelete[action] && !IsUserAdmin(c.Client, c.SenderID, c.ChatID, "delete") {
 		c.Answer("You don't have permission to delete messages here.", &tg.CallbackOptions{Alert: true})
 		return nil
 	}
@@ -1016,6 +1013,44 @@ func AdminVerifyCallback(c *tg.CallbackQuery) error {
 		}
 		c.Answer("Done")
 		c.Delete()
+	}
+
+	return nil
+}
+
+// HandleReactionUpdate handles emoji reactions on messages
+// 📌 = Pin, 🗑️ = Delete, ❤️ = React with heart, ⭐ = React with star
+// 🔁 = Forward, ✅ = React with check, 🔖 = Bookmark
+func HandleReactionUpdate(update tg.Update, c *tg.Client) error {
+	msgUpdate, ok := update.(*tg.UpdateBotMessageReaction)
+	if !ok {
+		return nil
+	}
+
+	peer := msgUpdate.Peer
+	msgID := msgUpdate.MsgID
+
+	for _, reaction := range msgUpdate.NewReactions {
+		emoji := ""
+
+		if simpleReaction, ok := reaction.(*tg.ReactionEmoji); ok {
+			emoji = simpleReaction.Emoticon
+		}
+
+		if emoji == "" {
+			continue
+		}
+
+		switch emoji {
+		case "📌":
+			if IsUserAdmin(c, c.GetPeerID(msgUpdate.Actor), c.GetPeerID(msgUpdate.Peer), "pin") {
+				c.PinMessage(peer, msgID)
+			}
+		case "💩":
+			if IsUserAdmin(c, c.GetPeerID(msgUpdate.Actor), c.GetPeerID(msgUpdate.Peer), "delete") {
+				c.DeleteMessages(peer, []int32{msgID})
+			}
+		}
 	}
 
 	return nil

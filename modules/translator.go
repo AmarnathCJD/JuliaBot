@@ -45,7 +45,7 @@ func TranslateHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if replaceMode && IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "delete") {
+	if replaceMode && IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "delete") {
 		r.Delete()
 		m.Delete()
 		m.Respond(fmt.Sprintf("<b>Translated from %s:</b>\n%s", src, translated))

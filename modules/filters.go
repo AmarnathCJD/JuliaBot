@@ -16,7 +16,7 @@ func FilterHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("<b>Permission denied.</b> You need Change Info permission to add filters.")
 		return nil
 	}
@@ -106,7 +106,7 @@ func StopFilterHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("<b>Permission denied.</b> You need Change Info permission to remove filters.")
 		return nil
 	}
@@ -177,7 +177,7 @@ func StopAllFiltersHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("<b>Permission denied.</b> You need Change Info permission to remove filters.")
 		return nil
 	}

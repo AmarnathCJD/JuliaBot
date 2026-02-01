@@ -239,7 +239,7 @@ func MathHandler(m *telegram.NewMessage) error {
 }
 
 func NightModeHandler(m *telegram.NewMessage) error {
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("You need Change Info rights to use this command")
 		return nil
 	}

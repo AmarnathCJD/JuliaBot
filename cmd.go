@@ -140,7 +140,7 @@ func initFunc(c *telegram.Client) {
 		c.On("callback:ytdl_(.*)", downloaders.YTCallbackHandler)
 
 		c.On(telegram.OnParticipant, modules.WelcomeHandler)
-		c.On(telegram.OnParticipant, modules.GoodbyeHandler)
+		c.On(&telegram.UpdateBotMessageReactions{}, modules.HandleReactionUpdate)
 		c.OnCommand("gif", modules.GifToSticker)
 		c.OnCommand("kang", modules.KangSticker)
 		c.OnCommand("rmkang", modules.RemoveKangedSticker)
@@ -192,10 +192,12 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:rmblacklist", modules.RemoveBlacklistHandler)
 		c.On("cmd:listbl", modules.ListBlacklistHandler)
 		c.On("cmd:blacklist", modules.ListBlacklistHandler)
+		c.On("cmd:rmblmenu", modules.BlacklistRemovalMenu)
 		c.On("cmd:setblaction", modules.SetBlacklistActionHandler)
 		c.On("cmd:clearbl", modules.ClearBlacklistHandler)
 		c.On("callback:clearbl_", modules.ClearBlacklistCallback)
 		c.On("callback:cancelbl_", modules.ClearBlacklistCallback)
+		c.On("callback:rmblmedia_", modules.HandleBlacklistMediaRemoval)
 		c.On(telegram.OnNewMessage, modules.BlacklistWatcher)
 
 		// Filters module

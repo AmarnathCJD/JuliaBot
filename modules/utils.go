@@ -162,7 +162,7 @@ func trimString(s string, length int) string {
 	return s
 }
 
-func IsUserAdmin(bot *telegram.Client, userID int, chatID int, right string) bool {
+func IsUserAdmin(bot *telegram.Client, userID int64, chatID int64, right string) bool {
 	member, err := bot.GetChatMember(chatID, userID)
 	if err != nil {
 		return false

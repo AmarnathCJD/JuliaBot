@@ -887,10 +887,7 @@ func execCommand(cmd string) error {
 	return nil
 }
 
-// HandlePostCommand posts content to a specified channel
-// Flags: -c username (target channel), -nm (no media), -fw (forward tag)
 func HandlePostCommand(m *tg.NewMessage) error {
-	// Parse arguments
 	args := strings.Fields(m.Args())
 
 	var targetChannel string
@@ -899,7 +896,6 @@ func HandlePostCommand(m *tg.NewMessage) error {
 	var contentText string
 	var contentArgs []string
 
-	// Parse flags
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "-c":
@@ -946,9 +942,7 @@ func HandlePostCommand(m *tg.NewMessage) error {
 
 	var targetChannelID any
 
-	// Try to parse as channel ID
 	if _, err := fmt.Sscanf(targetChannel, "%d", &targetChannelID); err != nil {
-		// Try to resolve by username
 		user, err := m.Client.ResolveUsername(targetChannel)
 		if err != nil {
 			m.Reply("Could not resolve channel: " + targetChannel)
@@ -988,5 +982,14 @@ func init() {
 
 - <code>/sh &lt;command&gt;</code> - Execute shell commands
 - <code>/eval &lt;code&gt;</code> - Evaluate Go code
-- <code>/json [-s | -m | -c] &lt;message&gt;</code> - Get JSON of a message`)
+- <code>/json [-s | -m | -c] &lt;message&gt;</code> - Get JSON of a message
+- <code>/mediainfo</code> - Get media information of a replied media
+- <code>/ls [directory]</code> - List files in a directory
+- <code>/go</code> - Get Go runtime stats
+- <code>/gensession</code> - Generate a new string session
+- <code>/setpfp</code> - Set bot profile picture
+- <code>/spectrogram</code> - Generate spectrogram of an audio file
+- <code>/restart</code> - Restart the bot
+- <code>/post -c &lt;channel&gt; [-nm] [-fw] &lt;content&gt;</code> - Post content to a channel
+`)
 }

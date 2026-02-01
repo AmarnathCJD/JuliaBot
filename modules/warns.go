@@ -16,7 +16,7 @@ func WarnUserHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
 		m.Reply("You need Ban Users permission to warn users")
 		return nil
 	}
@@ -34,7 +34,7 @@ func WarnUserHandler(m *tg.NewMessage) error {
 
 	userID := m.Client.GetPeerID(user)
 
-	if IsUserAdmin(m.Client, int(userID), int(m.ChatID()), "") {
+	if IsUserAdmin(m.Client, userID, m.ChatID(), "") {
 		m.Reply("Cannot warn admins")
 		return nil
 	}
@@ -112,7 +112,7 @@ func RemoveWarnCallback(c *tg.CallbackQuery) error {
 	userID, _ := strconv.ParseInt(parts[0], 10, 64)
 	adminID, _ := strconv.ParseInt(parts[1], 10, 64)
 
-	if c.SenderID != adminID && !IsUserAdmin(c.Client, int(c.SenderID), int(c.ChatID), "ban") {
+	if c.SenderID != adminID && !IsUserAdmin(c.Client, c.SenderID, c.ChatID, "ban") {
 		c.Answer("Only the warning admin or other admins can remove this warn", &tg.CallbackOptions{Alert: true})
 		return nil
 	}
@@ -185,7 +185,7 @@ func ResetWarnsHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
 		m.Reply("You need Ban Users permission to reset warns")
 		return nil
 	}
@@ -225,7 +225,7 @@ func RemoveWarnHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
 		m.Reply("You need Ban Users permission to remove warns")
 		return nil
 	}
@@ -269,7 +269,7 @@ func SetWarnLimitHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("You need Change Info permission to modify warn settings")
 		return nil
 	}
@@ -305,7 +305,7 @@ func SetWarnActionHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("You need Change Info permission to modify warn settings")
 		return nil
 	}

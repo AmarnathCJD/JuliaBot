@@ -51,7 +51,7 @@ func SetWelcomeHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("You need Change Info permission to set welcome message")
 		return nil
 	}
@@ -168,7 +168,7 @@ func SetGoodbyeHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("You need Change Info permission to set goodbye message")
 		return nil
 	}
@@ -237,7 +237,7 @@ func WelcomeToggleHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("You need Change Info permission to modify welcome settings")
 		return nil
 	}
@@ -274,7 +274,7 @@ func GoodbyeToggleHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("You need Change Info permission to modify goodbye settings")
 		return nil
 	}
@@ -311,7 +311,7 @@ func ClearWelcomeHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("You need Change Info permission to clear welcome")
 		return nil
 	}
@@ -327,7 +327,7 @@ func ClearGoodbyeHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("You need Change Info permission to clear goodbye")
 		return nil
 	}
@@ -420,49 +420,6 @@ func WelcomeHandler(p *tg.ParticipantUpdate) error {
 	return nil
 }
 
-func GoodbyeHandler(p *tg.ParticipantUpdate) error {
-	return nil
-	if !p.IsLeft() && !p.IsKicked() {
-		return nil
-	}
-
-	chatID := p.ChatID()
-	user := p.User
-
-	if user == nil {
-		return nil
-	}
-
-	goodbyeMsg, _ := db.GetGoodbye(chatID)
-
-	// Use default goodbye if none configured
-	content := ""
-	fileID := ""
-	if goodbyeMsg != nil {
-		content = goodbyeMsg.Content
-		fileID = goodbyeMsg.FileID
-	}
-
-	// Default goodbye message
-	if content == "" && fileID == "" {
-		content = "{first} has left the chat."
-	}
-
-	channel, _ := p.Client.GetChannel(chatID)
-	text := formatWelcomeText(content, user, channel)
-
-	if fileID != "" {
-		media, err := tg.ResolveBotFileID(fileID)
-		if err == nil {
-			p.Client.SendMedia(chatID, media, &tg.MediaOptions{Caption: text})
-		}
-	} else if text != "" {
-		p.Client.SendMessage(chatID, text)
-	}
-
-	return nil
-}
-
 func WelcomeSettingsHandler(m *tg.NewMessage) error {
 	if m.IsPrivate() {
 		m.Reply("Welcome settings can only be viewed in groups")
@@ -511,7 +468,7 @@ func CleanServiceHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "delete") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "delete") {
 		m.Reply("You need Delete Messages permission")
 		return nil
 	}
@@ -548,7 +505,7 @@ func WelcomeAutoDeleteHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("You need Change Info permission")
 		return nil
 	}

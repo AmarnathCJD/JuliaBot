@@ -23,9 +23,10 @@ type BlacklistSettings struct {
 }
 
 type BlacklistEntry struct {
-	Word    string `json:"word"`
-	FileID  string `json:"file_id,omitempty"`
-	AddedBy int64  `json:"added_by"`
+	Word        string `json:"word"`
+	FileID      string `json:"file_id,omitempty"`
+	MessageLink string `json:"message_link,omitempty"`
+	AddedBy     int64  `json:"added_by"`
 }
 
 func ensureBlacklistBuckets(db *bolt.DB) error {

@@ -80,7 +80,7 @@ func SetRulesHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("You need Change Info permission to set rules")
 		return nil
 	}
@@ -212,7 +212,7 @@ func ClearRulesHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("You need Change Info permission to clear rules")
 		return nil
 	}

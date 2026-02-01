@@ -86,7 +86,7 @@ func SaveNoteHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("<b>Permission denied.</b> You need Change Info permission.")
 		return nil
 	}
@@ -257,7 +257,7 @@ func sendNote(m *tg.NewMessage, noteName string) error {
 	}
 
 	// Check admin-only restriction
-	if note.AdminOnly && !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "") {
+	if note.AdminOnly && !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "") {
 		m.Reply("<b>Admin-only note.</b> Only admins can view this.")
 		return nil
 	}
@@ -374,7 +374,7 @@ func ClearNoteHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("<b>Permission denied.</b> You need Change Info permission.")
 		return nil
 	}
@@ -406,7 +406,7 @@ func ClearAllNotesHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("<b>Permission denied.</b> You need Change Info permission.")
 		return nil
 	}
@@ -472,7 +472,7 @@ func SaveTempNoteHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("<b>Permission denied.</b> You need Change Info permission.")
 		return nil
 	}
@@ -702,7 +702,7 @@ func RenameNoteHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "change_info") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("<b>Permission denied.</b> You need Change Info permission.")
 		return nil
 	}
@@ -764,7 +764,7 @@ func init() {
 
 <b>Special Tags:</b>
  • {admin} - Admin-only note
- • {mention}, {firstname}, {lastname}, {username} - User variables
+ • {mention}, {firstname}, {lastname}, {username}, {fullname} - User variables
  • {chatname}, {userid}, {chatid} - Chat variables
 
 <b>Add Buttons:</b>

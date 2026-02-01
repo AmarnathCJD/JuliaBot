@@ -16,7 +16,7 @@ func AddBlacklistHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
 		m.Reply("You need Ban Users permission to modify blacklist")
 		return nil
 	}
@@ -35,10 +35,13 @@ func AddBlacklistHandler(m *tg.NewMessage) error {
 				return nil
 			}
 
+			msgLink := fmt.Sprintf("https://t.me/c/%d/%d", m.ChatID(), reply.ID)
+
 			entry := &db.BlacklistEntry{
-				Word:    fileID,
-				FileID:  fileID,
-				AddedBy: m.SenderID(),
+				Word:        fileID,
+				FileID:      fileID,
+				MessageLink: msgLink,
+				AddedBy:     m.SenderID(),
 			}
 
 			if err := db.AddBlacklist(m.ChatID(), entry); err != nil {
@@ -87,7 +90,7 @@ func RemoveBlacklistHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
 		m.Reply("You need Ban Users permission to modify blacklist")
 		return nil
 	}
@@ -189,7 +192,7 @@ func SetBlacklistActionHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
 		m.Reply("You need Ban Users permission to modify blacklist settings")
 		return nil
 	}
@@ -355,7 +358,7 @@ func ClearBlacklistHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, int(m.SenderID()), int(m.ChatID()), "ban") {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
 		m.Reply("You need Ban Users permission to clear blacklist")
 		return nil
 	}
@@ -376,6 +379,155 @@ func ClearBlacklistHandler(m *tg.NewMessage) error {
 			).Build(),
 		},
 	)
+
+	return nil
+}
+
+// BlacklistRemovalMenu shows numbered media entries with buttons to remove them
+func BlacklistRemovalMenu(m *tg.NewMessage) error {
+	if m.IsPrivate() {
+		m.Reply("Blacklist can only be used in groups")
+		return nil
+	}
+
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
+		m.Reply("You need Ban Users permission to modify blacklist")
+		return nil
+	}
+
+	entries, err := db.GetBlacklist(m.ChatID())
+	if err != nil || len(entries) == 0 {
+		m.Reply("Blacklist is empty")
+		return nil
+	}
+
+	// Separate media and words
+	var mediaEntries []*db.BlacklistEntry
+	var wordEntries []*db.BlacklistEntry
+
+	for _, entry := range entries {
+		if entry.FileID != "" {
+			mediaEntries = append(mediaEntries, entry)
+		} else {
+			wordEntries = append(wordEntries, entry)
+		}
+	}
+
+	var resp strings.Builder
+	resp.WriteString("<b>Blacklist Items</b>\n\n")
+
+	// Show words
+	if len(wordEntries) > 0 {
+		resp.WriteString("<b>Words/Phrases:</b>\n")
+		for _, entry := range wordEntries {
+			resp.WriteString(fmt.Sprintf("• <code>%s</code>\n", entry.Word))
+		}
+		resp.WriteString("\n")
+	}
+
+	// Show media with removal buttons and links
+	if len(mediaEntries) > 0 {
+		fmt.Fprintf(&resp, "<b>Blacklisted Media (%d items):</b>\n\n", len(mediaEntries))
+
+		// Show clickable links for each media (max 10 displayed)
+		maxDisplay := min(len(mediaEntries), 10)
+
+		for i := range maxDisplay {
+			entry := mediaEntries[i]
+			if entry.MessageLink != "" {
+				fmt.Fprintf(&resp, "%d. <a href=\"%s\">View Media</a>\n", i+1, entry.MessageLink)
+			} else {
+				fmt.Fprintf(&resp, "%d. Media (no link)\n", i+1)
+			}
+		}
+
+		if len(mediaEntries) > maxDisplay {
+			fmt.Fprintf(&resp, "\n<i>Showing %d of %d media items</i>\n", maxDisplay, len(mediaEntries))
+		}
+
+		resp.WriteString("\n<b>Remove media:</b>\n")
+
+		// Show removal buttons (up to 10)
+		kb := tg.NewKeyboard()
+		b := tg.Button
+
+		for i := 0; i < maxDisplay && i < 10; i += 2 {
+			// Create row with up to 2 delete buttons
+			if i+1 < maxDisplay {
+				kb.AddRow(
+					b.Data(fmt.Sprintf("🗑️ Remove %d", i+1), fmt.Sprintf("rmblmedia_%d_%d", m.ChatID(), i)),
+					b.Data(fmt.Sprintf("🗑️ Remove %d", i+2), fmt.Sprintf("rmblmedia_%d_%d", m.ChatID(), i+1)),
+				)
+			} else {
+				kb.AddRow(b.Data(fmt.Sprintf("🗑️ Remove %d", i+1), fmt.Sprintf("rmblmedia_%d_%d", m.ChatID(), i)))
+			}
+		}
+
+		resp.WriteString(fmt.Sprintf("\nTotal: <b>%d media</b>, <b>%d words</b>", len(mediaEntries), len(wordEntries)))
+
+		m.Reply(resp.String(), &tg.SendOptions{
+			ReplyMarkup: kb.Build(),
+			ParseMode:   "HTML",
+		})
+
+	} else {
+		resp.WriteString(fmt.Sprintf("Total: <b>%d words</b>\n\n", len(wordEntries)))
+		resp.WriteString("Use /rmbl <word> to remove words")
+		m.Reply(resp.String())
+	}
+
+	return nil
+}
+
+// HandleBlacklistMediaRemoval handles removal of blacklisted media via callback
+func HandleBlacklistMediaRemoval(c *tg.CallbackQuery) error {
+	data := c.DataString()
+
+	if !strings.HasPrefix(data, "rmblmedia_") {
+		return nil
+	}
+
+	parts := strings.Split(strings.TrimPrefix(data, "rmblmedia_"), "_")
+	if len(parts) != 2 {
+		c.Answer("Invalid data", &tg.CallbackOptions{Alert: true})
+		return nil
+	}
+
+	var chatID int64
+	var mediaIndex int
+	if _, err := fmt.Sscanf(parts[0]+" "+parts[1], "%d %d", &chatID, &mediaIndex); err != nil {
+		c.Answer("Error processing request", &tg.CallbackOptions{Alert: true})
+		return nil
+	}
+
+	entries, err := db.GetBlacklist(chatID)
+	if err != nil {
+		c.Answer("Failed to get blacklist", &tg.CallbackOptions{Alert: true})
+		return nil
+	}
+
+	// Find media entries and get the one at mediaIndex
+	var mediaEntries []*db.BlacklistEntry
+	for _, entry := range entries {
+		if entry.FileID != "" {
+			mediaEntries = append(mediaEntries, entry)
+		}
+	}
+
+	if mediaIndex < 0 || mediaIndex >= len(mediaEntries) {
+		c.Answer("Media entry not found", &tg.CallbackOptions{Alert: true})
+		return nil
+	}
+
+	targetFileID := mediaEntries[mediaIndex].FileID
+
+	if err := db.RemoveBlacklist(chatID, targetFileID); err != nil {
+		c.Answer("Failed to remove media", &tg.CallbackOptions{Alert: true})
+		return nil
+	}
+
+	c.Answer("✓ Media removed from blacklist", &tg.CallbackOptions{Alert: false})
+	c.Edit("Media removed from blacklist!")
 
 	return nil
 }
