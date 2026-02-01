@@ -887,6 +887,102 @@ func execCommand(cmd string) error {
 	return nil
 }
 
+// HandlePostCommand posts content to a specified channel
+// Flags: -c username (target channel), -nm (no media), -fw (forward tag)
+func HandlePostCommand(m *tg.NewMessage) error {
+	// Parse arguments
+	args := strings.Fields(m.Args())
+
+	var targetChannel string
+	var dropMedia bool
+	var forwardTag bool
+	var contentText string
+	var contentArgs []string
+
+	// Parse flags
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-c":
+			if i+1 < len(args) {
+				targetChannel = args[i+1]
+				i++
+			}
+		case "-nm":
+			dropMedia = true
+		case "-fw":
+			forwardTag = true
+		default:
+			contentArgs = append(contentArgs, args[i])
+		}
+	}
+
+	var media tg.MessageMedia
+	var hasMedia bool
+
+	if m.IsReply() {
+		replyMsg, err := m.GetReplyMessage()
+		if err == nil {
+			contentText = replyMsg.Text()
+			if !dropMedia && replyMsg.Media() != nil {
+				hasMedia = true
+				media = replyMsg.Media()
+			}
+		}
+	}
+
+	if contentText == "" && len(contentArgs) > 0 {
+		contentText = strings.Join(contentArgs, " ")
+	}
+
+	if contentText == "" {
+		m.Reply("Please provide content to post (via reply or arguments)")
+		return nil
+	}
+
+	if targetChannel == "" {
+		m.Reply("Please specify target channel with -c flag")
+		return nil
+	}
+
+	var targetChannelID any
+
+	// Try to parse as channel ID
+	if _, err := fmt.Sscanf(targetChannel, "%d", &targetChannelID); err != nil {
+		// Try to resolve by username
+		user, err := m.Client.ResolveUsername(targetChannel)
+		if err != nil {
+			m.Reply("Could not resolve channel: " + targetChannel)
+			return nil
+		}
+		targetChannelID = user
+	}
+
+	if forwardTag {
+		contentText += "\n\n📌 <i>Forwarded</i>"
+	}
+
+	opts := &tg.SendOptions{}
+
+	if hasMedia {
+		_, err := m.Client.SendMedia(targetChannelID, media, &tg.MediaOptions{
+			Caption: contentText,
+		})
+		if err != nil {
+			m.Reply("Failed to post media: " + err.Error())
+			return nil
+		}
+	} else {
+		_, err := m.Client.SendMessage(targetChannelID, contentText, opts)
+		if err != nil {
+			m.Reply("Failed to post message: " + err.Error())
+			return nil
+		}
+	}
+
+	m.Reply("✓ Posted to " + targetChannel)
+	return nil
+}
+
 func init() {
 	Mods.AddModule("Dev", `<b>Here are the commands available in Dev module:</b>
 
