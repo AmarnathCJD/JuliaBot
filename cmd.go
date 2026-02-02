@@ -92,7 +92,7 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:greet", modules.WelcomeToggleHandler)
 		c.On("cmd:welcome", modules.WelcomeToggleHandler)
 		c.On("cmd:start", modules.StartHandle)
-		c.On("cmd:help", modules.HelpHandle)
+	//	c.On("cmd:help", modules.HelpHandle)
 		c.On("cmd:sys", modules.GatherSystemInfo)
 		c.On("cmd:info", modules.UserHandle)
 		c.On("cmd:json", modules.JsonHandle)
