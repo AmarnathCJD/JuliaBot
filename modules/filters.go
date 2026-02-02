@@ -278,22 +278,27 @@ func FilterWatcher(m *tg.NewMessage) error {
 }
 
 func init() {
-	Mods.AddModule("Filters", `<b>Filters Module</b>
+	Mods.AddModule("Filters", `<b>Content Filters</b>
 
-Set automatic responses to keywords.
+Set automatic responses or deletion for keywords.
 
 <b>Commands:</b>
- - /filter keyword response - Add filter (or reply)
- - /stop keyword - Remove filter
- - /filters - List filters
- - /stopall - Delete all filters
+/filter [keyword] [response] - Add filter with response (or reply to message)
+/stop [keyword] - Remove filter
+/filters - View all active filters
+/stopall - Delete all filters
 
 <b>Behavior:</b>
-Triggers when keyword appears as a complete word. Example: \"hello\" triggers on \"hello there\" but not \"helloworld\".
+Triggers when keyword appears as a complete word.
+Example: "hello" triggers on "hello there" but not "helloworld".
 
 <b>Add Buttons:</b>
 Use format: <code>[Button Text](https://example.com)</code>
 Example: <code>/filter spam [Report](url) | [Info](url)</code>
+
+<b>Examples:</b>
+• /filter spam - Auto-delete messages with "spam"
+• /filter rules Check the rules! - Reply to keyword
 
 <b>Permission:</b> Admins with Change Info permission only.`)
 }

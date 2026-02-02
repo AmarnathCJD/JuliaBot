@@ -45,6 +45,20 @@ var Mods = Modules{}
 func HelpHandle(m *telegram.NewMessage) error {
 	b := telegram.Button
 
+	// Check if a specific module is requested
+	args := strings.TrimSpace(m.Args())
+	if args != "" {
+		// Find the module and return its help
+		for _, mod := range Mods.Mod {
+			if strings.EqualFold(mod.Name, args) {
+				m.Reply(mod.Help)
+				return nil
+			}
+		}
+		m.Reply("Module not found. Use /help to see all available modules.")
+		return nil
+	}
+
 	if !m.IsPrivate() {
 		m.Reply("Use /help in private chat for detailed help.",
 			&telegram.SendOptions{

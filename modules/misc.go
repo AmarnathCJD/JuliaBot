@@ -9,7 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
 )
@@ -285,5 +288,289 @@ func NightModeHandler(m *telegram.NewMessage) error {
 	} else {
 		m.Reply("Night mode disabled. Messages allowed.")
 	}
+	return nil
+}
+
+// Stats tracking structures
+type UserStats struct {
+	MessageCount int
+	MediaCount   int
+	FirstSeen    time.Time
+	LastSeen     time.Time
+	Username     string
+	FirstName    string
+}
+
+type ChatStats struct {
+	TotalMessages      int
+	TotalUsers         map[int64]*UserStats
+	DailyMessages      map[string]int           // date -> count
+	DailyUserMessages  map[string]map[int64]int // date -> userID -> count
+	WeeklyUserMessages map[int64]int            // userID -> count (last 7 days)
+	HourlyActivity     map[int]int              // hour (0-23) -> count
+	MediaStats         map[string]int           // media type -> count
+	LastReset          time.Time
+}
+
+var chatStats = make(map[int64]*ChatStats)
+var statsLock sync.RWMutex
+
+// TrackMessageStats tracks all message statistics
+func TrackMessageStats(m *telegram.NewMessage) error {
+	if m.IsPrivate() || m.IsChannel() {
+		return nil
+	}
+
+	statsLock.Lock()
+	defer statsLock.Unlock()
+
+	chatID := m.ChatID()
+	userID := m.SenderID()
+
+	// Initialize chat stats if needed
+	if chatStats[chatID] == nil {
+		chatStats[chatID] = &ChatStats{
+			TotalUsers:         make(map[int64]*UserStats),
+			DailyMessages:      make(map[string]int),
+			DailyUserMessages:  make(map[string]map[int64]int),
+			WeeklyUserMessages: make(map[int64]int),
+			HourlyActivity:     make(map[int]int),
+			MediaStats:         make(map[string]int),
+			LastReset:          time.Now(),
+		}
+	}
+
+	stats := chatStats[chatID]
+	now := time.Now()
+	today := now.Format("2006-01-02")
+	hour := now.Hour()
+
+	// Initialize user stats if needed
+	if stats.TotalUsers[userID] == nil {
+		user, _ := m.Client.GetUser(userID)
+		username := ""
+		firstName := "User"
+		if user != nil {
+			username = user.Username
+			firstName = user.FirstName
+		}
+		stats.TotalUsers[userID] = &UserStats{
+			FirstSeen: now,
+			Username:  username,
+			FirstName: firstName,
+		}
+	}
+
+	userStats := stats.TotalUsers[userID]
+	userStats.MessageCount++
+	userStats.LastSeen = now
+
+	// Track media
+	if m.IsMedia() {
+		userStats.MediaCount++
+		if m.Photo() != nil {
+			stats.MediaStats["photo"]++
+		} else if m.Video() != nil {
+			stats.MediaStats["video"]++
+		} else if m.Document() != nil {
+			stats.MediaStats["document"]++
+		} else if m.Sticker() != nil {
+			stats.MediaStats["sticker"]++
+		} else if m.Voice() != nil {
+			stats.MediaStats["voice"]++
+		} else {
+			stats.MediaStats["other"]++
+		}
+	}
+
+	// Update counters
+	stats.TotalMessages++
+	stats.DailyMessages[today]++
+	stats.HourlyActivity[hour]++
+
+	// Daily user messages
+	if stats.DailyUserMessages[today] == nil {
+		stats.DailyUserMessages[today] = make(map[int64]int)
+	}
+	stats.DailyUserMessages[today][userID]++
+
+	// Weekly user messages (recalculate from daily data)
+	weekAgo := now.AddDate(0, 0, -7)
+	stats.WeeklyUserMessages[userID] = 0
+	for dateStr, userMsgs := range stats.DailyUserMessages {
+		date, _ := time.Parse("2006-01-02", dateStr)
+		if date.After(weekAgo) {
+			stats.WeeklyUserMessages[userID] += userMsgs[userID]
+		}
+	}
+
+	return nil
+}
+
+func StatsHandler(m *telegram.NewMessage) error {
+	if m.IsPrivate() {
+		m.Reply("Statistics can only be viewed in groups")
+		return nil
+	}
+
+	statsLock.RLock()
+	stats := chatStats[m.ChatID()]
+	statsLock.RUnlock()
+
+	if stats == nil || stats.TotalMessages == 0 {
+		m.Reply("No statistics available yet. Start chatting to generate data!")
+		return nil
+	}
+
+	var resp strings.Builder
+	resp.WriteString("<b>📊 Group Statistics</b>\n\n")
+
+	// Overall stats
+	resp.WriteString(fmt.Sprintf("<b>📈 Overall:</b>\n"))
+	resp.WriteString(fmt.Sprintf("  Total Messages: <code>%d</code>\n", stats.TotalMessages))
+	resp.WriteString(fmt.Sprintf("  Total Users: <code>%d</code>\n", len(stats.TotalUsers)))
+	resp.WriteString(fmt.Sprintf("  Tracking Since: <code>%s</code>\n\n", stats.LastReset.Format("Jan 02, 2006")))
+
+	// Today's stats
+	today := time.Now().Format("2006-01-02")
+	todayMsgs := stats.DailyMessages[today]
+	resp.WriteString(fmt.Sprintf("<b>📅 Today:</b>\n"))
+	resp.WriteString(fmt.Sprintf("  Messages: <code>%d</code>\n\n", todayMsgs))
+
+	// Top users today
+	type userRank struct {
+		UserID   int64
+		Name     string
+		Count    int
+		MediaCnt int
+	}
+
+	var todayTop []userRank
+	if stats.DailyUserMessages[today] != nil {
+		for userID, count := range stats.DailyUserMessages[today] {
+			if userStats, ok := stats.TotalUsers[userID]; ok {
+				name := userStats.FirstName
+				if userStats.Username != "" {
+					name = "@" + userStats.Username
+				}
+				todayTop = append(todayTop, userRank{userID, name, count, userStats.MediaCount})
+			}
+		}
+	}
+
+	sort.Slice(todayTop, func(i, j int) bool {
+		return todayTop[i].Count > todayTop[j].Count
+	})
+
+	resp.WriteString("<b>🏆 Top Users Today:</b>\n")
+	if len(todayTop) == 0 {
+		resp.WriteString("  No messages today yet\n\n")
+	} else {
+		for i := 0; i < len(todayTop) && i < 5; i++ {
+			medal := []string{"🥇", "🥈", "🥉", "4️⃣", "5️⃣"}[i]
+			resp.WriteString(fmt.Sprintf("  %s %s - <code>%d</code> msgs\n",
+				medal, todayTop[i].Name, todayTop[i].Count))
+		}
+		resp.WriteString("\n")
+	}
+
+	// Top users this week
+	var weekTop []userRank
+	for userID, count := range stats.WeeklyUserMessages {
+		if count > 0 {
+			if userStats, ok := stats.TotalUsers[userID]; ok {
+				name := userStats.FirstName
+				if userStats.Username != "" {
+					name = "@" + userStats.Username
+				}
+				weekTop = append(weekTop, userRank{userID, name, count, userStats.MediaCount})
+			}
+		}
+	}
+
+	sort.Slice(weekTop, func(i, j int) bool {
+		return weekTop[i].Count > weekTop[j].Count
+	})
+
+	resp.WriteString("<b>📅 Top Users This Week:</b>\n")
+	if len(weekTop) == 0 {
+		resp.WriteString("  No data for this week\n\n")
+	} else {
+		for i := 0; i < len(weekTop) && i < 5; i++ {
+			medal := []string{"🥇", "🥈", "🥉", "4️⃣", "5️⃣"}[i]
+			resp.WriteString(fmt.Sprintf("  %s %s - <code>%d</code> msgs\n",
+				medal, weekTop[i].Name, weekTop[i].Count))
+		}
+		resp.WriteString("\n")
+	}
+
+	// All-time top users
+	var allTimeTop []userRank
+	for userID, userStats := range stats.TotalUsers {
+		name := userStats.FirstName
+		if userStats.Username != "" {
+			name = "@" + userStats.Username
+		}
+		allTimeTop = append(allTimeTop, userRank{userID, name, userStats.MessageCount, userStats.MediaCount})
+	}
+
+	sort.Slice(allTimeTop, func(i, j int) bool {
+		return allTimeTop[i].Count > allTimeTop[j].Count
+	})
+
+	resp.WriteString("<b>🌟 All-Time Top Users:</b>\n")
+	for i := 0; i < len(allTimeTop) && i < 5; i++ {
+		medal := []string{"🥇", "🥈", "🥉", "4️⃣", "5️⃣"}[i]
+		resp.WriteString(fmt.Sprintf("  %s %s - <code>%d</code> msgs (<code>%d</code> media)\n",
+			medal, allTimeTop[i].Name, allTimeTop[i].Count, allTimeTop[i].MediaCnt))
+	}
+	resp.WriteString("\n")
+
+	// Most active hours
+	type hourRank struct {
+		Hour  int
+		Count int
+	}
+	var hours []hourRank
+	for hour, count := range stats.HourlyActivity {
+		hours = append(hours, hourRank{hour, count})
+	}
+	sort.Slice(hours, func(i, j int) bool {
+		return hours[i].Count > hours[j].Count
+	})
+
+	resp.WriteString("<b>⏰ Most Active Hours (UTC):</b>\n")
+	for i := 0; i < len(hours) && i < 3; i++ {
+		resp.WriteString(fmt.Sprintf("  %02d:00 - <code>%d</code> msgs\n",
+			hours[i].Hour, hours[i].Count))
+	}
+	resp.WriteString("\n")
+
+	// Media statistics
+	if len(stats.MediaStats) > 0 {
+		totalMedia := 0
+		for _, count := range stats.MediaStats {
+			totalMedia += count
+		}
+		resp.WriteString(fmt.Sprintf("<b>📎 Media Shared:</b> <code>%d</code> total\n", totalMedia))
+
+		type mediaRank struct {
+			Type  string
+			Count int
+		}
+		var media []mediaRank
+		for mediaType, count := range stats.MediaStats {
+			media = append(media, mediaRank{mediaType, count})
+		}
+		sort.Slice(media, func(i, j int) bool {
+			return media[i].Count > media[j].Count
+		})
+
+		for _, m := range media {
+			resp.WriteString(fmt.Sprintf("  %s: <code>%d</code>\n", m.Type, m.Count))
+		}
+	}
+
+	m.Reply(resp.String())
 	return nil
 }

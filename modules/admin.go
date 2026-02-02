@@ -344,16 +344,22 @@ func BanUserHandle(m *tg.NewMessage) error {
 		return nil
 	}
 
-	msg, opErr := performBan(m.Client, m.ChatID(), user, reason)
+	msg, opErr := performBan(m.Client, m.ChatID(), user, reason, m.SenderID())
 	if opErr != nil {
 		m.Reply(adminFriendlyError(opErr, "ban"))
 		return nil
 	}
-	m.Reply(msg)
+
+	b := tg.Button
+	m.Reply(msg, &tg.SendOptions{
+		ReplyMarkup: tg.NewKeyboard().AddRow(
+			b.Data("Undo Ban", fmt.Sprintf("undo_ban_%d_%d", targetID, m.SenderID())),
+		).Build(),
+	})
 	return nil
 }
 
-func performBan(client *tg.Client, chatID int64, user tg.InputPeer, reason string) (string, error) {
+func performBan(client *tg.Client, chatID int64, user tg.InputPeer, reason string, adminID int64) (string, error) {
 	channel, _ := client.GetChannel(chatID)
 	if channel != nil && !CanBot(client, channel, "ban") {
 		return "", errors.New("missing bot rights")
@@ -363,6 +369,9 @@ func performBan(client *tg.Client, chatID int64, user tg.InputPeer, reason strin
 	if err != nil || !done {
 		return "", err
 	}
+
+	userID := client.GetPeerID(user)
+	RecordAction(chatID, userID, adminID, "ban", map[string]interface{}{"reason": reason})
 
 	name := GetPeerDisplayName(client, user)
 	msg := fmt.Sprintf("Done. %s has been banned.", name)
@@ -515,16 +524,22 @@ func TbanUserHandle(m *tg.NewMessage) error {
 		reason = strings.Join(parts[1:], " ")
 	}
 
-	msg, opErr := performTban(m.Client, m.ChatID(), user, parts[0], reason)
+	msg, opErr := performTban(m.Client, m.ChatID(), user, parts[0], reason, m.SenderID())
 	if opErr != nil {
 		m.Reply(adminFriendlyError(opErr, "temp-ban"))
 		return nil
 	}
-	m.Reply(msg)
+
+	b := tg.Button
+	m.Reply(msg, &tg.SendOptions{
+		ReplyMarkup: tg.NewKeyboard().AddRow(
+			b.Data("Undo Ban", fmt.Sprintf("undo_tban_%d_%d", targetID, m.SenderID())),
+		).Build(),
+	})
 	return nil
 }
 
-func performTban(client *tg.Client, chatID int64, user tg.InputPeer, durationStr, reason string) (string, error) {
+func performTban(client *tg.Client, chatID int64, user tg.InputPeer, durationStr, reason string, adminID int64) (string, error) {
 	channel, _ := client.GetChannel(chatID)
 	if channel != nil && !CanBot(client, channel, "ban") {
 		return "", errors.New("missing bot rights")
@@ -540,6 +555,9 @@ func performTban(client *tg.Client, chatID int64, user tg.InputPeer, durationStr
 	if err != nil || !done {
 		return "", err
 	}
+
+	userID := client.GetPeerID(user)
+	RecordAction(chatID, userID, adminID, "tban", map[string]interface{}{"reason": reason, "duration": duration.String()})
 
 	name := GetPeerDisplayName(client, user)
 	msg := fmt.Sprintf("Done. %s has been banned for %s.", name, formatAdminDuration(duration))
@@ -574,16 +592,22 @@ func TmuteUserHandle(m *tg.NewMessage) error {
 		reason = strings.Join(parts[1:], " ")
 	}
 
-	msg, opErr := performTmute(m.Client, m.ChatID(), user, parts[0], reason)
+	msg, opErr := performTmute(m.Client, m.ChatID(), user, parts[0], reason, m.SenderID())
 	if opErr != nil {
 		m.Reply(adminFriendlyError(opErr, "temp-mute"))
 		return nil
 	}
-	m.Reply(msg)
+
+	b := tg.Button
+	m.Reply(msg, &tg.SendOptions{
+		ReplyMarkup: tg.NewKeyboard().AddRow(
+			b.Data("Undo Mute", fmt.Sprintf("undo_tmute_%d_%d", targetID, m.SenderID())),
+		).Build(),
+	})
 	return nil
 }
 
-func performTmute(client *tg.Client, chatID int64, user tg.InputPeer, durationStr, reason string) (string, error) {
+func performTmute(client *tg.Client, chatID int64, user tg.InputPeer, durationStr, reason string, adminID int64) (string, error) {
 	channel, _ := client.GetChannel(chatID)
 	if channel != nil && !CanBot(client, channel, "ban") {
 		return "", errors.New("missing bot rights")
@@ -602,6 +626,9 @@ func performTmute(client *tg.Client, chatID int64, user tg.InputPeer, durationSt
 	if err != nil || !done {
 		return "", err
 	}
+
+	userID := client.GetPeerID(user)
+	RecordAction(chatID, userID, adminID, "tmute", map[string]interface{}{"reason": reason, "duration": duration.String()})
 
 	name := GetPeerDisplayName(client, user)
 	msg := fmt.Sprintf("Done. %s has been muted for %s.", name, formatAdminDuration(duration))
@@ -623,16 +650,22 @@ func MuteUserHandle(m *tg.NewMessage) error {
 		return nil
 	}
 
-	msg, opErr := performMute(m.Client, m.ChatID(), user, reason)
+	msg, opErr := performMute(m.Client, m.ChatID(), user, reason, m.SenderID())
 	if opErr != nil {
 		m.Reply(adminFriendlyError(opErr, "mute"))
 		return nil
 	}
-	m.Reply(msg)
+
+	b := tg.Button
+	m.Reply(msg, &tg.SendOptions{
+		ReplyMarkup: tg.NewKeyboard().AddRow(
+			b.Data("Undo Mute", fmt.Sprintf("undo_mute_%d_%d", targetID, m.SenderID())),
+		).Build(),
+	})
 	return nil
 }
 
-func performMute(client *tg.Client, chatID int64, user tg.InputPeer, reason string) (string, error) {
+func performMute(client *tg.Client, chatID int64, user tg.InputPeer, reason string, adminID int64) (string, error) {
 	channel, _ := client.GetChannel(chatID)
 	if channel != nil && !CanBot(client, channel, "ban") {
 		return "", errors.New("missing bot rights")
@@ -642,6 +675,9 @@ func performMute(client *tg.Client, chatID int64, user tg.InputPeer, reason stri
 	if err != nil || !done {
 		return "", err
 	}
+
+	userID := client.GetPeerID(user)
+	RecordAction(chatID, userID, adminID, "mute", map[string]interface{}{"reason": reason})
 
 	name := GetPeerDisplayName(client, user)
 	msg := fmt.Sprintf("Done. %s has been muted.", name)
@@ -703,7 +739,7 @@ func SbanUserHandle(m *tg.NewMessage) error {
 		replyTemp(m, "I couldn't find who to ban. "+adminUsage("ban"), 6)
 		return nil
 	}
-	_, opErr := performBan(m.Client, m.ChatID(), user, "")
+	_, opErr := performBan(m.Client, m.ChatID(), user, "", m.SenderID())
 	if opErr != nil {
 		replyTemp(m, adminFriendlyError(opErr, "ban"), 6)
 		return nil
@@ -729,7 +765,7 @@ func SmuteUserHandle(m *tg.NewMessage) error {
 		replyTemp(m, "I couldn't find who to mute. "+adminUsage("mute"), 6)
 		return nil
 	}
-	_, opErr := performMute(m.Client, m.ChatID(), user, "")
+	_, opErr := performMute(m.Client, m.ChatID(), user, "", m.SenderID())
 	if opErr != nil {
 		replyTemp(m, adminFriendlyError(opErr, "mute"), 6)
 		return nil
@@ -814,7 +850,7 @@ func DBanUserHandle(m *tg.NewMessage) error {
 	}
 	// Delete the offending message first.
 	m.Client.DeleteMessages(m.ChatID(), []int32{int32(reply.ID)})
-	msg, opErr := performBan(m.Client, m.ChatID(), peer, strings.TrimSpace(m.Args()))
+	msg, opErr := performBan(m.Client, m.ChatID(), peer, strings.TrimSpace(m.Args()), m.SenderID())
 	if opErr != nil {
 		m.Reply(adminFriendlyError(opErr, "ban"))
 		return nil
@@ -848,7 +884,7 @@ func DMuteUserHandle(m *tg.NewMessage) error {
 		return nil
 	}
 	m.Client.DeleteMessages(m.ChatID(), []int32{int32(reply.ID)})
-	msg, opErr := performMute(m.Client, m.ChatID(), peer, strings.TrimSpace(m.Args()))
+	msg, opErr := performMute(m.Client, m.ChatID(), peer, strings.TrimSpace(m.Args()), m.SenderID())
 	if opErr != nil {
 		m.Reply(adminFriendlyError(opErr, "mute"))
 		return nil
@@ -967,37 +1003,37 @@ func AdminVerifyCallback(c *tg.CallbackQuery) error {
 	var resultMsg string
 	switch action {
 	case "ban":
-		resultMsg, opErr = performBan(c.Client, c.ChatID, user, "")
+		resultMsg, opErr = performBan(c.Client, c.ChatID, user, "", c.SenderID)
 	case "unban":
 		resultMsg, opErr = performUnban(c.Client, c.ChatID, user)
 	case "kick":
 		resultMsg, opErr = performKick(c.Client, c.ChatID, user, "")
 	case "mute":
-		resultMsg, opErr = performMute(c.Client, c.ChatID, user, "")
+		resultMsg, opErr = performMute(c.Client, c.ChatID, user, "", c.SenderID)
 	case "unmute":
 		resultMsg, opErr = performUnmute(c.Client, c.ChatID, user)
 	case "tban":
 		if len(parts) < 3 {
 			opErr = errors.New("missing duration")
 		} else {
-			resultMsg, opErr = performTban(c.Client, c.ChatID, user, parts[2], "")
+			resultMsg, opErr = performTban(c.Client, c.ChatID, user, parts[2], "", c.SenderID)
 		}
 	case "tmute":
 		if len(parts) < 3 {
 			opErr = errors.New("missing duration")
 		} else {
-			resultMsg, opErr = performTmute(c.Client, c.ChatID, user, parts[2], "")
+			resultMsg, opErr = performTmute(c.Client, c.ChatID, user, parts[2], "", c.SenderID)
 		}
 	case "dban":
 		if msgID != 0 {
 			c.Client.DeleteMessages(c.ChatID, []int32{msgID})
 		}
-		resultMsg, opErr = performBan(c.Client, c.ChatID, user, "")
+		resultMsg, opErr = performBan(c.Client, c.ChatID, user, "", c.SenderID)
 	case "dmute":
 		if msgID != 0 {
 			c.Client.DeleteMessages(c.ChatID, []int32{msgID})
 		}
-		resultMsg, opErr = performMute(c.Client, c.ChatID, user, "")
+		resultMsg, opErr = performMute(c.Client, c.ChatID, user, "", c.SenderID)
 	case "dkick":
 		if msgID != 0 {
 			c.Client.DeleteMessages(c.ChatID, []int32{msgID})
@@ -1054,4 +1090,35 @@ func HandleReactionUpdate(update tg.Update, c *tg.Client) error {
 	}
 
 	return nil
+}
+
+func init() {
+	Mods.AddModule("Admin", `<b>Admin Commands</b>
+
+<b>Ban & Unban:</b>
+/ban [user] [reason] - Ban a user permanently
+/unban [user] - Remove ban from user
+/tban [user] [time] [reason] - Ban for duration (1h, 30m, 2d, etc.)
+
+<b>Kick & Mute:</b>
+/kick [user] [reason] - Remove user from group
+/mute [user] [reason] - Silence a user (can read, not write)
+/unmute [user] - Restore user's ability to send messages
+/tmute [user] [time] [reason] - Mute for specified duration
+
+<b>Promote & Demote:</b>
+/promote [user] [title] - Make user an admin with optional title
+/demote [user] - Remove admin status from user
+
+<b>Delete & Act:</b>
+/del - Delete a message (reply to the message)
+/dban - Delete message and ban sender
+/dmute - Delete message and mute sender
+/dkick - Delete message and kick sender
+
+<b>Usage:</b>
+Reply to a user's message OR provide their @username or ID.
+All actions support optional reasons.
+
+<i>💡 Click undo buttons within 5 minutes to reverse actions</i>`)
 }

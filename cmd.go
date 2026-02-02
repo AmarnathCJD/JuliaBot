@@ -42,9 +42,19 @@ func FilterOwnerNoReply(m *telegram.NewMessage) bool {
 	return m.SenderID() == ownerId
 }
 
+func StatsMiddleware() telegram.Middleware {
+	return func(handler telegram.MessageHandler) telegram.MessageHandler {
+		return func(m *telegram.NewMessage) error {
+			modules.TrackMessageStats(m)
+			return handler(m)
+		}
+	}
+}
+
 func initFunc(c *telegram.Client) {
 	_, _ = c.UpdatesGetState()
 	c.SetCommandPrefixes("./!-?")
+	c.Use(StatsMiddleware())
 
 	if LoadModules {
 		c.Logger.Info("Loading Modules...")
@@ -222,8 +232,14 @@ func initFunc(c *telegram.Client) {
 		c.On("cmd:resetwarns", modules.ResetWarnsHandler)
 		c.On("cmd:setwarnlimit", modules.SetWarnLimitHandler)
 		c.On("cmd:setwarnaction", modules.SetWarnActionHandler)
+		c.On("cmd:setwarnmode", modules.SetWarnActionHandler)
 		c.On("cmd:warnsettings", modules.WarnSettingsHandler)
+		c.On("cmd:twarn", modules.TemporaryWarnHandler)
 		c.On("callback:rmwarn_", modules.RemoveWarnCallback)
+		c.On("callback:undo_", modules.UndoActionHandler)
+
+		c.On("cmd:help", modules.HelpHandle)
+		c.On("cmd:stats", modules.StatsHandler)
 
 		// Welcome/Goodbye module
 		c.On("cmd:setwelcome", modules.SetWelcomeHandler)
