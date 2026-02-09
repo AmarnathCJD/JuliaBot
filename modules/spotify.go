@@ -1,6 +1,7 @@
 package modules
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/hex"
@@ -16,8 +17,204 @@ import (
 	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
+	tg "github.com/amarnathcjd/gogram/telegram"
 	"github.com/tramhao/id3v2"
 )
+
+type APIResponse struct {
+	Success bool `json:"success"`
+	Data    []struct {
+		ID     string `json:"id"`
+		Cipher bool   `json:"cipher"`
+		Meta   struct {
+			Title    string `json:"title"`
+			Source   string `json:"source"`
+			Duration string `json:"duration"`
+			Tags     string `json:"tags"`
+			Subtitle struct {
+				Token    string   `json:"token"`
+				Language []string `json:"language"`
+			} `json:"subtitle"`
+			Shortcode    string `json:"shortcode"`
+			CommentCount int    `json:"comment_count"`
+			LikeCount    int    `json:"like_count"`
+			Username     string `json:"username"`
+		} `json:"meta"`
+		Thumb string `json:"thumb"`
+		URL   []struct {
+			URL          string `json:"url"`
+			Name         string `json:"name"`
+			Ext          string `json:"ext"`
+			Quality      string `json:"quality"`
+			Subname      string `json:"subname"`
+			Type         string `json:"type"`
+			Downloadable bool   `json:"downloadable"`
+			NoAudio      bool   `json:"no_audio"`
+			Itag         string `json:"itag"`
+		} `json:"url"`
+	} `json:"data"`
+}
+
+func SongHandler(m *tg.NewMessage) error {
+	rawArgs := m.Args()
+	videoMode := false
+	if strings.Contains(rawArgs, "-v") {
+		videoMode = true
+		rawArgs = strings.ReplaceAll(rawArgs, "-v", "")
+	}
+	q := strings.TrimSpace(rawArgs)
+
+	if q == "" {
+		m.Reply("provide a youtube or insta url")
+		return nil
+	}
+
+	status, _ := m.Reply("Processing...")
+
+	data := bytes.NewBuffer([]byte(`{"url":"` + q + `"}`))
+	req, _ := http.NewRequest("POST", "https://i.gogram.fun/api/process", data)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		status.Edit("Error: " + err.Error())
+		return nil
+	}
+	defer resp.Body.Close()
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		status.Edit("Error: " + err.Error())
+		return nil
+	}
+
+	var res APIResponse
+	if err := json.Unmarshal(b, &res); err != nil {
+		status.Edit("Error decoding JSON.")
+		return nil
+	}
+
+	if !res.Success || len(res.Data) == 0 {
+		status.Edit("No data found.")
+		return nil
+	}
+
+	d := res.Data[0]
+	isInsta := strings.Contains(d.Meta.Source, "instagram.com") || d.Meta.Shortcode != ""
+
+	if isInsta {
+		status.Delete()
+		caption := fmt.Sprintf("<b>Title:</b> %s\n<b>Account:</b> <a href='%s'>%s</a>", d.Meta.Title, d.Meta.Source, d.Meta.Username)
+		kb := tg.NewKeyboard().AddRow(
+			tg.Button.URL(fmt.Sprintf("Likes: %d", d.Meta.LikeCount), "https://instagram.com"),
+			tg.Button.URL(fmt.Sprintf("Comments: %d", d.Meta.CommentCount), "https://instagram.com"),
+		)
+
+		for _, u := range d.URL {
+			if u.URL == "" {
+				continue
+			}
+			path := fmt.Sprintf("downloads/%d%s", time.Now().UnixNano(), "."+u.Ext)
+			if err := downloadFile(path, u.URL); err != nil {
+				m.Reply("Failed to download: " + err.Error())
+				continue
+			}
+			m.ReplyMedia(path, &tg.MediaOptions{Caption: caption, ReplyMarkup: kb.Build()})
+			os.Remove(path)
+		}
+	} else {
+		targetUrl := ""
+		for _, u := range d.URL {
+			if u.Quality == "360" && !u.NoAudio {
+				targetUrl = u.URL
+				break
+			}
+		}
+		if targetUrl == "" {
+			for _, u := range d.URL {
+				if u.Quality == "360" {
+					targetUrl = u.URL
+					break
+				}
+			}
+		}
+		if targetUrl == "" && len(d.URL) > 0 {
+			targetUrl = d.URL[0].URL
+		}
+
+		if targetUrl == "" {
+			status.Edit("No suitable stream found.")
+			return nil
+		}
+
+		fpath := fmt.Sprintf("downloads/%d.mp4", time.Now().UnixNano())
+		if err := downloadFile(fpath, targetUrl); err != nil {
+			status.Edit("Download Exception: " + err.Error())
+			return nil
+		}
+
+		if videoMode {
+			m.ReplyMedia(fpath, &tg.MediaOptions{Caption: d.Meta.Title})
+			os.Remove(fpath)
+			status.Delete()
+		} else {
+			status.Edit("Converting to MP3...")
+			mp3Path := strings.Replace(fpath, ".mp4", ".mp3", 1)
+			cmd := exec.Command("ffmpeg", "-i", fpath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", "-y", mp3Path)
+			if err := cmd.Run(); err != nil {
+				status.Edit("FFmpeg Error: " + err.Error())
+				os.Remove(fpath)
+				return nil
+			}
+
+			tag, _ := id3v2.Open(mp3Path, id3v2.Options{Parse: true})
+			defer tag.Close()
+			tag.SetTitle(d.Meta.Title)
+
+			if d.Thumb != "" {
+				thumbPath := fpath + ".jpg"
+				if err := downloadFile(thumbPath, d.Thumb); err == nil {
+					pic, _ := os.ReadFile(thumbPath)
+					tag.AddAttachedPicture(id3v2.PictureFrame{
+						Encoding:    id3v2.EncodingISO,
+						MimeType:    "image/jpeg",
+						PictureType: id3v2.PTFrontCover,
+						Description: "Cover",
+						Picture:     pic,
+					})
+					os.Remove(thumbPath)
+				}
+			}
+			tag.Save()
+
+			m.ReplyMedia(mp3Path, &tg.MediaOptions{Caption: d.Meta.Title})
+			os.Remove(fpath)
+			os.Remove(mp3Path)
+			status.Delete()
+		}
+	}
+
+	return nil
+}
+
+func downloadFile(filepath string, url string) error {
+	os.MkdirAll("downloads", 0777)
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	out, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	return err
+}
 
 func rebuildOgg(filename string) {
 	oggS := []byte("OggS")
