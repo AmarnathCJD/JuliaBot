@@ -28,6 +28,12 @@ func adminUsage(action string) string {
 		return "Reply to the message you want deleted. I will delete it and mute the sender. You can add an optional reason."
 	case "dkick":
 		return "Reply to the message you want deleted. I will delete it and kick the sender. You can add an optional reason."
+	case "pin":
+		return "Reply to the message you want to pin. Add 'silent' or 'notify' to control notification behavior."
+	case "unpin":
+		return "Reply to the pinned message you want to unpin, or use 'all' to unpin all messages."
+	case "purge":
+		return "Reply to the starting message. I'll delete all messages from that message to this command."
 	default:
 		return "Reply to a user's message or pass their username/ID."
 	}
@@ -120,6 +126,10 @@ func parseAdminError(err error, action string) string {
 		return "I couldn't " + action + ". That account can't be managed here."
 	case strings.Contains(errStr, "PARTICIPANT_ID_INVALID"):
 		return "I couldn't " + action + ". The user might have left the chat."
+	case strings.Contains(errStr, "CHAT_NOT_MODIFIED"):
+		return "The chat permissions are already set to the requested state."
+	case strings.Contains(errStr, "MESSAGE_ID_INVALID"):
+		return "Unable to " + action + ", the message might have been deleted or is too old"
 	default:
 		fmt.Println("Admin action error:", errStr)
 		return "I couldn't " + action + ". Please check my admin rights and try again."
@@ -927,6 +937,381 @@ func DKickUserHandle(m *tg.NewMessage) error {
 	return nil
 }
 
+func PinMessageHandle(m *tg.NewMessage) error {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "pin") {
+		m.Reply("You don't have permission to pin messages here.")
+		return nil
+	}
+	if !CanBot(m.Client, m.Channel, "pin") {
+		m.Reply("I need admin permission to pin messages in this chat.")
+		return nil
+	}
+	if !m.IsReply() {
+		m.Reply("Reply to the message you want to pin.")
+		return nil
+	}
+	reply, err := m.GetReplyMessage()
+	if err != nil {
+		m.Reply("I couldn't read the replied message. Please try again.")
+		return nil
+	}
+
+	notify := true
+	args := strings.ToLower(strings.TrimSpace(m.Args()))
+	if strings.Contains(args, "silent") || strings.Contains(args, "notify") {
+		notify = false
+	}
+
+	_, err = m.Client.PinMessage(m.ChatID(), int32(reply.ID), &tg.PinOptions{Silent: !notify})
+	if err != nil {
+		m.Reply(adminFriendlyError(err, "pin message"))
+		return nil
+	}
+	m.Reply("Done. Message pinned.")
+	return nil
+}
+
+func UnpinMessageHandle(m *tg.NewMessage) error {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "pin") {
+		m.Reply("You don't have permission to unpin messages here.")
+		return nil
+	}
+	if !CanBot(m.Client, m.Channel, "pin") {
+		m.Reply("I need admin permission to unpin messages in this chat.")
+		return nil
+	}
+
+	if !m.IsReply() {
+		m.Reply("Reply to the pinned message you want to unpin, or use `/unpin all` to unpin all messages.")
+		return nil
+	}
+
+	reply, err := m.GetReplyMessage()
+	if err != nil {
+		m.Reply("I couldn't read the replied message. Please try again.")
+		return nil
+	}
+
+	_, err = m.Client.UnpinMessage(m.ChatID(), int32(reply.ID))
+	if err != nil {
+		m.Reply(adminFriendlyError(err, "unpin message"))
+		return nil
+	}
+	m.Reply("Done. Message unpinned.")
+	return nil
+}
+
+func PurgeMessagesHandle(m *tg.NewMessage) error {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "delete") {
+		m.Reply("You don't have permission to delete messages here.")
+		return nil
+	}
+	if !CanBot(m.Client, m.Channel, "delete") {
+		m.Reply("I need admin permission to delete messages in this chat.")
+		return nil
+	}
+	if !m.IsReply() {
+		m.Reply("Reply to the starting message. I'll delete all messages from that message to this command.")
+		return nil
+	}
+
+	reply, err := m.GetReplyMessage()
+	if err != nil {
+		m.Reply("I couldn't read the replied message. Please try again.")
+		return nil
+	}
+
+	startMsgID := int32(reply.ID)
+	endMsgID := int32(m.ID)
+
+	if startMsgID >= endMsgID {
+		m.Reply("The replied message must be older than this command message.")
+		return nil
+	}
+
+	// Telegram allows max 100 messages per request
+	var msgIDs []int32
+	for i := startMsgID; i <= endMsgID; i++ {
+		msgIDs = append(msgIDs, i)
+	}
+
+	if len(msgIDs) > 100 {
+		m.Reply(fmt.Sprintf("⚠️ Purging %d messages...", len(msgIDs)))
+
+		// Delete in batches of 100
+		for i := 0; i < len(msgIDs); i += 100 {
+			end := i + 100
+			if end > len(msgIDs) {
+				end = len(msgIDs)
+			}
+			m.Client.DeleteMessages(m.ChatID(), msgIDs[i:end])
+			time.Sleep(500 * time.Millisecond) // Rate limiting
+		}
+	} else {
+		m.Client.DeleteMessages(m.ChatID(), msgIDs)
+	}
+
+	statusMsg, _ := m.Reply(fmt.Sprintf("✅ Purged %d messages.", len(msgIDs)))
+
+	// Auto-delete the status message after 5 seconds
+	if statusMsg != nil {
+		time.Sleep(5 * time.Second)
+		m.Client.DeleteMessages(m.ChatID(), []int32{int32(statusMsg.ID)})
+	}
+
+	return nil
+}
+
+func LockHandle(m *tg.NewMessage) error {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
+		m.Reply("You don't have permission to lock chat settings here.")
+		return nil
+	}
+	if !CanBot(m.Client, m.Channel, "ban") {
+		m.Reply("I need admin permission to manage chat restrictions.")
+		return nil
+	}
+
+	args := strings.ToLower(strings.TrimSpace(m.Args()))
+	if args == "" {
+		m.Reply("Please specify what to lock: `all`, `messages`, `media`, `stickers`, `gifs`, `polls`, `invite`, `pin`, `info`")
+		return nil
+	}
+
+	channel, err := m.Client.GetChannel(m.ChatID())
+	if err != nil {
+		m.Reply("This command only works in supergroups.")
+		return nil
+	}
+
+	defaultRights := channel.DefaultBannedRights
+	if defaultRights == nil {
+		defaultRights = &tg.ChatBannedRights{}
+	}
+
+	updated := false
+	lockMsg := "🔒 Locked: "
+
+	switch args {
+	case "all":
+		defaultRights.SendMessages = true
+		defaultRights.SendMedia = true
+		defaultRights.SendStickers = true
+		defaultRights.SendGifs = true
+		defaultRights.SendGames = true
+		defaultRights.SendInline = true
+		defaultRights.SendPolls = true
+		defaultRights.ChangeInfo = true
+		defaultRights.InviteUsers = true
+		defaultRights.PinMessages = true
+		lockMsg += "All permissions"
+		updated = true
+	case "messages", "msg":
+		defaultRights.SendMessages = true
+		lockMsg += "Messages"
+		updated = true
+	case "media":
+		defaultRights.SendMedia = true
+		lockMsg += "Media"
+		updated = true
+	case "stickers", "sticker":
+		defaultRights.SendStickers = true
+		lockMsg += "Stickers"
+		updated = true
+	case "gifs", "gif", "animations":
+		defaultRights.SendGifs = true
+		lockMsg += "GIFs"
+		updated = true
+	case "games", "game":
+		defaultRights.SendGames = true
+		lockMsg += "Games"
+		updated = true
+	case "inline":
+		defaultRights.SendInline = true
+		lockMsg += "Inline bots"
+		updated = true
+	case "polls", "poll":
+		defaultRights.SendPolls = true
+		lockMsg += "Polls"
+		updated = true
+	case "invite", "invites":
+		defaultRights.InviteUsers = true
+		lockMsg += "Invite users"
+		updated = true
+	case "pin":
+		defaultRights.PinMessages = true
+		lockMsg += "Pin messages"
+		updated = true
+	case "info", "change_info":
+		defaultRights.ChangeInfo = true
+		lockMsg += "Change chat info"
+		updated = true
+	default:
+		m.Reply("Unknown lock type. Available: `all`, `messages`, `media`, `stickers`, `gifs`, `polls`, `invite`, `pin`, `info`")
+		return nil
+	}
+
+	if updated {
+		peerChannel, _ := m.Client.ResolvePeer(m.ChatID())
+		_, err := m.Client.MessagesEditChatDefaultBannedRights(peerChannel, defaultRights)
+		if err != nil {
+			m.Reply(adminFriendlyError(err, "update chat permissions"))
+			return nil
+		}
+		m.Reply(lockMsg)
+	}
+
+	return nil
+}
+
+func UnlockHandle(m *tg.NewMessage) error {
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
+		m.Reply("You don't have permission to unlock chat settings here.")
+		return nil
+	}
+	if !CanBot(m.Client, m.Channel, "ban") {
+		m.Reply("I need admin permission to manage chat restrictions.")
+		return nil
+	}
+
+	args := strings.ToLower(strings.TrimSpace(m.Args()))
+	if args == "" {
+		m.Reply("Please specify what to unlock: `all`, `messages`, `media`, `stickers`, `gifs`, `polls`, `invite`, `pin`, `info`")
+		return nil
+	}
+
+	channel, err := m.Client.GetChannel(m.ChatID())
+	if err != nil {
+		m.Reply("This command only works in supergroups.")
+		return nil
+	}
+
+	defaultRights := channel.DefaultBannedRights
+	if defaultRights == nil {
+		defaultRights = &tg.ChatBannedRights{}
+	}
+
+	updated := false
+	unlockMsg := "🔓 Unlocked: "
+
+	switch args {
+	case "all":
+		defaultRights.SendMessages = false
+		defaultRights.SendMedia = false
+		defaultRights.SendStickers = false
+		defaultRights.SendGifs = false
+		defaultRights.SendGames = false
+		defaultRights.SendInline = false
+		defaultRights.SendPolls = false
+		defaultRights.ChangeInfo = false
+		defaultRights.InviteUsers = false
+		defaultRights.PinMessages = false
+		unlockMsg += "All permissions"
+		updated = true
+	case "messages", "msg":
+		defaultRights.SendMessages = false
+		unlockMsg += "Messages"
+		updated = true
+	case "media":
+		defaultRights.SendMedia = false
+		unlockMsg += "Media"
+		updated = true
+	case "stickers", "sticker":
+		defaultRights.SendStickers = false
+		unlockMsg += "Stickers"
+		updated = true
+	case "gifs", "gif", "animations":
+		defaultRights.SendGifs = false
+		unlockMsg += "GIFs"
+		updated = true
+	case "games", "game":
+		defaultRights.SendGames = false
+		unlockMsg += "Games"
+		updated = true
+	case "inline":
+		defaultRights.SendInline = false
+		unlockMsg += "Inline bots"
+		updated = true
+	case "polls", "poll":
+		defaultRights.SendPolls = false
+		unlockMsg += "Polls"
+		updated = true
+	case "invite", "invites":
+		defaultRights.InviteUsers = false
+		unlockMsg += "Invite users"
+		updated = true
+	case "pin":
+		defaultRights.PinMessages = false
+		unlockMsg += "Pin messages"
+		updated = true
+	case "info", "change_info":
+		defaultRights.ChangeInfo = false
+		unlockMsg += "Change chat info"
+		updated = true
+	default:
+		m.Reply("Unknown unlock type. Available: `all`, `messages`, `media`, `stickers`, `gifs`, `polls`, `invite`, `pin`, `info`")
+		return nil
+	}
+
+	if updated {
+		peerChannel, _ := m.Client.ResolvePeer(m.ChatID())
+		_, err := m.Client.MessagesEditChatDefaultBannedRights(peerChannel, defaultRights)
+		if err != nil {
+			m.Reply(adminFriendlyError(err, "update chat permissions"))
+			return nil
+		}
+		m.Reply(unlockMsg)
+	}
+
+	return nil
+}
+
+func LocksHandle(m *tg.NewMessage) error {
+	channel, err := m.Client.GetChannel(m.ChatID())
+	if err != nil {
+		m.Reply("This command only works in supergroups.")
+		return nil
+	}
+
+	defaultRights := channel.DefaultBannedRights
+	if defaultRights == nil {
+		m.Reply("📋 <b>Current Locks:</b>\n\nNo restrictions are currently active.")
+		return nil
+	}
+
+	locks := "<b>📋 Current Locks:</b>\n\n"
+	lockCount := 0
+
+	checkLock := func(locked bool, name string) {
+		if locked {
+			locks += "🔒 " + name + "\n"
+			lockCount++
+		} else {
+			locks += "🔓 " + name + "\n"
+		}
+	}
+
+	checkLock(defaultRights.SendMessages, "Messages")
+	checkLock(defaultRights.SendMedia, "Media")
+	checkLock(defaultRights.SendStickers, "Stickers")
+	checkLock(defaultRights.SendGifs, "GIFs")
+	checkLock(defaultRights.SendGames, "Games")
+	checkLock(defaultRights.SendInline, "Inline bots")
+	checkLock(defaultRights.SendPolls, "Polls")
+	checkLock(defaultRights.InviteUsers, "Invite users")
+	checkLock(defaultRights.PinMessages, "Pin messages")
+	checkLock(defaultRights.ChangeInfo, "Change info")
+
+	if lockCount == 0 {
+		locks += "\n<i>No restrictions are currently active.</i>"
+	} else {
+		locks += fmt.Sprintf("\n<i>Total locked: %d/10</i>", lockCount)
+	}
+
+	m.Reply(locks)
+	return nil
+}
+
 const AnonBotID = 1087968824
 
 func checkAdmin(m *tg.NewMessage, right, callbackData string) bool {
@@ -1099,15 +1484,19 @@ func init() {
 /ban [user] [reason] - Ban a user permanently
 /unban [user] - Remove ban from user
 /tban [user] [time] [reason] - Ban for duration (1h, 30m, 2d, etc.)
+/sban [user] [reason] - Ban silently (deletes command message)
 
 <b>Kick & Mute:</b>
 /kick [user] [reason] - Remove user from group
 /mute [user] [reason] - Silence a user (can read, not write)
 /unmute [user] - Restore user's ability to send messages
 /tmute [user] [time] [reason] - Mute for specified duration
+/smute [user] [reason] - Mute silently (deletes command message)
+/skick [user] [reason] - Kick silently (deletes command message)
 
 <b>Promote & Demote:</b>
 /promote [user] [title] - Make user an admin with optional title
+/fullpromote [user] [title] - Promote with full admin rights
 /demote [user] - Remove admin status from user
 
 <b>Delete & Act:</b>
@@ -1115,6 +1504,20 @@ func init() {
 /dban - Delete message and ban sender
 /dmute - Delete message and mute sender
 /dkick - Delete message and kick sender
+/purge - Delete messages from replied message to command message
+
+<b>Pin Management:</b>
+/pin [silent|notify] - Pin the replied message
+/unpin - Unpin the replied message
+/unpin all - Unpin all messages in chat
+
+<b>Lock/Unlock:</b>
+/lock [type] - Lock chat permissions (messages, media, stickers, gifs, polls, invite, pin, info, all)
+/unlock [type] - Unlock chat permissions
+/locks - View current lock status
+
+<b>Info:</b>
+/id - Get user and chat IDs with detailed info
 
 <b>Usage:</b>
 Reply to a user's message OR provide their @username or ID.
