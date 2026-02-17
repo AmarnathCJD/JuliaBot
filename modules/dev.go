@@ -1009,4 +1009,5 @@ func registerDevHandlers() {
 	c.On("cmd:spec", SpectrogramHandler)
 	c.On("cmd:upd", UpdateSourceCodeHandle, tg.CustomFilter(FilterOwnerNoReply))
 	c.On("cmd:post", HandlePostCommand, tg.CustomFilter(FilterOwner))
+	c.On("cmd:mediainfo", MediaInfoHandler)
 }

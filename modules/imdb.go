@@ -595,6 +595,7 @@ func registerIMDBHandlers() {
 	c := Client
 	c.On("cmd:imdb", ImdbHandler)
 	c.On("inline:imdb", ImDBInlineSearchHandler)
+	c.On(tg.OnChosenInline, ImdbInlineOnSendHandler)
 	c.On("callback:imdb_(.*) _(.*)", ImdbCallbackHandler)
 }
 

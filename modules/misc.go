@@ -22,6 +22,7 @@ func PasteBinHandler(m *telegram.NewMessage) error {
 	}
 
 	content := m.Args()
+	ext := ""
 
 	if m.IsReply() {
 		r, err := m.GetReplyMessage()
@@ -46,6 +47,8 @@ func PasteBinHandler(m *telegram.NewMessage) error {
 				m.Reply("Error downloading file")
 				return nil
 			}
+
+			ext = r.File.Ext
 
 			f, err := os.ReadFile(doc)
 			if err != nil {
@@ -75,6 +78,9 @@ func PasteBinHandler(m *telegram.NewMessage) error {
 	}
 
 	b := telegram.Button
+	if ext != "" {
+		url += "." + ext
+	}
 
 	m.Reply(fmt.Sprintf("<b>Pasted to <a href='%s'>%s</a></b>", url, provider), &telegram.SendOptions{
 		ReplyMarkup: telegram.NewKeyboard().AddRow(

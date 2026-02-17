@@ -849,6 +849,7 @@ func registerSpotifyHandlers() {
 	c := Client
 	c.On("cmd:spot(:?ify)? (.*)", SpotifyHandler)
 	c.On("cmd:spots", SpotifySearchHandler)
+	c.On("cmd:song", SongHandler)
 	c.On(tg.OnInline, SpotifyInlineSearch)
 	c.On(tg.OnChosenInline, SpotifyInlineHandler)
 	c.On("callback:spot_(.*)_(.*)", SpotifyHandlerCallback)
