@@ -566,7 +566,28 @@ func ClearBlacklistCallback(c *tg.CallbackQuery) error {
 	return nil
 }
 
+func registerBlacklistHandlers() {
+	c := Client
+	if c != nil {
+		c.On("cmd:addbl", AddBlacklistHandler)
+		c.On("cmd:addblacklist", AddBlacklistHandler)
+		c.On("cmd:rmbl", RemoveBlacklistHandler)
+		c.On("cmd:rmblacklist", RemoveBlacklistHandler)
+		c.On("cmd:listbl", ListBlacklistHandler)
+		c.On("cmd:blacklist", ListBlacklistHandler)
+		c.On("cmd:rmblmenu", BlacklistRemovalMenu)
+		c.On("cmd:setblaction", SetBlacklistActionHandler)
+		c.On("cmd:clearbl", ClearBlacklistHandler)
+		c.On("callback:clearbl_", ClearBlacklistCallback)
+		c.On("callback:cancelbl_", ClearBlacklistCallback)
+		c.On("callback:rmblmedia_", HandleBlacklistMediaRemoval)
+		c.On(tg.OnNewMessage, BlacklistWatcher)
+	}
+}
+
 func init() {
+	QueueHandlerRegistration(registerBlacklistHandlers)
+
 	Mods.AddModule("Blacklist", `<b>Blacklist Module</b>
 
 Block specific words/phrases or media in your group.

@@ -277,7 +277,20 @@ func FilterWatcher(m *tg.NewMessage) error {
 	return nil
 }
 
+func registerFiltersHandlers() {
+	c := Client
+	c.On("cmd:filter", FilterHandler)
+	c.On("cmd:stop", StopFilterHandler)
+	c.On("cmd:filters", ListFiltersHandler)
+	c.On("cmd:stopall", StopAllFiltersHandler)
+	c.On("callback:stopall_", StopAllFiltersCallback)
+	c.On("callback:cancelfilters_", StopAllFiltersCallback)
+	c.On(tg.OnNewMessage, FilterWatcher)
+}
+
 func init() {
+	QueueHandlerRegistration(registerFiltersHandlers)
+
 	Mods.AddModule("Filters", `<b>Content Filters</b>
 
 Set automatic responses or deletion for keywords.

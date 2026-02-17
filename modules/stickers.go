@@ -506,3 +506,17 @@ func PackInfoHandle(m *tg.NewMessage) error {
 	m.Reply(text)
 	return nil
 }
+
+func registerStickersHandlers() {
+	c := Client
+	c.OnCommand("gif", GifToSticker)
+	c.OnCommand("kang", KangSticker)
+	c.OnCommand("rmkang", RemoveKangedSticker)
+	c.OnCommand("pack", PackInfoHandle)
+	c.On("command:doge", DogeSticker)
+	c.On("inline:doge", DogeStickerInline)
+}
+
+func init() {
+	QueueHandlerRegistration(registerStickersHandlers)
+}

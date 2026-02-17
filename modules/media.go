@@ -278,3 +278,13 @@ func MirrorFileHandler(m *telegram.NewMessage) error {
 	}
 	return nil
 }
+
+func registerMediaHandlers() {
+	c := Client
+	c.On("cmd:thumb", SetThumbHandler)
+	c.On("cmd:mirror", MirrorFileHandler)
+}
+
+func init() {
+	QueueHandlerRegistration(registerMediaHandlers)
+}

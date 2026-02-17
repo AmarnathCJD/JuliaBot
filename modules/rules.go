@@ -264,7 +264,17 @@ func RulesButtonCallback(c *tg.CallbackQuery) error {
 	return nil
 }
 
+func registerRuleHandlers() {
+	c := Client
+	c.On("cmd:setrules", SetRulesHandler)
+	c.On("cmd:rules", GetRulesHandler)
+	c.On("cmd:clearrules", ClearRulesHandler)
+	c.On("callback:rules_", RulesButtonCallback)
+}
+
 func init() {
+	QueueHandlerRegistration(registerRuleHandlers)
+
 	Mods.AddModule("Rules", `<b>Rules Module</b>
 
 Set and display group rules with optional media.

@@ -261,7 +261,14 @@ func fetchPinterestImages(query string, lim int, offset int) ([]string, error) {
 	return imageUrls, nil
 }
 
+func registerInlineHandlers() {
+	c := Client
+	c.On("inline:pin", PinterestInlineHandle)
+}
+
 func init() {
+	QueueHandlerRegistration(registerInlineHandlers)
+
 	Mods.AddModule("Inline", `<b>Here are the commands available in Inline module:</b>
 
 - <code>@botusername pin &lt;query&gt;</code> - Search for images on Pinterest`)

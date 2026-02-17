@@ -553,7 +553,25 @@ func WelcomeAutoDeleteHandler(m *tg.NewMessage) error {
 	return nil
 }
 
+func registerWelcomeHandlers() {
+	c := Client
+	c.On("cmd:setwelcome", SetWelcomeHandler)
+	c.On("cmd:setgoodbye", SetGoodbyeHandler)
+	c.On("cmd:goodbye", GoodbyeToggleHandler)
+	c.On("cmd:clearwelcome", ClearWelcomeHandler)
+	c.On("cmd:cleargoodbye", ClearGoodbyeHandler)
+	c.On("cmd:cleanwelcome", CleanServiceHandler)
+	c.On("cmd:wautodelete", WelcomeAutoDeleteHandler)
+	c.On("cmd:welcomesettings", WelcomeSettingsHandler)
+	c.On("cmd:greetings", WelcomeSettingsHandler)
+	c.On("cmd:greet", WelcomeToggleHandler)
+	c.On("cmd:welcome", WelcomeToggleHandler)
+	c.On(tg.OnParticipant, WelcomeHandler)
+}
+
 func init() {
+	QueueHandlerRegistration(registerWelcomeHandlers)
+
 	Mods.AddModule("Welcome", `<b>Greetings Module</b>
 
 Welcome new users and say goodbye to leaving users.

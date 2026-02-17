@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/amarnathcjd/gogram/telegram"
+	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
 var (
@@ -296,6 +297,8 @@ func FileInfoHandle(m *telegram.NewMessage) error {
 }
 
 func init() {
+	QueueHandlerRegistration(registerFileHandlers)
+
 	Mods.AddModule("Files", `<b>Here are the commands available in Files module:</b>
 
 <code>/file &lt;fileId&gt;</code> - Send a file by its fileId
@@ -303,4 +306,15 @@ func init() {
 <code>/ul &lt;filename&gt; [-s]</code> - Upload a file
 <code>/dl</code> - Reply to a file to download it
 <code>/cancel</code> - Reply to a download message to cancel it`)
+}
+
+func registerFileHandlers() {
+	c := Client
+	c.On("cmd:file", SendFileByIDHandle)
+	c.On("cmd:fid", GetFileIDHandle)
+	c.On("cmd:ul", UploadHandle, tg.CustomFilter(FilterOwnerNoReply))
+	c.On("cmd:ldl", DownloadHandle, tg.CustomFilter(FilterOwnerNoReply))
+	c.On("cmd:cancel", CancelDownloadHandle, tg.CustomFilter(FilterOwnerNoReply))
+	c.On("cmd:fileinfo", FileInfoHandle)
+	c.On("cmd:finfo", FileInfoHandle)
 }

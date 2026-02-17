@@ -95,7 +95,14 @@ func googleTranslate(text, target string) (string, string, error) {
 	return "", "", fmt.Errorf("no result")
 }
 
+func registerTranslatorHandlers() {
+	c := Client
+	c.On("cmd:tr", TranslateHandler)
+}
+
 func init() {
+	QueueHandlerRegistration(registerTranslatorHandlers)
+
 	Mods.AddModule("Translator", `<b>Translator Module</b>
 	
 Commands:

@@ -370,7 +370,24 @@ Use /setwarnaction to change the action`, settings.MaxWarns, settings.Action))
 	return nil
 }
 
+func registerWarnsHandlers() {
+	c := Client
+	c.On("cmd:warn", WarnUserHandler)
+	c.On("cmd:warns", ListWarnsHandler)
+	c.On("cmd:rmwarn", RemoveWarnHandler)
+	c.On("cmd:resetwarns", ResetWarnsHandler)
+	c.On("cmd:setwarnlimit", SetWarnLimitHandler)
+	c.On("cmd:setwarnaction", SetWarnActionHandler)
+	c.On("cmd:setwarnmode", SetWarnActionHandler)
+	c.On("cmd:warnsettings", WarnSettingsHandler)
+	c.On("cmd:twarn", TemporaryWarnHandler)
+	c.On("callback:rmwarn_", RemoveWarnCallback)
+	c.On("callback:undo_", UndoActionHandler)
+}
+
 func init() {
+	QueueHandlerRegistration(registerWarnsHandlers)
+
 	Mods.AddModule("Warns", `<b>Warning System</b>
 
 <b>Issue Warnings:</b>

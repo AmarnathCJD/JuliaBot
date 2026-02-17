@@ -590,3 +590,14 @@ func ImdbCallbackHandler(m *tg.CallbackQuery) error {
 
 	return nil
 }
+
+func registerIMDBHandlers() {
+	c := Client
+	c.On("cmd:imdb", ImdbHandler)
+	c.On("inline:imdb", ImDBInlineSearchHandler)
+	c.On("callback:imdb_(.*) _(.*)", ImdbCallbackHandler)
+}
+
+func init() {
+	QueueHandlerRegistration(registerIMDBHandlers)
+}

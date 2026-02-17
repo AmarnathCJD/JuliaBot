@@ -230,3 +230,14 @@ func formatDuration(d time.Duration) string {
 
 	return strings.Join(parts, " ")
 }
+
+func registerTimerHandlers() {
+	c := Client
+	c.On("command:timer", SetTimerHandler)
+	c.On("callback:snooze_", TimerCallbackHandler)
+	c.On("callback:dismiss_", TimerCallbackHandler)
+}
+
+func init() {
+	QueueHandlerRegistration(registerTimerHandlers)
+}

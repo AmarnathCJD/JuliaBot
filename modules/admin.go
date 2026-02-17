@@ -3,207 +3,13 @@ package modules
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
 
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
-
-func adminUsage(action string) string {
-	switch action {
-	case "promote":
-		return "Reply to a user's message or pass their username/ID. You can add an optional custom title after it."
-	case "demote":
-		return "Reply to a user's message or pass their username/ID."
-	case "ban", "unban", "kick", "mute", "unmute":
-		return "Reply to a user's message or pass their username/ID. You can add an optional reason after it."
-	case "tban", "tmute":
-		return "Reply to a user's message or pass their username/ID, then a duration (e.g. 30m, 2h, 1d) and optional reason."
-	case "del":
-		return "Reply to the message you want to delete."
-	case "dban":
-		return "Reply to the message you want deleted. I will delete it and ban the sender. You can add an optional reason."
-	case "dmute":
-		return "Reply to the message you want deleted. I will delete it and mute the sender. You can add an optional reason."
-	case "dkick":
-		return "Reply to the message you want deleted. I will delete it and kick the sender. You can add an optional reason."
-	case "pin":
-		return "Reply to the message you want to pin. Add 'silent' or 'notify' to control notification behavior."
-	case "unpin":
-		return "Reply to the pinned message you want to unpin, or use 'all' to unpin all messages."
-	case "purge":
-		return "Reply to the starting message. I'll delete all messages from that message to this command."
-	default:
-		return "Reply to a user's message or pass their username/ID."
-	}
-}
-
-func formatAdminDuration(d time.Duration) string {
-	if d <= 0 {
-		return ""
-	}
-	week := 7 * 24 * time.Hour
-	day := 24 * time.Hour
-	if d%week == 0 {
-		w := int(d / week)
-		if w == 1 {
-			return "1 week"
-		}
-		return fmt.Sprintf("%d weeks", w)
-	}
-	if d%day == 0 {
-		days := int(d / day)
-		if days == 1 {
-			return "1 day"
-		}
-		return fmt.Sprintf("%d days", days)
-	}
-	if d%time.Hour == 0 {
-		h := int(d / time.Hour)
-		if h == 1 {
-			return "1 hour"
-		}
-		return fmt.Sprintf("%d hours", h)
-	}
-	if d%time.Minute == 0 {
-		m := int(d / time.Minute)
-		if m == 1 {
-			return "1 minute"
-		}
-		return fmt.Sprintf("%d minutes", m)
-	}
-	return d.Round(time.Second).String()
-}
-
-func adminFriendlyError(err error, action string) string {
-	msg := parseAdminError(err, action)
-	if msg == "" {
-		return "I couldn't do that right now. Please try again."
-	}
-	return msg
-}
-
-func replyTemp(m *tg.NewMessage, text string, seconds int) {
-	msg, err := m.Reply(text)
-	if err != nil || msg == nil || seconds <= 0 {
-		return
-	}
-	go func(chatID int64, msgID int32, delay int) {
-		time.Sleep(time.Duration(delay) * time.Second)
-		m.Client.DeleteMessages(chatID, []int32{msgID})
-	}(m.ChatID(), msg.ID, seconds)
-}
-
-func parseAdminError(err error, action string) string {
-	if err == nil {
-		return "I couldn't " + action + ". Please try again."
-	}
-	errStr := err.Error()
-
-	switch {
-	case strings.Contains(errStr, "CHAT_ADMIN_REQUIRED"):
-		return "Unable to " + action + ", make sure I have the required admin rights"
-	case strings.Contains(errStr, "USER_ADMIN_INVALID"):
-		return "Unable to " + action + ", can't modify another admin's rights"
-	case strings.Contains(errStr, "USER_NOT_PARTICIPANT"):
-		return "Unable to " + action + ", user is not a member of this chat"
-	case strings.Contains(errStr, "USER_CREATOR"):
-		return "Unable to " + action + ", can't perform this action on the chat owner"
-	case strings.Contains(errStr, "USER_ID_INVALID"):
-		return "Unable to " + action + ", invalid user specified"
-	case strings.Contains(errStr, "PEER_ID_INVALID"):
-		return "Unable to " + action + ", invalid user or chat"
-	case strings.Contains(errStr, "USER_PRIVACY_RESTRICTED"):
-		return "Unable to " + action + ", user's privacy settings prevent this"
-	case strings.Contains(errStr, "RIGHT_FORBIDDEN"):
-		return "Unable to " + action + ", I don't have the required permission"
-	case strings.Contains(errStr, "ADMIN_RANK_INVALID"):
-		return "Unable to " + action + ", custom title is too long or contains invalid characters"
-	case strings.Contains(errStr, "ADMIN_RANK_EMOJI_NOT_ALLOWED"):
-		return "Unable to " + action + ", custom title cannot contain emojis"
-	case strings.Contains(errStr, "USER_RESTRICTED"):
-		return "I couldn't " + action + ". That account can't be managed here."
-	case strings.Contains(errStr, "PARTICIPANT_ID_INVALID"):
-		return "I couldn't " + action + ". The user might have left the chat."
-	case strings.Contains(errStr, "CHAT_NOT_MODIFIED"):
-		return "The chat permissions are already set to the requested state."
-	case strings.Contains(errStr, "MESSAGE_ID_INVALID"):
-		return "Unable to " + action + ", the message might have been deleted or is too old"
-	default:
-		fmt.Println("Admin action error:", errStr)
-		return "I couldn't " + action + ". Please check my admin rights and try again."
-	}
-}
-
-func parseAdminDuration(s string) (time.Duration, error) {
-	s = strings.TrimSpace(strings.ToLower(s))
-	if s == "" {
-		return 0, nil
-	}
-
-	s = strings.ReplaceAll(s, "minutes", "m")
-	s = strings.ReplaceAll(s, "minute", "m")
-	s = strings.ReplaceAll(s, "mins", "m")
-	s = strings.ReplaceAll(s, "min", "m")
-	s = strings.ReplaceAll(s, "hours", "h")
-	s = strings.ReplaceAll(s, "hour", "h")
-	s = strings.ReplaceAll(s, "hrs", "h")
-	s = strings.ReplaceAll(s, "hr", "h")
-	s = strings.ReplaceAll(s, "days", "d")
-	s = strings.ReplaceAll(s, "day", "d")
-	s = strings.ReplaceAll(s, "weeks", "w")
-	s = strings.ReplaceAll(s, "week", "w")
-	s = strings.ReplaceAll(s, "seconds", "s")
-	s = strings.ReplaceAll(s, "secs", "s")
-	s = strings.ReplaceAll(s, "sec", "s")
-
-	var total time.Duration
-	numBuf := ""
-
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= '0' && c <= '9' {
-			numBuf += string(c)
-		} else if c == 'd' || c == 'w' || c == 'h' || c == 'm' || c == 's' {
-			if numBuf == "" {
-				numBuf = "1"
-			}
-			num := 0
-			for _, d := range numBuf {
-				num = num*10 + int(d-'0')
-			}
-			numBuf = ""
-
-			switch c {
-			case 'w':
-				total += time.Duration(num) * 7 * 24 * time.Hour
-			case 'd':
-				total += time.Duration(num) * 24 * time.Hour
-			case 'h':
-				total += time.Duration(num) * time.Hour
-			case 'm':
-				total += time.Duration(num) * time.Minute
-			case 's':
-				total += time.Duration(num) * time.Second
-			}
-		}
-	}
-
-	if numBuf != "" {
-		num := 0
-		for _, d := range numBuf {
-			num = num*10 + int(d-'0')
-		}
-		total += time.Duration(num) * time.Minute
-	}
-
-	if total == 0 {
-		return time.ParseDuration(s)
-	}
-
-	return total, nil
-}
 
 func PromoteUserHandle(m *tg.NewMessage) error {
 	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "promote") {
@@ -225,7 +31,7 @@ func PromoteUserHandle(m *tg.NewMessage) error {
 		reason = "Admin"
 	}
 
-	done, err := m.Client.EditAdmin(m.ChatID(), user, &tg.AdminOptions{Rank: reason, Rights: &tg.ChatAdminRights{
+	done, err := m.Client.EditAdmin(m.ChatID(), user, &tg.AdminOptions{IsAdmin: true, Rank: reason, Rights: &tg.ChatAdminRights{
 		ChangeInfo:     true,
 		PinMessages:    true,
 		DeleteMessages: true,
@@ -1477,7 +1283,205 @@ func HandleReactionUpdate(update tg.Update, c *tg.Client) error {
 	return nil
 }
 
+//  ------------------ Util Fns ------------------
+
+func adminUsage(action string) string {
+	switch action {
+	case "promote":
+		return "Reply to a user's message or pass their username/ID. You can add an optional custom title after it."
+	case "demote":
+		return "Reply to a user's message or pass their username/ID."
+	case "ban", "unban", "kick", "mute", "unmute":
+		return "Reply to a user's message or pass their username/ID. You can add an optional reason after it."
+	case "tban", "tmute":
+		return "Reply to a user's message or pass their username/ID, then a duration (e.g. 30m, 2h, 1d) and optional reason."
+	case "del":
+		return "Reply to the message you want to delete."
+	case "dban":
+		return "Reply to the message you want deleted. I will delete it and ban the sender. You can add an optional reason."
+	case "dmute":
+		return "Reply to the message you want deleted. I will delete it and mute the sender. You can add an optional reason."
+	case "dkick":
+		return "Reply to the message you want deleted. I will delete it and kick the sender. You can add an optional reason."
+	case "pin":
+		return "Reply to the message you want to pin. Add 'silent' or 'notify' to control notification behavior."
+	case "unpin":
+		return "Reply to the pinned message you want to unpin, or use 'all' to unpin all messages."
+	case "purge":
+		return "Reply to the starting message. I'll delete all messages from that message to this command."
+	default:
+		return "Reply to a user's message or pass their username/ID."
+	}
+}
+
+func formatAdminDuration(d time.Duration) string {
+	if d <= 0 {
+		return ""
+	}
+	week := 7 * 24 * time.Hour
+	day := 24 * time.Hour
+	if d%week == 0 {
+		w := int(d / week)
+		if w == 1 {
+			return "1 week"
+		}
+		return fmt.Sprintf("%d weeks", w)
+	}
+	if d%day == 0 {
+		days := int(d / day)
+		if days == 1 {
+			return "1 day"
+		}
+		return fmt.Sprintf("%d days", days)
+	}
+	if d%time.Hour == 0 {
+		h := int(d / time.Hour)
+		if h == 1 {
+			return "1 hour"
+		}
+		return fmt.Sprintf("%d hours", h)
+	}
+	if d%time.Minute == 0 {
+		m := int(d / time.Minute)
+		if m == 1 {
+			return "1 minute"
+		}
+		return fmt.Sprintf("%d minutes", m)
+	}
+	return d.Round(time.Second).String()
+}
+
+func adminFriendlyError(err error, action string) string {
+	msg := parseAdminError(err, action)
+	if msg == "" {
+		return "I couldn't do that right now. Please try again."
+	}
+	return msg
+}
+
+func replyTemp(m *tg.NewMessage, text string, seconds int) {
+	msg, err := m.Reply(text)
+	if err != nil || msg == nil || seconds <= 0 {
+		return
+	}
+	go func(chatID int64, msgID int32, delay int) {
+		time.Sleep(time.Duration(delay) * time.Second)
+		m.Client.DeleteMessages(chatID, []int32{msgID})
+	}(m.ChatID(), msg.ID, seconds)
+}
+
+func parseAdminError(err error, action string) string {
+	if err == nil {
+		return "I couldn't " + action + ". Please try again."
+	}
+	errStr := err.Error()
+
+	switch {
+	case strings.Contains(errStr, "CHAT_ADMIN_REQUIRED"):
+		return "Unable to " + action + ", make sure I have the required admin rights"
+	case strings.Contains(errStr, "USER_ADMIN_INVALID"):
+		return "Unable to " + action + ", can't modify another admin's rights"
+	case strings.Contains(errStr, "USER_NOT_PARTICIPANT"):
+		return "Unable to " + action + ", user is not a member of this chat"
+	case strings.Contains(errStr, "USER_CREATOR"):
+		return "Unable to " + action + ", can't perform this action on the chat owner"
+	case strings.Contains(errStr, "USER_ID_INVALID"):
+		return "Unable to " + action + ", invalid user specified"
+	case strings.Contains(errStr, "PEER_ID_INVALID"):
+		return "Unable to " + action + ", invalid user or chat"
+	case strings.Contains(errStr, "USER_PRIVACY_RESTRICTED"):
+		return "Unable to " + action + ", user's privacy settings prevent this"
+	case strings.Contains(errStr, "RIGHT_FORBIDDEN"):
+		return "Unable to " + action + ", I don't have the required permission"
+	case strings.Contains(errStr, "ADMIN_RANK_INVALID"):
+		return "Unable to " + action + ", custom title is too long or contains invalid characters"
+	case strings.Contains(errStr, "ADMIN_RANK_EMOJI_NOT_ALLOWED"):
+		return "Unable to " + action + ", custom title cannot contain emojis"
+	case strings.Contains(errStr, "USER_RESTRICTED"):
+		return "I couldn't " + action + ". That account can't be managed here."
+	case strings.Contains(errStr, "PARTICIPANT_ID_INVALID"):
+		return "I couldn't " + action + ". The user might have left the chat."
+	case strings.Contains(errStr, "CHAT_NOT_MODIFIED"):
+		return "The chat permissions are already set to the requested state."
+	case strings.Contains(errStr, "MESSAGE_ID_INVALID"):
+		return "Unable to " + action + ", the message might have been deleted or is too old"
+	default:
+		log.Printf("Admin action '%s' failed: %v", action, err)
+		return "I couldn't " + action + ". Please check my admin rights and try again."
+	}
+}
+
+func parseAdminDuration(s string) (time.Duration, error) {
+	s = strings.TrimSpace(strings.ToLower(s))
+	if s == "" {
+		return 0, nil
+	}
+
+	s = strings.ReplaceAll(s, "minutes", "m")
+	s = strings.ReplaceAll(s, "minute", "m")
+	s = strings.ReplaceAll(s, "mins", "m")
+	s = strings.ReplaceAll(s, "min", "m")
+	s = strings.ReplaceAll(s, "hours", "h")
+	s = strings.ReplaceAll(s, "hour", "h")
+	s = strings.ReplaceAll(s, "hrs", "h")
+	s = strings.ReplaceAll(s, "hr", "h")
+	s = strings.ReplaceAll(s, "days", "d")
+	s = strings.ReplaceAll(s, "day", "d")
+	s = strings.ReplaceAll(s, "weeks", "w")
+	s = strings.ReplaceAll(s, "week", "w")
+	s = strings.ReplaceAll(s, "seconds", "s")
+	s = strings.ReplaceAll(s, "secs", "s")
+	s = strings.ReplaceAll(s, "sec", "s")
+
+	var total time.Duration
+	numBuf := ""
+
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= '0' && c <= '9' {
+			numBuf += string(c)
+		} else if c == 'd' || c == 'w' || c == 'h' || c == 'm' || c == 's' {
+			if numBuf == "" {
+				numBuf = "1"
+			}
+			num := 0
+			for _, d := range numBuf {
+				num = num*10 + int(d-'0')
+			}
+			numBuf = ""
+
+			switch c {
+			case 'w':
+				total += time.Duration(num) * 7 * 24 * time.Hour
+			case 'd':
+				total += time.Duration(num) * 24 * time.Hour
+			case 'h':
+				total += time.Duration(num) * time.Hour
+			case 'm':
+				total += time.Duration(num) * time.Minute
+			case 's':
+				total += time.Duration(num) * time.Second
+			}
+		}
+	}
+
+	if numBuf != "" {
+		num := 0
+		for _, d := range numBuf {
+			num = num*10 + int(d-'0')
+		}
+		total += time.Duration(num) * time.Minute
+	}
+
+	if total == 0 {
+		return time.ParseDuration(s)
+	}
+
+	return total, nil
+}
+
 func init() {
+	QueueHandlerRegistration(registerAdminHandlers)
 	Mods.AddModule("Admin", `<b>Admin Commands</b>
 
 <b>Ban & Unban:</b>
@@ -1524,4 +1528,37 @@ Reply to a user's message OR provide their @username or ID.
 All actions support optional reasons.
 
 <i>💡 Click undo buttons within 5 minutes to reverse actions</i>`)
+}
+
+func registerAdminHandlers() {
+	c := Client
+	c.On("cmd:rspot", RestartSpotify, tg.FromUser(OwnerId))
+	c.On("cmd:rproxy", RestartProxy, tg.CustomFilter(FilterOwnerAndAuth))
+	c.On("cmd:promote", PromoteUserHandle)
+	c.On("cmd:demote", DemoteUserHandle)
+	c.On("cmd:ban", BanUserHandle)
+	c.On("cmd:unban", UnbanUserHandle)
+	c.On("cmd:kick", KickUserHandle)
+	c.On("cmd:fullpromote", FullPromoteHandle)
+	c.On("cmd:tban", TbanUserHandle)
+	c.On("cmd:tmute", TmuteUserHandle)
+	c.On("cmd:mute", MuteUserHandle)
+	c.On("cmd:unmute", UnmuteUserHandle)
+	c.On("cmd:sban", SbanUserHandle)
+	c.On("cmd:smute", SmuteUserHandle)
+	c.On("cmd:skick", SkickUserHandle)
+	c.On("cmd:del", DeleteMessageHandle)
+	c.On("cmd:dban", DBanUserHandle)
+	c.On("cmd:dmute", DMuteUserHandle)
+	c.On("cmd:dkick", DKickUserHandle)
+	c.On("cmd:pin", PinMessageHandle)
+	c.On("cmd:unpin", UnpinMessageHandle)
+	c.On("cmd:purge", PurgeMessagesHandle)
+	c.On("cmd:lock", LockHandle)
+	c.On("cmd:unlock", UnlockHandle)
+	c.On("cmd:locks", LocksHandle)
+	c.On("cmd:restart", RestartHandle, tg.CustomFilter(FilterOwner))
+	c.On("cmd:id", IDHandle)
+	c.On("cmd:gban", Gban, tg.CustomFilter(FilterOwner))
+	c.On("cmd:ungban", Ungban, tg.CustomFilter(FilterOwner))
 }

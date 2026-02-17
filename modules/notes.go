@@ -748,7 +748,22 @@ func RenameNoteHandler(m *tg.NewMessage) error {
 	return nil
 }
 
+func registerNoteHandlers() {
+	c := Client
+	c.On("cmd:save", SaveNoteHandler)
+	c.On("cmd:note", GetNoteHandler)
+	c.On("cmd:notes", ListNotesHandler)
+	c.On("cmd:listnotes", ListNotesHandler)
+	c.On("cmd:clear", ClearNoteHandler)
+	c.On("cmd:clearallnotes", ClearAllNotesHandler)
+	c.On("callback:clearallnotes_", ClearAllNotesCallback)
+	c.On("callback:cancelnotes_", ClearAllNotesCallback)
+	c.On("message:^#", NoteHashHandler)
+}
+
 func init() {
+	QueueHandlerRegistration(registerNoteHandlers)
+
 	Mods.AddModule("Notes", `<b>Notes Module</b>
 
 <b>Commands:</b>

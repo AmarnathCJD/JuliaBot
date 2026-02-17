@@ -840,3 +840,16 @@ func extractPlaylistIdFromURL(url string) string {
 	}
 	return matches[1]
 }
+
+func init() {
+	QueueHandlerRegistration(registerSpotifyHandlers)
+}
+
+func registerSpotifyHandlers() {
+	c := Client
+	c.On("cmd:spot(:?ify)? (.*)", SpotifyHandler)
+	c.On("cmd:spots", SpotifySearchHandler)
+	c.On(tg.OnInline, SpotifyInlineSearch)
+	c.On(tg.OnChosenInline, SpotifyInlineHandler)
+	c.On("callback:spot_(.*)_(.*)", SpotifyHandlerCallback)
+}

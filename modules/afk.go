@@ -259,3 +259,14 @@ func SedHandler(m *tg.NewMessage) error {
 
 	return nil
 }
+
+func registerAFKHandlers() {
+	c := Client
+	c.On(tg.OnNewMessage, AFKHandler)
+	c.On(tg.OnNewMessage, SedHandler)
+	c.On(&tg.UpdateBotMessageReactions{}, HandleReactionUpdate)
+}
+
+func init() {
+	QueueHandlerRegistration(registerAFKHandlers)
+}

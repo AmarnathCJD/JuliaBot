@@ -978,6 +978,8 @@ func HandlePostCommand(m *tg.NewMessage) error {
 }
 
 func init() {
+	QueueHandlerRegistration(registerDevHandlers)
+
 	Mods.AddModule("Dev", `<b>Here are the commands available in Dev module:</b>
 
 - <code>/sh &lt;command&gt;</code> - Execute shell commands
@@ -992,4 +994,19 @@ func init() {
 - <code>/restart</code> - Restart the bot
 - <code>/post -c &lt;channel&gt; [-nm] [-fw] &lt;content&gt;</code> - Post content to a channel
 `)
+}
+
+func registerDevHandlers() {
+	c := Client
+	c.On("cmd:sh", ShellHandle, tg.CustomFilter(FilterOwner))
+	c.On("cmd:bash", ShellHandle, tg.CustomFilter(FilterOwner))
+	c.On("cmd:eval", EvalHandle, tg.CustomFilter(FilterOwnerNoReply))
+	c.On("cmd:go", GoHandler)
+	c.On("cmd:json", JsonHandle)
+	c.On("cmd:ls", LsHandler, tg.CustomFilter(FilterOwner))
+	c.On("cmd:sessgen", GenStringSessionHandler)
+	c.On("cmd:setpfp", SetBotPfpHandler, tg.CustomFilter(FilterOwner))
+	c.On("cmd:spec", SpectrogramHandler)
+	c.On("cmd:upd", UpdateSourceCodeHandle, tg.CustomFilter(FilterOwnerNoReply))
+	c.On("cmd:post", HandlePostCommand, tg.CustomFilter(FilterOwner))
 }

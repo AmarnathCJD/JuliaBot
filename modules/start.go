@@ -743,3 +743,18 @@ func init() {
 <code>/translate [lang] [-r]: Translate reply. -r replaces original.</code>
 <code>/new: count down to Next New Years.`)
 }
+
+func registerStartHandlers() {
+	c := Client
+	c.On("cmd:start", StartHandle)
+	c.On("cmd:ping", PingHandle)
+	c.On("cmd:new", NewYearHandle)
+	c.On("cmd:sys", GatherSystemInfo)
+	c.On("cmd:info", UserHandle)
+	c.On("cmd:ud", UDHandler)
+	c.On("cmd:tr", TranslateHandler)
+}
+
+func init() {
+	QueueHandlerRegistration(registerStartHandlers)
+}
