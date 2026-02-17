@@ -78,7 +78,7 @@ func PasteBinHandler(m *telegram.NewMessage) error {
 
 	m.Reply(fmt.Sprintf("<b>Pasted to <a href='%s'>%s</a></b>", url, provider), &telegram.SendOptions{
 		ReplyMarkup: telegram.NewKeyboard().AddRow(
-			b.URL("View Paste", url),
+			b.URL("View Paste", url).Success(),
 		).Build(),
 	})
 

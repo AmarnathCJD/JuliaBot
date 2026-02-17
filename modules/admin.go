@@ -169,7 +169,7 @@ func BanUserHandle(m *tg.NewMessage) error {
 	b := tg.Button
 	m.Reply(msg, &tg.SendOptions{
 		ReplyMarkup: tg.NewKeyboard().AddRow(
-			b.Data("Undo Ban", fmt.Sprintf("undo_ban_%d_%d", targetID, m.SenderID())),
+			b.Data("Undo Ban", fmt.Sprintf("undo_ban_%d_%d", targetID, m.SenderID())).Danger(),
 		).Build(),
 	})
 	return nil
@@ -349,7 +349,7 @@ func TbanUserHandle(m *tg.NewMessage) error {
 	b := tg.Button
 	m.Reply(msg, &tg.SendOptions{
 		ReplyMarkup: tg.NewKeyboard().AddRow(
-			b.Data("Undo Ban", fmt.Sprintf("undo_tban_%d_%d", targetID, m.SenderID())),
+			b.Data("Undo Ban", fmt.Sprintf("undo_tban_%d_%d", targetID, m.SenderID())).Danger(),
 		).Build(),
 	})
 	return nil

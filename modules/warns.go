@@ -90,7 +90,7 @@ func WarnUserHandler(m *tg.NewMessage) error {
 			userName, count, settings.MaxWarns, reason),
 		&tg.SendOptions{
 			ReplyMarkup: tg.NewKeyboard().AddRow(
-				b.Data("Remove Warning", fmt.Sprintf("rmwarn_%d_%d", userID, m.SenderID())),
+				b.Data("Remove Warning", fmt.Sprintf("rmwarn_%d_%d", userID, m.SenderID())).Danger(),
 			).Build(),
 		},
 	)

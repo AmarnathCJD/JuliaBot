@@ -316,11 +316,11 @@ func UserHandle(m *telegram.NewMessage) error {
 	sendableUser, err := m.Client.GetSendableUser(un)
 	if err == nil {
 		keyb.AddRow(
-			telegram.Button.Mention("View Profile", sendableUser),
+			telegram.Button.Mention("View Profile", sendableUser).Primary(),
 		)
 	} else {
 		keyb.AddRow(
-			telegram.Button.URL("View Profile", "tg://user?id="+strconv.FormatInt(un.ID, 10)),
+			telegram.Button.URL("View Profile", "tg://user?id="+strconv.FormatInt(un.ID, 10)).Primary(),
 		)
 	}
 

@@ -86,8 +86,8 @@ func sendTimerNotification(timerID string) {
 		text += "\n" + timer.message
 	}
 
-	snoozeBtn := telegram.Button.Data("Snooze 5m", "snooze_"+timerID)
-	dismissBtn := telegram.Button.Data("Dismiss", "dismiss_"+timerID)
+	snoozeBtn := telegram.Button.Data("Snooze 5m", "snooze_"+timerID).Primary()
+	dismissBtn := telegram.Button.Data("Dismiss", "dismiss_"+timerID).Danger()
 	keyboard := telegram.NewKeyboard().AddRow(snoozeBtn).AddRow(dismissBtn).Build()
 
 	if timer.media != nil {

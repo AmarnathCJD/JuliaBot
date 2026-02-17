@@ -107,8 +107,8 @@ func SongHandler(m *tg.NewMessage) error {
 		status.Delete()
 		caption := fmt.Sprintf("<b>Title:</b> %s\n<b>Account:</b> <a href='%s'>%s</a>", d.Meta.Title, d.Meta.Source, d.Meta.Username)
 		kb := tg.NewKeyboard().AddRow(
-			tg.Button.URL(fmt.Sprintf("Likes: %d", d.Meta.LikeCount), "https://instagram.com"),
-			tg.Button.URL(fmt.Sprintf("Comments: %d", d.Meta.CommentCount), "https://instagram.com"),
+			tg.Button.URL(fmt.Sprintf("Likes: %d", d.Meta.LikeCount), "https://instagram.com").Success(),
+			tg.Button.URL(fmt.Sprintf("Comments: %d", d.Meta.CommentCount), "https://instagram.com").Success(),
 		)
 
 		for _, u := range d.URL {
@@ -457,7 +457,7 @@ func SpotifyInlineHandler(u *telegram.InlineSend) error {
 		Thumb:   thumb,
 		Spoiler: true,
 		ReplyMarkup: telegram.NewKeyboard().AddRow(
-			telegram.Button.URL("Spotify Link", fmt.Sprintf("https://open.spotify.com/track/%s", response.Tc)),
+			telegram.Button.URL("Spotify Link", fmt.Sprintf("https://open.spotify.com/track/%s", response.Tc)).Success(),
 		).Build(),
 	})
 	return nil
@@ -492,7 +492,7 @@ func SpotifySearchHandler(m *telegram.NewMessage) error {
 	var b = telegram.Button
 	var kb = telegram.NewKeyboard()
 	for _, r := range response.Results {
-		kb.AddRow(b.Data(fmt.Sprintf("%s - %s", r.Name, r.Artist), fmt.Sprintf("spot_%s_%d", r.ID, m.SenderID())))
+		kb.AddRow(b.Data(fmt.Sprintf("%s - %s", r.Name, r.Artist), fmt.Sprintf("spot_%s_%d", r.ID, m.SenderID())).Primary())
 	}
 	m.Reply("<b>Select a song from below:</b>", &telegram.SendOptions{
 		ReplyMarkup: kb.Build(),

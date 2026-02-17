@@ -455,11 +455,11 @@ func BlacklistRemovalMenu(m *tg.NewMessage) error {
 			// Create row with up to 2 delete buttons
 			if i+1 < maxDisplay {
 				kb.AddRow(
-					b.Data(fmt.Sprintf("🗑️ Remove %d", i+1), fmt.Sprintf("rmblmedia_%d_%d", m.ChatID(), i)),
-					b.Data(fmt.Sprintf("🗑️ Remove %d", i+2), fmt.Sprintf("rmblmedia_%d_%d", m.ChatID(), i+1)),
+					b.Data(fmt.Sprintf("Remove %d", i+1), fmt.Sprintf("rmblmedia_%d_%d", m.ChatID(), i)).Danger(),
+					b.Data(fmt.Sprintf("Remove %d", i+2), fmt.Sprintf("rmblmedia_%d_%d", m.ChatID(), i+1)).Danger(),
 				)
 			} else {
-				kb.AddRow(b.Data(fmt.Sprintf("🗑️ Remove %d", i+1), fmt.Sprintf("rmblmedia_%d_%d", m.ChatID(), i)))
+				kb.AddRow(b.Data(fmt.Sprintf("Remove %d", i+1), fmt.Sprintf("rmblmedia_%d_%d", m.ChatID(), i)).Danger())
 			}
 		}
 
