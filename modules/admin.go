@@ -1245,44 +1245,6 @@ func AdminVerifyCallback(c *tg.CallbackQuery) error {
 	return nil
 }
 
-// HandleReactionUpdate handles emoji reactions on messages
-// 📌 = Pin, 🗑️ = Delete, ❤️ = React with heart, ⭐ = React with star
-// 🔁 = Forward, ✅ = React with check, 🔖 = Bookmark
-func HandleReactionUpdate(update tg.Update, c *tg.Client) error {
-	msgUpdate, ok := update.(*tg.UpdateBotMessageReaction)
-	if !ok {
-		return nil
-	}
-
-	peer := msgUpdate.Peer
-	msgID := msgUpdate.MsgID
-
-	for _, reaction := range msgUpdate.NewReactions {
-		emoji := ""
-
-		if simpleReaction, ok := reaction.(*tg.ReactionEmoji); ok {
-			emoji = simpleReaction.Emoticon
-		}
-
-		if emoji == "" {
-			continue
-		}
-
-		switch emoji {
-		case "📌":
-			if IsUserAdmin(c, c.GetPeerID(msgUpdate.Actor), c.GetPeerID(msgUpdate.Peer), "pin") {
-				c.PinMessage(peer, msgID)
-			}
-		case "💩":
-			if IsUserAdmin(c, c.GetPeerID(msgUpdate.Actor), c.GetPeerID(msgUpdate.Peer), "delete") {
-				c.DeleteMessages(peer, []int32{msgID})
-			}
-		}
-	}
-
-	return nil
-}
-
 //  ------------------ Util Fns ------------------
 
 func adminUsage(action string) string {
