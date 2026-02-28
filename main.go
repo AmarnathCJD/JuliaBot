@@ -23,6 +23,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	
 
 	defer logZap.Close()
 	wr := io.MultiWriter(os.Stdout, logZap)
