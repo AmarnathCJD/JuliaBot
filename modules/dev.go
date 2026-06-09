@@ -96,6 +96,7 @@ func main() {
 	var err error
 	client, err = tg.NewClient(tg.ClientConfig{
 		StringSession: %q,
+		MemorySession: true,
 		LogLevel:      tg.LogDisable,
 	})
 	if err != nil {
