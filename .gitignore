@@ -50,3 +50,9 @@ aigen2.go
 yt.go
 insta.go
 terabox.go
+cmd/chatbot/*
+*.data
+useracc
+mdc
+macy
+*.apk
