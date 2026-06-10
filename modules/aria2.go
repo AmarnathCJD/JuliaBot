@@ -456,6 +456,27 @@ func createProgressBar(progress float64) string {
 	return filled + empty
 }
 
+func formatBytes(bytes int64) string {
+	if bytes < 0 {
+		return "0 B"
+	}
+
+	units := []string{"B", "KB", "MB", "GB", "TB", "PB"}
+	value := float64(bytes)
+	unitIndex := 0
+
+	for value >= 1024 && unitIndex < len(units)-1 {
+		value /= 1024
+		unitIndex++
+	}
+
+	if unitIndex == 0 {
+		return fmt.Sprintf("%d %s", bytes, units[unitIndex])
+	}
+
+	return fmt.Sprintf("%.1f %s", value, units[unitIndex])
+}
+
 func base64Encode(data []byte) string {
 	const base64Table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 	var result strings.Builder
