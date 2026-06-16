@@ -6,10 +6,12 @@ import (
 	"log"
 	"main/modules"
 	"main/modules/db"
+	"net"
 	"net/http"
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"unicode"
 
 	tg "github.com/amarnathcjd/gogram/telegram"
@@ -37,19 +39,23 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	
 
 	defer logZap.Close()
 	wr := io.MultiWriter(os.Stdout, logZap)
 
+	socks := buildSocksProxy()
+
 	appId, _ := strconv.Atoi(os.Getenv("APP_ID"))
 	ownerId, _ = strconv.ParseInt(os.Getenv("OWNER_ID"), 10, 64)
-	client, err := tg.NewClient(tg.ClientConfig{
-		//Session: "userxyz",
+	clientCfg := tg.ClientConfig{
 		AppID:    int32(appId),
 		AppHash:  os.Getenv("APP_HASH"),
 		LogLevel: tg.LogInfo,
-	})
+	}
+	if socks != nil {
+		clientCfg.Proxy = socks
+	}
+	client, err := tg.NewClient(clientCfg)
 	if err != nil {
 		panic(err)
 	}
@@ -78,4 +84,27 @@ func main() {
 func b64toBytes(s string) []byte {
 	a, _ := base64.StdEncoding.DecodeString(s)
 	return a
+}
+
+func buildSocksProxy() *tg.Socks5Proxy {
+	raw := strings.TrimSpace(os.Getenv("PROXY"))
+	if raw == "" {
+		return nil
+	}
+	host, portStr, err := net.SplitHostPort(raw)
+	if err != nil {
+		log.Printf("[proxy] invalid PROXY=%q (expected host:port): %v", raw, err)
+		return nil
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		log.Printf("[proxy] invalid port in PROXY=%q: %v", raw, err)
+		return nil
+	}
+	log.Printf("[proxy] using socks5 %s:%d", host, port)
+	return &tg.Socks5Proxy{
+		BaseProxy: tg.BaseProxy{Host: host, Port: port},
+		Username:  os.Getenv("PROXY_USERNAME"),
+		Password:  os.Getenv("PROXY_PASSWORD"),
+	}
 }
