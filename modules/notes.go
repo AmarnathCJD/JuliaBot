@@ -574,6 +574,7 @@ func formatDurationv2(d time.Duration) string {
 	return fmt.Sprintf("%.1f days", d.Hours()/24)
 }
 
+// DEAD: never registered with any On("cmd:..." or OnCommand(...) call
 // NoteInfoHandler shows detailed info about a note
 func NoteInfoHandler(m *tg.NewMessage) error {
 	if m.IsPrivate() {
@@ -633,6 +634,7 @@ func NoteInfoHandler(m *tg.NewMessage) error {
 	return nil
 }
 
+// DEAD: never registered with any On("cmd:..." or OnCommand(...) call
 // SearchNotesHandler searches notes by name or content
 func SearchNotesHandler(m *tg.NewMessage) error {
 	if m.IsPrivate() {
@@ -695,6 +697,7 @@ func SearchNotesHandler(m *tg.NewMessage) error {
 	return nil
 }
 
+// DEAD: never registered with any On("cmd:..." or OnCommand(...) call
 // RenameNoteHandler renames an existing note
 func RenameNoteHandler(m *tg.NewMessage) error {
 	if m.IsPrivate() {

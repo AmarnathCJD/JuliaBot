@@ -22,6 +22,7 @@ import (
 
 var startTime = time.Now()
 
+// DEAD: empty stub, never registered, never called
 func SnapSaveHandler(m *telegram.NewMessage) error {
 	return nil
 }
