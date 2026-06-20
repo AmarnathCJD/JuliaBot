@@ -51,6 +51,7 @@ func main() {
 		AppID:    int32(appId),
 		AppHash:  os.Getenv("APP_HASH"),
 		LogLevel: tg.LogInfo,
+		Session:  "xyumi.dat",
 	}
 	if socks != nil {
 		clientCfg.Proxy = socks
