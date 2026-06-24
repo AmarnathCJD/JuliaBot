@@ -527,8 +527,8 @@ func LockHandler(m *tg.NewMessage) error {
 		m.Reply("Locks only work in groups.")
 		return nil
 	}
-	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "delete") {
-		m.Reply("You need Delete Messages permission to manage locks.")
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
+		m.Reply("You need Change Info permission to manage locks.")
 		return nil
 	}
 
@@ -593,8 +593,8 @@ func UnlockHandler(m *tg.NewMessage) error {
 		m.Reply("Locks only work in groups.")
 		return nil
 	}
-	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "delete") {
-		m.Reply("You need Delete Messages permission to manage locks.")
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
+		m.Reply("You need Change Info permission to manage locks.")
 		return nil
 	}
 

@@ -468,8 +468,8 @@ func CleanServiceHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "delete") {
-		m.Reply("You need Delete Messages permission")
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
+		m.Reply("You need Change Info permission")
 		return nil
 	}
 

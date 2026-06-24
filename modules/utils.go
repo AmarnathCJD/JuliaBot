@@ -193,17 +193,24 @@ func IsUserAdmin(bot *telegram.Client, userID int64, chatID int64, right string)
 }
 
 func CanBot(bot *telegram.Client, chat *telegram.Channel, right string) bool {
-	if chat.AdminRights != nil {
-		switch right {
-		case "ban":
-			return chat.AdminRights.BanUsers
-		case "delete":
-			return chat.AdminRights.DeleteMessages
-		case "invite":
-			return chat.AdminRights.InviteUsers
-		case "promote":
-			return chat.AdminRights.AddAdmins
-		}
+	if chat == nil || chat.AdminRights == nil {
+		return true
+	}
+	switch right {
+	case "ban":
+		return chat.AdminRights.BanUsers
+	case "delete":
+		return chat.AdminRights.DeleteMessages
+	case "invite":
+		return chat.AdminRights.InviteUsers
+	case "promote":
+		return chat.AdminRights.AddAdmins
+	case "pin":
+		return chat.AdminRights.PinMessages
+	case "change_info", "info":
+		return chat.AdminRights.ChangeInfo
+	case "":
+		return true
 	}
 	return false
 }

@@ -137,8 +137,8 @@ func CleanupHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "delete") {
-		m.Reply("<b>Permission denied.</b> You need Delete Messages permission.")
+	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
+		m.Reply("<b>Permission denied.</b> You need Change Info permission.")
 		return nil
 	}
 
