@@ -7,9 +7,10 @@ import (
 	"html"
 	"image"
 	"image/color"
-	"image/png"
 	_ "image/jpeg"
+	"image/png"
 	"main/modules/db"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -23,6 +24,52 @@ import (
 	"github.com/fogleman/gg"
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/image/font/basicfont"
+)
+
+var quoteNameColorsLight = [7]color.RGBA{
+	{0xFC, 0x5C, 0x51, 0xFF}, {0xFA, 0x79, 0x0F, 0xFF}, {0x89, 0x5D, 0xD5, 0xFF},
+	{0x0F, 0xB2, 0x97, 0xFF}, {0x0F, 0xC9, 0xD6, 0xFF}, {0x3C, 0xA5, 0xEC, 0xFF},
+	{0xD5, 0x4F, 0xAF, 0xFF},
+}
+
+var quoteNameColorsDark = [7]color.RGBA{
+	{0xFF, 0x8E, 0x86, 0xFF}, {0xFF, 0xA3, 0x57, 0xFF}, {0xB1, 0x8F, 0xFF, 0xFF},
+	{0x4D, 0xD6, 0xBF, 0xFF}, {0x45, 0xE8, 0xD1, 0xFF}, {0x7A, 0xC9, 0xFF, 0xFF},
+	{0xFF, 0x7F, 0xD5, 0xFF},
+}
+
+var quoteAvatarColors = [7][2]color.RGBA{
+	{{0xFF, 0x88, 0x5E, 0xFF}, {0xFF, 0x51, 0x6A, 0xFF}},
+	{{0xFF, 0xCD, 0x6A, 0xFF}, {0xFF, 0xA8, 0x5C, 0xFF}},
+	{{0xE0, 0xA2, 0xF3, 0xFF}, {0xD6, 0x69, 0xED, 0xFF}},
+	{{0xA0, 0xDE, 0x7E, 0xFF}, {0x54, 0xCB, 0x68, 0xFF}},
+	{{0x53, 0xED, 0xD6, 0xFF}, {0x28, 0xC9, 0xB7, 0xFF}},
+	{{0x72, 0xD5, 0xFD, 0xFF}, {0x2A, 0x9E, 0xF1, 0xFF}},
+	{{0xFF, 0xA8, 0xA8, 0xFF}, {0xFF, 0x71, 0x9A, 0xFF}},
+}
+
+var quoteDefaultBg = color.RGBA{0x29, 0x22, 0x32, 0xFF}
+
+const (
+	quoteScale       = 2.0
+	quotePadX        = 16.0
+	quotePadY        = 15.0
+	quoteGap         = 9.0
+	quoteHeaderGap   = 8.0
+	quoteRadius      = 25.0
+	quoteShadowPad   = 6.0
+	quoteTailSize    = 14.0
+	quoteMinWidth    = 100.0
+	quoteAvatarSize  = 50.0
+	quoteAvatarGap   = 10.0
+	quoteBlockPadY   = 6.0
+	quoteBlockPadL   = 10.0
+	quoteBlockPadR   = 10.0
+	quoteBlockBar    = 3.0
+	quoteBlockRadius = 8.0
+	quoteBlockTint   = 0.12
+
+	quoteWidthBase = 512.0
 )
 
 var quotesBucket = []byte("quotes")
@@ -47,106 +94,179 @@ type quoteBlock struct {
 	Text   string
 	Avatar string
 	UserID int64
-	Color  color.RGBA
 	Date   int64
 }
 
-func quotesAccentPalette() []color.RGBA {
-	return []color.RGBA{
-		{0xff, 0x6b, 0x6b, 0xff},
-		{0x4e, 0xcd, 0xc4, 0xff},
-		{0xff, 0xd9, 0x3d, 0xff},
-		{0x95, 0xe1, 0xd3, 0xff},
-		{0xf3, 0x8b, 0xa0, 0xff},
-		{0xa8, 0xe6, 0xcf, 0xff},
-		{0xff, 0x8b, 0x94, 0xff},
-		{0xc7, 0x9e, 0xff, 0xff},
-		{0x6c, 0x5c, 0xe7, 0xff},
-		{0xfd, 0x79, 0xa8, 0xff},
-		{0xfd, 0xcb, 0x6e, 0xff},
-		{0x55, 0xef, 0xc4, 0xff},
-		{0x74, 0xb9, 0xff, 0xff},
-		{0xff, 0x76, 0x75, 0xff},
-		{0xe1, 0x7e, 0xb5, 0xff},
-		{0xff, 0xa6, 0x2b, 0xff},
-		{0x8e, 0xd8, 0x1f, 0xff},
-		{0x00, 0xcf, 0xc1, 0xff},
+func quoteIsLight(c color.RGBA) bool {
+	r, g, b := float64(c.R), float64(c.G), float64(c.B)
+	hsp := math.Sqrt(0.299*r*r + 0.587*g*g + 0.114*b*b)
+	return hsp > 127.5
+}
+
+func quoteColorLuminance(c color.RGBA, lum float64) color.RGBA {
+	adjust := func(v uint8) uint8 {
+		f := float64(v)
+		f = math.Round(math.Min(math.Max(0, f+f*lum), 255))
+		return uint8(f)
+	}
+	return color.RGBA{adjust(c.R), adjust(c.G), adjust(c.B), 255}
+}
+
+func quoteBrightness(c color.RGBA) float64 {
+	return (float64(c.R)*299 + float64(c.G)*587 + float64(c.B)*114) / 1000
+}
+
+func quoteAdjustBrightness(c color.RGBA, amount float64) color.RGBA {
+	clamp := func(v float64) uint8 {
+		return uint8(math.Max(0, math.Min(255, v)))
+	}
+	return color.RGBA{
+		clamp(float64(c.R) + amount),
+		clamp(float64(c.G) + amount),
+		clamp(float64(c.B) + amount),
+		255,
 	}
 }
 
-func quotesPickAccent(userID int64) color.RGBA {
-	pal := quotesAccentPalette()
+func quoteAdjustContrast(bg, fg color.RGBA) color.RGBA {
+	const threshold = 175.0
+	bb := quoteBrightness(bg)
+	bf := quoteBrightness(fg)
+	lightest := math.Max(bb, bf)
+	darkest := math.Min(bb, bf)
+	ratio := (lightest + 0.05) / (darkest + 0.05)
+	if ratio >= 4.5 {
+		return fg
+	}
+	diff := bb - bf
+	if diff >= 0 {
+		return quoteAdjustBrightness(fg, math.Ceil((threshold-bf)/2))
+	}
+	return quoteAdjustBrightness(fg, -math.Ceil((bf-threshold)/2))
+}
+
+func quoteNameColor(userID int64, bgOne, bgTwo color.RGBA) color.RGBA {
+	pal := quoteNameColorsDark
+	if quoteIsLight(bgOne) {
+		pal = quoteNameColorsLight
+	}
+	idx := 1
+	if userID != 0 {
+		v := userID
+		if v < 0 {
+			v = -v
+		}
+		idx = int(v % 7)
+	}
+	nameColor := pal[idx]
+	contrast := (quoteBrightness(quoteColorLuminance(bgOne, 0.55)) + 0.05) /
+		(quoteBrightness(nameColor) + 0.05)
+	if contrast < 1 {
+		contrast = 1 / contrast
+	}
+	if contrast > 90 || contrast < 30 {
+		nameColor = quoteAdjustContrast(quoteColorLuminance(bgTwo, 0.55), nameColor)
+	}
+	return nameColor
+}
+
+func quoteAvatarPair(userID int64) [2]color.RGBA {
 	if userID == 0 {
-		return pal[quotesRng.Intn(len(pal))]
+		return quoteAvatarColors[quotesRng.Intn(7)]
 	}
-	return pal[int(uint64(userID))%len(pal)]
+	v := userID
+	if v < 0 {
+		v = -v
+	}
+	return quoteAvatarColors[int(v%7)]
 }
 
-func quotesLoadFont(dc *gg.Context, size float64) bool {
+type quoteRadii struct{ tl, tr, br, bl float64 }
+
+func quoteBubblePath(dc *gg.Context, w, h float64, r quoteRadii, tailSize float64) {
+	cap := func(v float64) float64 { return math.Min(v, math.Min(w/2, h/2)) }
+	tl, tr, br, bl := cap(r.tl), cap(r.tr), cap(r.br), cap(r.bl)
+
+	dc.NewSubPath()
+	dc.MoveTo(tl, 0)
+	dc.LineTo(w-tr, 0)
+	dc.DrawArc(w-tr, tr, tr, gg.Radians(-90), gg.Radians(0))
+	dc.LineTo(w, h-br)
+	dc.DrawArc(w-br, h-br, br, gg.Radians(0), gg.Radians(90))
+
+	if tailSize > 0 {
+		t := tailSize
+		dc.LineTo(-t, h)
+		// Cubic bezier — flat bottom edge curls up to the bubble's left edge.
+		dc.CubicTo(-t*0.4, h, 0, h-bl*0.3, 0, h-bl)
+	} else {
+		dc.LineTo(bl, h)
+		dc.DrawArc(bl, h-bl, bl, gg.Radians(90), gg.Radians(180))
+	}
+	dc.LineTo(0, tl)
+	dc.DrawArc(tl, tl, tl, gg.Radians(180), gg.Radians(270))
+	dc.ClosePath()
+}
+
+func quoteDrawGradientBubble(dc *gg.Context, x, y, w, h float64, c1, c2 color.RGBA, r quoteRadii, tailSize float64) {
+	dc.Push()
+	defer dc.Pop()
+	dc.Translate(x, y)
+	grad := gg.NewLinearGradient(0, 0, w, h)
+	grad.AddColorStop(0, c1)
+	grad.AddColorStop(1, c2)
+	dc.SetFillStyle(grad)
+	quoteBubblePath(dc, w, h, r, tailSize)
+	dc.Fill()
+}
+
+func quoteDrawAccentBlock(dc *gg.Context, x, y, w, h float64, accent color.RGBA, s float64) {
+	radius := quoteBlockRadius * s
+	bar := quoteBlockBar * s
+
+	dc.Push()
+	dc.SetRGBA(float64(accent.R)/255, float64(accent.G)/255, float64(accent.B)/255, quoteBlockTint)
+	dc.DrawRoundedRectangle(x, y, w, h, radius)
+	dc.Fill()
+	dc.Pop()
+
+	dc.Push()
+	dc.SetRGBA255(int(accent.R), int(accent.G), int(accent.B), 255)
+	dc.DrawRoundedRectangle(x, y, bar, h, radius/2)
+	dc.Fill()
+	dc.Pop()
+}
+
+func quoteDrawShadow(dc *gg.Context, x, y, w, h float64, r quoteRadii, tailSize, s float64) {
+	dc.Push()
+	defer dc.Pop()
+	dc.Translate(x, y+1*s)
+	dc.SetRGBA(0, 0, 0, 0.10)
+	quoteBubblePath(dc, w, h, r, tailSize)
+	dc.Fill()
+
+	dc.Translate(0, 1*s)
+	dc.SetRGBA(0, 0, 0, 0.08)
+	quoteBubblePath(dc, w, h, r, tailSize)
+	dc.Fill()
+}
+
+func quoteLoadFont(dc *gg.Context, size float64, bold bool) {
 	primary := memeFontPath("Inter_28pt-Bold.ttf")
+	if !bold {
+	}
 	if primary != "" {
 		if err := dc.LoadFontFace(primary, size); err == nil {
-			return true
+			return
 		}
 	}
 	fallback := memeFontPath("Swiss 721 Black Extended BT.ttf")
 	if fallback != "" {
 		if err := dc.LoadFontFace(fallback, size); err == nil {
-			return true
+			return
 		}
 	}
 	dc.SetFontFace(basicfont.Face7x13)
-	return false
-}
-
-func quotesDrawCircleAvatar(dc *gg.Context, path string, cx, cy, radius float64, accent color.RGBA) {
-	dc.Push()
-	defer dc.Pop()
-
-	if path == "" {
-		quotesDrawInitialsAvatar(dc, cx, cy, radius, "?", accent)
-		return
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		quotesDrawInitialsAvatar(dc, cx, cy, radius, "?", accent)
-		return
-	}
-	defer f.Close()
-	img, _, err := image.Decode(f)
-	if err != nil {
-		quotesDrawInitialsAvatar(dc, cx, cy, radius, "?", accent)
-		return
-	}
-	b := img.Bounds()
-	srcW := float64(b.Dx())
-	srcH := float64(b.Dy())
-	scale := (radius * 2) / srcW
-	if srcH > srcW {
-		scale = (radius * 2) / srcH
-	}
-	scaled := gg.NewContext(int(radius*2)+2, int(radius*2)+2)
-	scaled.ScaleAbout(scale, scale, srcW/2, srcH/2)
-	scaled.DrawImageAnchored(img, int(radius), int(radius), 0.5, 0.5)
-
-	dc.DrawCircle(cx, cy, radius)
-	dc.Clip()
-	dc.DrawImageAnchored(scaled.Image(), int(cx), int(cy), 0.5, 0.5)
-	dc.ResetClip()
-}
-
-func quotesDrawInitialsAvatar(dc *gg.Context, cx, cy, radius float64, initials string, accent color.RGBA) {
-	dc.Push()
-	defer dc.Pop()
-	dc.DrawCircle(cx, cy, radius)
-	dc.SetRGBA255(int(accent.R)/2, int(accent.G)/2, int(accent.B)/2, 255)
-	dc.Fill()
-	quotesLoadFont(dc, radius*0.9)
-	dc.SetRGB(1, 1, 1)
-	if initials == "" {
-		initials = "?"
-	}
-	dc.DrawStringAnchored(strings.ToUpper(initials), cx, cy, 0.5, 0.5)
 }
 
 var quoteHTMLTags = regexp.MustCompile(`<[^>]+>`)
@@ -159,12 +279,13 @@ func quoteSanitizeText(s string) string {
 	return strings.TrimSpace(html.UnescapeString(stripped))
 }
 
-func quotesWrapLines(dc *gg.Context, text string, maxWidth float64) []string {
+// quoteWrapLines — simple word wrap on the current dc font.
+func quoteWrapLines(dc *gg.Context, text string, maxWidth float64) []string {
 	if text == "" {
 		return nil
 	}
 	var lines []string
-	for _, paragraph := range strings.Split(text, "\n") {
+	for paragraph := range strings.SplitSeq(text, "\n") {
 		words := strings.Fields(paragraph)
 		if len(words) == 0 {
 			lines = append(lines, "")
@@ -191,7 +312,7 @@ func quotesWrapLines(dc *gg.Context, text string, maxWidth float64) []string {
 	return lines
 }
 
-func quotesInitials(name string) string {
+func quoteInitials(name string) string {
 	parts := strings.Fields(strings.TrimSpace(name))
 	if len(parts) == 0 {
 		return "?"
@@ -202,19 +323,18 @@ func quotesInitials(name string) string {
 			return "?"
 		}
 		if len(r) == 1 {
-			return string(r[0])
+			return strings.ToUpper(string(r[0]))
 		}
-		return string(r[0]) + string(r[1])
+		return strings.ToUpper(string(r[0]) + string(r[1]))
 	}
 	a := []rune(parts[0])
 	b := []rune(parts[len(parts)-1])
 	if len(a) == 0 || len(b) == 0 {
 		return "?"
 	}
-	return string(a[0]) + string(b[0])
+	return strings.ToUpper(string(a[0]) + string(b[0]))
 }
-
-func quotesGetAccessHash(c *tg.Client, userID int64) int64 {
+func quoteGetAccessHash(c *tg.Client, userID int64) int64 {
 	peer, err := c.ResolvePeer(userID)
 	if err != nil {
 		return 0
@@ -225,13 +345,13 @@ func quotesGetAccessHash(c *tg.Client, userID int64) int64 {
 	return 0
 }
 
-func quotesDownloadAvatar(c *tg.Client, userID int64) string {
+func quoteDownloadAvatar(c *tg.Client, userID int64) string {
 	if userID == 0 {
 		return ""
 	}
 	full, err := c.UsersGetFullUser(&tg.InputUserObj{
 		UserID:     userID,
-		AccessHash: quotesGetAccessHash(c, userID),
+		AccessHash: quoteGetAccessHash(c, userID),
 	})
 	if err != nil || full == nil {
 		return ""
@@ -261,7 +381,160 @@ func quotesDownloadAvatar(c *tg.Client, userID int64) string {
 	return tmp
 }
 
-func quotesCollectChain(m *tg.NewMessage, maxDepth int) []quoteBlock {
+func quoteDrawAvatarCircle(dc *gg.Context, path string, cx, cy, radius float64, userID int64, name string) {
+	if path != "" {
+		if f, err := os.Open(path); err == nil {
+			defer f.Close()
+			if img, _, derr := image.Decode(f); derr == nil {
+				dc.Push()
+				dc.DrawCircle(cx, cy, radius)
+				dc.Clip()
+				b := img.Bounds()
+				side := math.Min(float64(b.Dx()), float64(b.Dy()))
+				scale := (radius * 2) / side
+				scaled := gg.NewContext(int(radius*2)+2, int(radius*2)+2)
+				scaled.ScaleAbout(scale, scale, float64(b.Dx())/2, float64(b.Dy())/2)
+				scaled.DrawImageAnchored(img, int(radius), int(radius), 0.5, 0.5)
+				dc.DrawImageAnchored(scaled.Image(), int(cx), int(cy), 0.5, 0.5)
+				dc.ResetClip()
+				dc.Pop()
+				return
+			}
+		}
+	}
+
+	pair := quoteAvatarPair(userID)
+	dc.Push()
+	dc.DrawCircle(cx, cy, radius)
+	dc.Clip()
+	grad := gg.NewLinearGradient(cx-radius, cy-radius, cx+radius, cy+radius)
+	grad.AddColorStop(0, pair[0])
+	grad.AddColorStop(1, pair[1])
+	dc.SetFillStyle(grad)
+	dc.DrawRectangle(cx-radius, cy-radius, radius*2, radius*2)
+	dc.Fill()
+	dc.ResetClip()
+	dc.Pop()
+
+	initials := quoteInitials(name)
+	letterCount := len([]rune(initials))
+	fontSize := radius * 2 * 0.48
+	if letterCount > 1 {
+		fontSize = radius * 2 * 0.38
+	}
+	quoteLoadFont(dc, fontSize, true)
+	dc.SetRGB(1, 1, 1)
+	dc.DrawStringAnchored(initials, cx, cy, 0.5, 0.5)
+}
+
+type quoteMeasured struct {
+	headerH    float64
+	textLines  []string
+	textH      float64
+	totalH     float64
+	contentW   float64
+	bubbleW    float64
+	nameSize   float64
+	handleSize float64
+	textSize   float64
+	avatarSize float64
+	avatarGap  float64
+}
+
+func quoteMeasureBlock(dc *gg.Context, b quoteBlock, s float64) quoteMeasured {
+	m := quoteMeasured{
+		avatarSize: quoteAvatarSize * s,
+		avatarGap:  quoteAvatarGap * s,
+		nameSize:   22 * s,
+		handleSize: 14 * s,
+		textSize:   24 * s,
+	}
+	m.bubbleW = quoteWidthBase * s
+	m.contentW = m.bubbleW - 2*quotePadX*s
+
+	quoteLoadFont(dc, m.nameSize, true)
+	_, nameH := dc.MeasureString(b.Name)
+	if nameH == 0 {
+		nameH = m.nameSize
+	}
+	m.headerH = nameH
+	if b.Handle != "" {
+		m.headerH = nameH + 4*s + m.handleSize*1.2
+	}
+
+	quoteLoadFont(dc, m.textSize, false)
+	m.textLines = quoteWrapLines(dc, b.Text, m.contentW)
+	lineH := m.textSize * 1.35
+	m.textH = lineH * float64(len(m.textLines))
+	if len(m.textLines) == 0 {
+		m.textH = 0
+	}
+
+	m.totalH = quotePadY*s + m.headerH + quoteGap*s + m.textH + quotePadY*s
+	if m.totalH < quoteMinWidth*s/2 {
+		m.totalH = quoteMinWidth * s / 2
+	}
+	return m
+}
+
+func quoteDrawSingleBubble(dc *gg.Context, b quoteBlock, originX, originY float64, m quoteMeasured, bgOne, bgTwo color.RGBA, isLast bool) float64 {
+	s := quoteScale
+
+	bubbleX := originX + m.avatarSize + m.avatarGap
+	bubbleY := originY
+	bubbleW := m.bubbleW
+	bubbleH := m.totalH
+
+	radii := quoteRadii{
+		tl: quoteRadius * s,
+		tr: quoteRadius * s,
+		br: quoteRadius * s,
+		bl: quoteRadius * s,
+	}
+	tail := 0.0
+	if isLast {
+		tail = quoteTailSize * s
+	}
+
+	quoteDrawShadow(dc, bubbleX, bubbleY, bubbleW, bubbleH, radii, tail, s)
+	quoteDrawGradientBubble(dc, bubbleX, bubbleY, bubbleW, bubbleH, bgOne, bgTwo, radii, tail)
+
+	if isLast {
+		avX := originX + m.avatarSize/2
+		avY := bubbleY + bubbleH - m.avatarSize/2 - 2*s
+		quoteDrawAvatarCircle(dc, b.Avatar, avX, avY, m.avatarSize/2, b.UserID, b.Name)
+	}
+
+	nameColor := quoteNameColor(b.UserID, bgOne, bgTwo)
+	textX := bubbleX + quotePadX*s
+	nameY := bubbleY + quotePadY*s + m.nameSize*0.85
+	quoteLoadFont(dc, m.nameSize, true)
+	dc.SetRGBA255(int(nameColor.R), int(nameColor.G), int(nameColor.B), 255)
+	dc.DrawString(b.Name, textX, nameY)
+
+	if b.Handle != "" {
+		quoteLoadFont(dc, m.handleSize, false)
+		handleY := nameY + 4*s + m.handleSize
+		dc.SetRGBA(0.78, 0.78, 0.86, 0.85)
+		dc.DrawString("@"+b.Handle, textX, handleY)
+	}
+
+	quoteLoadFont(dc, m.textSize, false)
+	if quoteIsLight(bgOne) {
+		dc.SetRGB(0, 0, 0)
+	} else {
+		dc.SetRGB(0.96, 0.96, 0.97)
+	}
+	bodyY := bubbleY + quotePadY*s + m.headerH + quoteGap*s + m.textSize*0.85
+	lineH := m.textSize * 1.35
+	for i, ln := range m.textLines {
+		dc.DrawString(ln, textX, bodyY+float64(i)*lineH)
+	}
+
+	return bubbleH
+}
+
+func quoteCollectChain(m *tg.NewMessage, maxDepth int) []quoteBlock {
 	var blocks []quoteBlock
 	current, err := m.GetReplyMessage()
 	if err != nil || current == nil {
@@ -289,14 +562,13 @@ func quotesCollectChain(m *tg.NewMessage, maxDepth int) []quoteBlock {
 				handle = u.Username
 			}
 		}
-		avatar := quotesDownloadAvatar(m.Client, userID)
+		avatar := quoteDownloadAvatar(m.Client, userID)
 		blocks = append(blocks, quoteBlock{
 			Name:   name,
 			Handle: handle,
 			Text:   text,
 			Avatar: avatar,
 			UserID: userID,
-			Color:  quotesPickAccent(userID),
 			Date:   int64(current.Date()),
 		})
 		if !current.IsReply() {
@@ -311,169 +583,60 @@ func quotesCollectChain(m *tg.NewMessage, maxDepth int) []quoteBlock {
 	return blocks
 }
 
-func quotesMeasureBlock(dc *gg.Context, block quoteBlock, contentW float64) (float64, float64, []string) {
-	avatarSize := 96.0
-	nameSize := 38.0
-	handleSize := 22.0
-	textSize := 40.0
-
-	quotesLoadFont(dc, nameSize)
-	_, nameH := dc.MeasureString(block.Name)
-	if nameH == 0 {
-		nameH = nameSize
-	}
-
-	headerH := nameH
-	if block.Handle != "" {
-		headerH = nameH + 6 + handleSize*1.2
-	}
-	if headerH < avatarSize {
-		headerH = avatarSize
-	}
-
-	quotesLoadFont(dc, textSize)
-	lines := quotesWrapLines(dc, block.Text, contentW)
-	lineH := textSize * 1.35
-	textH := lineH * float64(len(lines))
-	if textH < lineH && len(lines) > 0 {
-		textH = lineH
-	}
-
-	bodyGap := 24.0
-	total := headerH + bodyGap + textH
-	return total, headerH, lines
-}
-
-func quotesDrawBlock(dc *gg.Context, block quoteBlock, x, y, contentW float64) float64 {
-	avatarSize := 96.0
-	nameSize := 38.0
-	handleSize := 22.0
-	textSize := 40.0
-	gapAvatarText := 22.0
-
-	total, headerH, lines := quotesMeasureBlock(dc, block, contentW)
-
-	avX := x + avatarSize/2
-	avY := y + avatarSize/2
-	if block.Avatar != "" {
-		quotesDrawCircleAvatar(dc, block.Avatar, avX, avY, avatarSize/2, block.Color)
-	} else {
-		quotesDrawInitialsAvatar(dc, avX, avY, avatarSize/2, quotesInitials(block.Name), block.Color)
-	}
-
-	textX := x + avatarSize + gapAvatarText
-	quotesLoadFont(dc, nameSize)
-	_, nameH := dc.MeasureString(block.Name)
-	if nameH == 0 {
-		nameH = nameSize
-	}
-	nameY := y + nameH
-	dc.SetRGBA255(int(block.Color.R), int(block.Color.G), int(block.Color.B), 255)
-	dc.DrawString(block.Name, textX, nameY)
-
-	if block.Handle != "" {
-		quotesLoadFont(dc, handleSize)
-		handleY := nameY + 6 + handleSize
-		dc.SetRGBA(0.78, 0.78, 0.86, 0.95)
-		dc.DrawString("@"+block.Handle, textX, handleY)
-	}
-
-	quotesLoadFont(dc, textSize)
-	lineH := textSize * 1.35
-	bodyStartY := y + headerH + 24 + textSize*0.85
-	dc.SetRGBA(0.95, 0.95, 0.96, 1.0)
-	for i, ln := range lines {
-		dc.DrawString(ln, x, bodyStartY+float64(i)*lineH)
-	}
-
-	return total
-}
-
-func quotesAutoCropBottom(img *image.RGBA, pad int) *image.RGBA {
-	b := img.Bounds()
-	lastY := b.Min.Y
-	for y := b.Max.Y - 1; y >= b.Min.Y; y-- {
-		rowHasContent := false
-		for x := b.Min.X; x < b.Max.X; x++ {
-			_, _, _, a := img.At(x, y).RGBA()
-			if a > 0 {
-				rowHasContent = true
-				break
-			}
-		}
-		if rowHasContent {
-			lastY = y
-			break
-		}
-	}
-	newH := lastY - b.Min.Y + 1 + pad
-	if newH > b.Dy() {
-		newH = b.Dy()
-	}
-	if newH < 1 {
-		newH = 1
-	}
-	out := image.NewRGBA(image.Rect(0, 0, b.Dx(), newH))
-	for y := 0; y < newH; y++ {
-		for x := 0; x < b.Dx(); x++ {
-			out.Set(x, y, img.At(b.Min.X+x, b.Min.Y+y))
-		}
-	}
-	return out
-}
-
-func quotesRenderImage(blocks []quoteBlock, botName string) (string, error) {
+func quoteRenderImage(blocks []quoteBlock, botName string) (string, error) {
 	if len(blocks) == 0 {
 		return "", fmt.Errorf("no blocks")
 	}
-	const W = 1024
-	const maxH = 4096
-	padding := 32.0
-	contentW := float64(W) - padding*2
-	blockGap := 20.0
-	footerH := 36.0
+	s := quoteScale
 
-	measure := gg.NewContext(W, 100)
-	totalH := padding
+	bgOne := quoteColorLuminance(quoteDefaultBg, 0.35)
+	bgTwo := quoteColorLuminance(quoteDefaultBg, -0.15)
+
+	measureCtx := gg.NewContext(8, 8)
+	measured := make([]quoteMeasured, len(blocks))
+	maxBubbleW := 0.0
+	totalH := 0.0
+	gap := quoteGap * s * 2
 	for i, b := range blocks {
-		h, _, _ := quotesMeasureBlock(measure, b, contentW)
-		totalH += h
+		measured[i] = quoteMeasureBlock(measureCtx, b, s)
+		if measured[i].bubbleW > maxBubbleW {
+			maxBubbleW = measured[i].bubbleW
+		}
+		totalH += measured[i].totalH
 		if i < len(blocks)-1 {
-			totalH += blockGap
+			totalH += gap
 		}
 	}
-	totalH += footerH + padding
 
-	H := int(totalH)
-	if H < 256 {
-		H = 256
-	}
-	if H > maxH {
-		H = maxH
-	}
+	originX := quoteShadowPad * s
+	originY := quoteShadowPad * s
+	footerH := 24 * s
+	canvasW := int(originX + measured[0].avatarSize + measured[0].avatarGap + maxBubbleW + quoteShadowPad*s)
+	canvasH := int(originY + totalH + footerH + quoteShadowPad*s)
 
-	rgba := image.NewRGBA(image.Rect(0, 0, W, H))
+	rgba := image.NewRGBA(image.Rect(0, 0, canvasW, canvasH))
 	dc := gg.NewContextForRGBA(rgba)
 
-	y := padding
+	dc.SetRGBA(0, 0, 0, 0)
+	dc.Clear()
+
+	y := originY
 	for i, b := range blocks {
-		blockH := quotesDrawBlock(dc, b, padding, y, contentW)
-		y += blockH
-		if i < len(blocks)-1 {
-			y += blockGap
+		isLast := i == len(blocks)-1
+		h := quoteDrawSingleBubble(dc, b, originX, y, measured[i], bgOne, bgTwo, isLast)
+		y += h
+		if !isLast {
+			y += gap
 		}
 	}
 
-	quotesLoadFont(dc, 16)
+	quoteLoadFont(dc, 12*s, false)
 	dc.SetRGBA(0.78, 0.78, 0.86, 0.45)
 	mark := "— via @" + botName
 	if botName == "" {
 		mark = "— via @JuliaBot"
 	}
-	footerY := y + footerH - 8
-	dc.DrawStringAnchored(mark, float64(W)-padding, footerY, 1.0, 0.5)
-
-	cropped := quotesAutoCropBottom(rgba, int(padding))
+	dc.DrawStringAnchored(mark, float64(canvasW)-quoteShadowPad*s, y+footerH-6*s, 1.0, 0.5)
 
 	outPath := filepath.Join(os.TempDir(), fmt.Sprintf("quote_%d.png", time.Now().UnixNano()))
 	f, err := os.Create(outPath)
@@ -481,63 +644,10 @@ func quotesRenderImage(blocks []quoteBlock, botName string) (string, error) {
 		return "", err
 	}
 	defer f.Close()
-	if err := png.Encode(f, cropped); err != nil {
+	if err := png.Encode(f, rgba); err != nil {
 		return "", err
 	}
 	return outPath, nil
-}
-
-func quotesAutoStackPreceding(m *tg.NewMessage, replied *tg.NewMessage) []quoteBlock {
-	var extras []quoteBlock
-	if replied == nil {
-		return extras
-	}
-	repliedDate := int64(replied.Date())
-	repliedSender := replied.SenderID()
-	if repliedSender == 0 {
-		return extras
-	}
-	startID := replied.ID - 1
-	for i := 0; i < 2 && startID > 0; i, startID = i+1, startID-1 {
-		msgs, err := m.Client.GetMessages(m.ChatID(), &tg.SearchOption{IDs: startID})
-		if err != nil || len(msgs) == 0 {
-			break
-		}
-		prev := msgs[0]
-		if prev.SenderID() != repliedSender {
-			break
-		}
-		prevDate := int64(prev.Date())
-		if repliedDate-prevDate > 30 || repliedDate-prevDate < 0 {
-			break
-		}
-		text := quoteSanitizeText(prev.RawText())
-		if text == "" {
-			break
-		}
-		if len(text) > 600 {
-			text = text[:600] + "..."
-		}
-		name := "User"
-		handle := ""
-		u, uerr := m.Client.GetUser(repliedSender)
-		if uerr == nil && u != nil {
-			name = strings.TrimSpace(u.FirstName + " " + u.LastName)
-			if name == "" {
-				name = "User"
-			}
-			handle = u.Username
-		}
-		extras = append(extras, quoteBlock{
-			Name:   name,
-			Handle: handle,
-			Text:   text,
-			UserID: repliedSender,
-			Color:  quotesPickAccent(repliedSender),
-			Date:   prevDate,
-		})
-	}
-	return extras
 }
 
 func QuoteImageHandler(m *tg.NewMessage) error {
@@ -548,7 +658,7 @@ func QuoteImageHandler(m *tg.NewMessage) error {
 
 	status, _ := m.Reply("<i>painting your quote...</i>")
 
-	blocks := quotesCollectChain(m, 3)
+	blocks := quoteCollectChain(m, 3)
 	if len(blocks) == 0 {
 		if status != nil {
 			status.Edit("could not read reply")
@@ -577,7 +687,7 @@ func QuoteImageHandler(m *tg.NewMessage) error {
 		blocks[i], blocks[j] = blocks[j], blocks[i]
 	}
 
-	outPath, err := quotesRenderImage(blocks, botName)
+	outPath, err := quoteRenderImage(blocks, botName)
 	if err != nil || outPath == "" {
 		errMsg := "render failed"
 		if err != nil {
@@ -633,8 +743,8 @@ func quotesNextID(tx *bolt.Tx, chatID int64) uint64 {
 	binary.BigEndian.PutUint64(prefix, uint64(chatID))
 	c := b.Cursor()
 	var maxID uint64
-	for k, _ := c.Seek(prefix); k != nil && len(k) >= 16; k, _ = c.Next() {
-		if !bytesHasPrefix(k, prefix) {
+	for k, _ := c.Seek(prefix); len(k) >= 16; k, _ = c.Next() {
+		if !quotesBytesHasPrefix(k, prefix) {
 			break
 		}
 		id := binary.BigEndian.Uint64(k[8:16])
@@ -645,7 +755,7 @@ func quotesNextID(tx *bolt.Tx, chatID int64) uint64 {
 	return maxID + 1
 }
 
-func bytesHasPrefix(a, b []byte) bool {
+func quotesBytesHasPrefix(a, b []byte) bool {
 	if len(a) < len(b) {
 		return false
 	}
@@ -674,7 +784,7 @@ func quotesListByChat(chatID int64) ([]quoteRecord, error) {
 			return nil
 		}
 		c := b.Cursor()
-		for k, v := c.Seek(prefix); k != nil && bytesHasPrefix(k, prefix); k, v = c.Next() {
+		for k, v := c.Seek(prefix); k != nil && quotesBytesHasPrefix(k, prefix); k, v = c.Next() {
 			var rec quoteRecord
 			if jerr := json.Unmarshal(v, &rec); jerr == nil {
 				out = append(out, rec)
