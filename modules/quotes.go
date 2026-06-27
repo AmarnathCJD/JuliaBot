@@ -25,6 +25,7 @@ import (
 	"github.com/fogleman/gg"
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/image/font/basicfont"
+	_ "golang.org/x/image/webp"
 )
 
 var quoteNameColorsLight = [7]color.RGBA{
@@ -51,8 +52,28 @@ var quoteAvatarColors = [7][2]color.RGBA{
 
 var quoteDefaultBg = color.RGBA{0x29, 0x22, 0x32, 0xFF}
 
+var quoteCSSColors = map[string]color.RGBA{
+	"red":     {0xFF, 0x00, 0x00, 0xFF},
+	"green":   {0x00, 0x80, 0x00, 0xFF},
+	"blue":    {0x00, 0x00, 0xFF, 0xFF},
+	"black":   {0x00, 0x00, 0x00, 0xFF},
+	"white":   {0xFF, 0xFF, 0xFF, 0xFF},
+	"yellow":  {0xFF, 0xFF, 0x00, 0xFF},
+	"orange":  {0xFF, 0xA5, 0x00, 0xFF},
+	"purple":  {0x80, 0x00, 0x80, 0xFF},
+	"pink":    {0xFF, 0xC0, 0xCB, 0xFF},
+	"cyan":    {0x00, 0xFF, 0xFF, 0xFF},
+	"magenta": {0xFF, 0x00, 0xFF, 0xFF},
+	"gray":    {0x80, 0x80, 0x80, 0xFF},
+	"grey":    {0x80, 0x80, 0x80, 0xFF},
+	"brown":   {0xA5, 0x2A, 0x2A, 0xFF},
+	"navy":    {0x00, 0x00, 0x80, 0xFF},
+	"teal":    {0x00, 0x80, 0x80, 0xFF},
+	"lime":    {0x00, 0xFF, 0x00, 0xFF},
+}
+
 const (
-	quoteScale       = 2.0
+	quoteScale       = 3.0
 	quotePadX        = 16.0
 	quotePadY        = 15.0
 	quoteGap         = 9.0
@@ -90,15 +111,17 @@ type quoteRecord struct {
 }
 
 type quoteBlock struct {
-	Name      string
-	FirstName string
-	LastName  string
-	Handle    string
-	Text      string
-	Avatar    string
-	UserID    int64
-	ChatID    int64
-	Date      int64
+	Name        string
+	FirstName   string
+	LastName    string
+	Handle      string
+	Text        string
+	Avatar      string
+	UserID      int64
+	ChatID      int64
+	Date        int64
+	Media       image.Image
+	ForwardFrom string
 }
 
 func quoteIsLight(c color.RGBA) bool {
@@ -147,6 +170,57 @@ func quoteAdjustContrast(bg, fg color.RGBA) color.RGBA {
 		return quoteAdjustBrightness(fg, math.Ceil((threshold-bf)/2))
 	}
 	return quoteAdjustBrightness(fg, -math.Ceil((bf-threshold)/2))
+}
+
+func quoteParseHex(s string) (color.RGBA, bool) {
+	s = strings.TrimPrefix(strings.TrimSpace(s), "#")
+	if len(s) == 3 {
+		s = string([]byte{s[0], s[0], s[1], s[1], s[2], s[2]})
+	}
+	if len(s) != 6 {
+		return color.RGBA{}, false
+	}
+	n, err := strconv.ParseUint(s, 16, 32)
+	if err != nil {
+		return color.RGBA{}, false
+	}
+	return color.RGBA{uint8(n >> 16), uint8(n >> 8), uint8(n), 0xFF}, true
+}
+
+func quoteNormalizeColor(s string) (color.RGBA, bool) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return color.RGBA{}, false
+	}
+	if c, ok := quoteCSSColors[s]; ok {
+		return c, true
+	}
+	return quoteParseHex(s)
+}
+
+func quoteParseBackgroundColor(bg string) (color.RGBA, color.RGBA) {
+	bg = strings.TrimSpace(bg)
+	if bg == "" {
+		bg = "//#292232"
+	}
+	// "a/b" form (but NOT "//x")
+	if i := strings.Index(bg, "/"); i > 0 {
+		a, okA := quoteNormalizeColor(bg[:i])
+		b, okB := quoteNormalizeColor(bg[i+1:])
+		if okA && okB {
+			return a, b
+		}
+	}
+	if strings.HasPrefix(bg, "//") {
+		if base, ok := quoteNormalizeColor(strings.TrimPrefix(bg, "//")); ok {
+			return quoteColorLuminance(base, 0.35), quoteColorLuminance(base, -0.15)
+		}
+	}
+	if base, ok := quoteNormalizeColor(bg); ok {
+		return base, base
+	}
+	// Fallback to default gradient.
+	return quoteColorLuminance(quoteDefaultBg, 0.35), quoteColorLuminance(quoteDefaultBg, -0.15)
 }
 
 func quoteNameColor(userID int64, bgOne, bgTwo color.RGBA) color.RGBA {
@@ -237,6 +311,26 @@ func quoteDrawAccentBlock(dc *gg.Context, x, y, w, h float64, accent color.RGBA,
 	dc.Push()
 	dc.SetRGBA255(int(accent.R), int(accent.G), int(accent.B), 255)
 	dc.DrawRoundedRectangle(x, y, bar, h, radius/2)
+	dc.Fill()
+	dc.Pop()
+}
+
+func quoteDrawQuoteIcon(dc *gg.Context, x, y, size float64, c color.RGBA) {
+	r := size * 0.09
+	gapX := size * 0.36
+	dc.Push()
+	dc.SetRGBA255(int(c.R), int(c.G), int(c.B), 255)
+	mark := func(ox, oy float64) {
+		cx, cy := x+ox+r, y+oy+r
+		dc.DrawCircle(cx, cy, r)
+		dc.MoveTo(x+ox+2*r, cy)
+		dc.QuadraticTo(x+ox+2.2*r, y+oy+0.35*size, x+ox+0.3*r, y+oy+0.4*size)
+		dc.LineTo(x+ox+0.3*r, y+oy+0.32*size)
+		dc.QuadraticTo(x+ox+1.5*r, y+oy+0.27*size, x+ox+0.8*r, cy)
+		dc.ClosePath()
+	}
+	mark(size*0.08, size*0.15)
+	mark(size*0.08+gapX, size*0.15)
 	dc.Fill()
 	dc.Pop()
 }
@@ -450,6 +544,76 @@ func quoteDrawAvatarCircle(dc *gg.Context, path string, cx, cy, radius float64, 
 	dc.DrawStringAnchored(initials, cx, cy, 0.5, 0.5)
 }
 
+type quoteMediaKind int
+
+const (
+	qMediaNone quoteMediaKind = iota
+	qMediaPhoto
+	qMediaStickerStatic
+)
+
+func quoteDetectMedia(msg *tg.NewMessage) quoteMediaKind {
+	if msg == nil || !msg.IsMedia() || msg.Media() == nil {
+		return qMediaNone
+	}
+	switch md := msg.Media().(type) {
+	case *tg.MessageMediaPhoto:
+		_ = md
+		return qMediaPhoto
+	case *tg.MessageMediaDocument:
+		doc, ok := md.Document.(*tg.DocumentObj)
+		if !ok {
+			return qMediaNone
+		}
+		isSticker := false
+		for _, a := range doc.Attributes {
+			switch at := a.(type) {
+			case *tg.DocumentAttributeSticker:
+				_ = at
+				isSticker = true
+			case *tg.DocumentAttributeFilename:
+				if strings.HasSuffix(strings.ToLower(at.FileName), ".tgs") {
+					return qMediaNone
+				}
+			}
+		}
+		// Skip video stickers (webm) — image.Decode can't handle them.
+		if isSticker && strings.HasPrefix(doc.MimeType, "video/") {
+			return qMediaNone
+		}
+		if isSticker {
+			return qMediaStickerStatic
+		}
+	}
+	return qMediaNone
+}
+
+func quoteDownloadMedia(msg *tg.NewMessage, kind quoteMediaKind) image.Image {
+	if kind == qMediaNone {
+		return nil
+	}
+	ext := ".jpg"
+	if kind == qMediaStickerStatic {
+		ext = ".webp"
+	}
+	dst := filepath.Join(os.TempDir(), fmt.Sprintf("quote_media_%d%s", time.Now().UnixNano(), ext))
+	path, err := msg.Download(&tg.DownloadOptions{FileName: dst})
+	if err != nil {
+		return nil
+	}
+	defer os.Remove(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	img, _, derr := image.Decode(f)
+	if derr != nil {
+		return nil
+	}
+	return img
+}
+
 type quoteScene struct {
 	main  quoteBlock
 	reply *quoteBlock
@@ -479,18 +643,27 @@ type quoteLayout struct {
 	textLines []string
 	textH     float64
 
+	mediaW   float64
+	mediaH   float64
+	hasMedia bool
+
+	forwardText string
+	forwardH    float64
+
 	bubbleH float64
 }
 
-func quoteBuildLayout(measureCtx *gg.Context, scene quoteScene, bgOne, bgTwo color.RGBA) quoteLayout {
-	s := quoteScale
+func quoteBuildLayout(measureCtx *gg.Context, scene quoteScene, bgOne, bgTwo color.RGBA, scale float64) quoteLayout {
+	s := scale
+	// Logical sizes nudged up from LyoSU's defaults (22/24/16/21) so the
+	// resulting sticker reads punchy when Telegram downscales it to 512px.
 	L := quoteLayout{
 		s:          s,
-		nameSize:   22 * s,
-		handleSize: 14 * s,
-		textSize:   24 * s,
-		replyName:  16 * s,
-		replyText:  21 * s,
+		nameSize:   26 * s,
+		handleSize: 16 * s,
+		textSize:   30 * s,
+		replyName:  22 * s,
+		replyText:  28 * s,
 		bubbleW:    quoteWidthBase * s,
 		avatarSize: quoteAvatarSize * s,
 		avatarGap:  quoteAvatarGap * s,
@@ -504,9 +677,6 @@ func quoteBuildLayout(measureCtx *gg.Context, scene quoteScene, bgOne, bgTwo col
 	}
 	L.nameH = nh
 	L.headerH = nh
-	if scene.main.Handle != "" {
-		L.headerH = nh + 4*s + L.handleSize*1.2
-	}
 
 	if scene.reply != nil {
 		L.hasReply = true
@@ -533,9 +703,42 @@ func quoteBuildLayout(measureCtx *gg.Context, scene quoteScene, bgOne, bgTwo col
 	lineH := L.textSize * 1.35
 	L.textH = lineH * float64(len(L.textLines))
 
+	if scene.main.Media != nil {
+		L.hasMedia = true
+		iw := float64(scene.main.Media.Bounds().Dx())
+		ih := float64(scene.main.Media.Bounds().Dy())
+		maxMedia := L.bubbleW / 3.0
+		mw := iw * (maxMedia / ih)
+		mh := maxMedia
+		if mw >= maxMedia {
+			mw = maxMedia
+			mh = ih * (maxMedia / iw)
+		}
+		L.mediaW, L.mediaH = mw, mh
+	}
+
+	if scene.main.ForwardFrom != "" {
+		L.forwardText = "Forwarded from " + scene.main.ForwardFrom
+		quoteLoadFont(measureCtx, L.replyName, true)
+		_, fh := measureCtx.MeasureString(L.forwardText)
+		if fh == 0 {
+			fh = L.replyName
+		}
+		L.forwardH = fh + 4*s
+		if !L.hasReply {
+			L.replyAccent = quoteNameColor(scene.main.UserID, bgOne, bgTwo)
+		}
+	}
+
 	L.bubbleH = quotePadY*s + L.headerH
+	if L.forwardH > 0 {
+		L.bubbleH += quoteGap*s + L.forwardH
+	}
 	if L.hasReply {
 		L.bubbleH += quoteGap*s + L.replyBlockH
+	}
+	if L.hasMedia {
+		L.bubbleH += quoteGap*s + L.mediaH
 	}
 	if L.textH > 0 {
 		L.bubbleH += quoteGap*s + L.textH
@@ -577,16 +780,26 @@ func quoteDrawScene(dc *gg.Context, scene quoteScene, bubbleX, bubbleY, canvasH 
 	quoteLoadFont(dc, L.nameSize, true)
 	dc.SetRGBA255(int(nameColor.R), int(nameColor.G), int(nameColor.B), 255)
 	dc.DrawString(scene.main.Name, textX, nameY)
-	if scene.main.Handle != "" {
-		quoteLoadFont(dc, L.handleSize, false)
-		dc.SetRGBA(0.78, 0.78, 0.86, 0.85)
-		dc.DrawString("@"+scene.main.Handle, textX, nameY+4*s+L.handleSize)
-	}
 
 	cursorY := bubbleY + quotePadY*s + L.headerH
+	if L.forwardH > 0 {
+		cursorY += quoteGap * s
+		quoteLoadFont(dc, L.replyName, true)
+		if L.hasReply {
+			dc.SetRGBA255(int(L.replyAccent.R), int(L.replyAccent.G), int(L.replyAccent.B), 255)
+		} else {
+			dc.SetRGBA255(int(nameColor.R), int(nameColor.G), int(nameColor.B), 255)
+		}
+		dc.DrawString(L.forwardText, textX, cursorY+L.replyName*0.85)
+		cursorY += L.forwardH
+	}
 	if L.hasReply {
 		cursorY += quoteGap * s
 		quoteDrawAccentBlock(dc, textX, cursorY, L.contentW, L.replyBlockH, L.replyAccent, s)
+
+		iconSize := 15.0 * s
+		inset := 5.0 * s
+		quoteDrawQuoteIcon(dc, textX+L.contentW-iconSize-inset, cursorY+inset, iconSize, L.replyAccent)
 
 		innerX := textX + quoteBlockBar*s + quoteBlockPadL*s
 		innerY := cursorY + quoteBlockPadY*s
@@ -609,6 +822,25 @@ func quoteDrawScene(dc *gg.Context, scene quoteScene, bubbleX, bubbleY, canvasH 
 			dc.DrawString(ln, innerX, textBaseY+float64(i)*textLineH)
 		}
 		cursorY += L.replyBlockH
+	}
+
+	if L.hasMedia && scene.main.Media != nil {
+		cursorY += quoteGap * s
+		mx := textX
+		my := cursorY
+		dc.Push()
+		r := quoteBlockRadius * s
+		dc.DrawRoundedRectangle(mx, my, L.mediaW, L.mediaH, r)
+		dc.Clip()
+		scaled := gg.NewContext(int(math.Ceil(L.mediaW)), int(math.Ceil(L.mediaH)))
+		iw := float64(scene.main.Media.Bounds().Dx())
+		ih := float64(scene.main.Media.Bounds().Dy())
+		scaled.Scale(L.mediaW/iw, L.mediaH/ih)
+		scaled.DrawImage(scene.main.Media, 0, 0)
+		dc.DrawImage(scaled.Image(), int(mx), int(my))
+		dc.ResetClip()
+		dc.Pop()
+		cursorY += L.mediaH
 	}
 
 	if L.textH > 0 {
@@ -653,16 +885,38 @@ func quoteBuildBlock(m *tg.NewMessage, msg *tg.NewMessage, downloadAvatar bool) 
 	if downloadAvatar {
 		avatar = quoteDownloadAvatar(m.Client, userID)
 	}
+	mediaImg := quoteDownloadMedia(msg, quoteDetectMedia(msg))
+	forwardFrom := ""
+	if msg.Message != nil && msg.Message.FwdFrom != nil {
+		fwd := msg.Message.FwdFrom
+		switch p := fwd.FromID.(type) {
+		case *tg.PeerUser:
+			if u, uerr := m.Client.GetUser(p.UserID); uerr == nil && u != nil {
+				forwardFrom = strings.TrimSpace(u.FirstName + " " + u.LastName)
+			}
+		case *tg.PeerChannel:
+			_ = p
+			// best-effort: leave blank if we can't resolve; PostAuthor fallback below
+		}
+		if forwardFrom == "" && fwd.PostAuthor != "" {
+			forwardFrom = fwd.PostAuthor
+		}
+		if forwardFrom == "" && fwd.FromName != "" {
+			forwardFrom = fwd.FromName
+		}
+	}
 	return quoteBlock{
-		Name:      name,
-		FirstName: firstName,
-		LastName:  lastName,
-		Handle:    handle,
-		Text:      text,
-		Avatar:    avatar,
-		UserID:    userID,
-		ChatID:    msg.ChatID(),
-		Date:      int64(msg.Date()),
+		Name:        name,
+		FirstName:   firstName,
+		LastName:    lastName,
+		Handle:      handle,
+		Text:        text,
+		Avatar:      avatar,
+		UserID:      userID,
+		ChatID:      msg.ChatID(),
+		Date:        int64(msg.Date()),
+		Media:       mediaImg,
+		ForwardFrom: forwardFrom,
 	}
 }
 
@@ -683,13 +937,12 @@ func quoteCollectScene(m *tg.NewMessage) (quoteScene, error) {
 	return scene, nil
 }
 
-func quoteRenderImage(scene quoteScene) (string, error) {
-	s := quoteScale
-	bgOne := quoteColorLuminance(quoteDefaultBg, 0.35)
-	bgTwo := quoteColorLuminance(quoteDefaultBg, -0.15)
+func quoteRenderImage(scene quoteScene, bgArg string, scale float64) (string, error) {
+	s := scale
+	bgOne, bgTwo := quoteParseBackgroundColor(bgArg)
 
 	measureCtx := gg.NewContext(8, 8)
-	L := quoteBuildLayout(measureCtx, scene, bgOne, bgTwo)
+	L := quoteBuildLayout(measureCtx, scene, bgOne, bgTwo, scale)
 
 	// Bubble sits to the right of the avatar column. Shadow pad applied only
 	// to the right and bottom edges (the shadow is offset down/right).
@@ -716,13 +969,13 @@ func quoteRenderImage(scene quoteScene) (string, error) {
 	return outPath, nil
 }
 
-func quotePngToWebp(pngPath string) (string, error) {
+func quotePngToWebp(pngPath string, maxDim int) (string, error) {
 	webpPath := strings.TrimSuffix(pngPath, ".png") + ".webp"
 	cmd := exec.Command("ffmpeg",
 		"-loglevel", "error",
 		"-y",
 		"-i", pngPath,
-		"-vf", "scale='if(gt(iw,ih),512,-1)':'if(gt(iw,ih),-1,512)':flags=lanczos",
+		"-vf", fmt.Sprintf("scale='if(gt(iw,ih),%d,-1)':'if(gt(iw,ih),-1,%d)':flags=lanczos", maxDim, maxDim),
 		"-lossless", "1",
 		"-pix_fmt", "yuva420p",
 		webpPath,
@@ -734,6 +987,14 @@ func quotePngToWebp(pngPath string) (string, error) {
 }
 
 func QuoteImageHandler(m *tg.NewMessage) error {
+	return quoteImageHandlerScaled(m, quoteScale)
+}
+
+func QuoteHDImageHandler(m *tg.NewMessage) error {
+	return quoteImageHandlerScaled(m, 5.0)
+}
+
+func quoteImageHandlerScaled(m *tg.NewMessage, scale float64) error {
 	if !m.IsReply() {
 		m.Reply("<b>Usage:</b> reply to a message with <code>/q</code> to generate a quote.")
 		return nil
@@ -757,7 +1018,8 @@ func QuoteImageHandler(m *tg.NewMessage) error {
 		}
 	}()
 
-	pngPath, rerr := quoteRenderImage(scene)
+	bgArg := strings.TrimSpace(m.Args())
+	pngPath, rerr := quoteRenderImage(scene, bgArg, scale)
 	if rerr != nil || pngPath == "" {
 		errMsg := "render failed"
 		if rerr != nil {
@@ -770,7 +1032,26 @@ func QuoteImageHandler(m *tg.NewMessage) error {
 	}
 	defer os.Remove(pngPath)
 
-	webpPath, werr := quotePngToWebp(pngPath)
+	// HD path: send PNG directly as photo, skip 512px sticker cap.
+	if scale >= 5 {
+		_, merr := m.ReplyMedia(pngPath, &tg.MediaOptions{
+			FileName: "quote.png",
+			MimeType: "image/png",
+		})
+		if merr != nil {
+			if status != nil {
+				status.Edit("upload failed: " + html.EscapeString(merr.Error()))
+			}
+			return nil
+		}
+		if status != nil {
+			status.Delete()
+		}
+		return nil
+	}
+
+	maxDim := 512
+	webpPath, werr := quotePngToWebp(pngPath, maxDim)
 	if werr != nil || webpPath == "" {
 		if status != nil {
 			status.Edit("ffmpeg failed: " + html.EscapeString(werr.Error()))
@@ -1113,6 +1394,7 @@ func QuotesSearchHandler(m *tg.NewMessage) error {
 func registerQuotesHandlers() {
 	c := Client
 	c.On("cmd:q", QuoteImageHandler)
+	c.On("cmd:qhd", QuoteHDImageHandler)
 	c.On("cmd:qsave", QuoteSaveHandler)
 	c.On("cmd:quotes", QuotesListHandler)
 	c.On("cmd:delq", QuoteDeleteHandler)
