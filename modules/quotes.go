@@ -90,12 +90,15 @@ type quoteRecord struct {
 }
 
 type quoteBlock struct {
-	Name   string
-	Handle string
-	Text   string
-	Avatar string
-	UserID int64
-	Date   int64
+	Name      string
+	FirstName string
+	LastName  string
+	Handle    string
+	Text      string
+	Avatar    string
+	UserID    int64
+	ChatID    int64
+	Date      int64
 }
 
 func quoteIsLight(c color.RGBA) bool {
@@ -238,16 +241,15 @@ func quoteDrawAccentBlock(dc *gg.Context, x, y, w, h float64, accent color.RGBA,
 	dc.Pop()
 }
 
+// quoteDrawShadow draws a single-pass offset silhouette of the bubble.
+// NOTE: gg has no native Gaussian blur, so this is a deliberate compromise —
+// a slightly soft offset instead of a true penumbra. Drawing the path twice
+// produced a visible doubled outline, so we render once at alpha 0.18.
 func quoteDrawShadow(dc *gg.Context, x, y, w, h float64, r quoteRadii, tailSize, s float64) {
 	dc.Push()
 	defer dc.Pop()
 	dc.Translate(x, y+1*s)
-	dc.SetRGBA(0, 0, 0, 0.10)
-	quoteBubblePath(dc, w, h, r, tailSize)
-	dc.Fill()
-
-	dc.Translate(0, 1*s)
-	dc.SetRGBA(0, 0, 0, 0.08)
+	dc.SetRGBA(0, 0, 0, 0.18)
 	quoteBubblePath(dc, w, h, r, tailSize)
 	dc.Fill()
 }
@@ -313,8 +315,22 @@ func quoteWrapLines(dc *gg.Context, text string, maxWidth float64) []string {
 	return lines
 }
 
-func quoteInitials(name string) string {
-	parts := strings.Fields(strings.TrimSpace(name))
+func quoteInitials(firstName, lastName string) string {
+	first := strings.TrimSpace(firstName)
+	last := strings.TrimSpace(lastName)
+	if first != "" && last != "" {
+		fr := []rune(first)
+		lr := []rune(last)
+		if len(fr) == 0 || len(lr) == 0 {
+			return "?"
+		}
+		return strings.ToUpper(string(fr[0]) + string(lr[0]))
+	}
+	source := first
+	if source == "" {
+		source = last
+	}
+	parts := strings.Fields(source)
 	if len(parts) == 0 {
 		return "?"
 	}
@@ -323,10 +339,7 @@ func quoteInitials(name string) string {
 		if len(r) == 0 {
 			return "?"
 		}
-		if len(r) == 1 {
-			return strings.ToUpper(string(r[0]))
-		}
-		return strings.ToUpper(string(r[0]) + string(r[1]))
+		return strings.ToUpper(string(r[0]))
 	}
 	a := []rune(parts[0])
 	b := []rune(parts[len(parts)-1])
@@ -382,20 +395,29 @@ func quoteDownloadAvatar(c *tg.Client, userID int64) string {
 	return tmp
 }
 
-func quoteDrawAvatarCircle(dc *gg.Context, path string, cx, cy, radius float64, userID int64, name string) {
+func quoteDrawAvatarCircle(dc *gg.Context, path string, cx, cy, radius float64, userID int64, firstName, lastName string) {
 	if path != "" {
 		if f, err := os.Open(path); err == nil {
 			defer f.Close()
 			if img, _, derr := image.Decode(f); derr == nil {
+				b := img.Bounds()
+				side := math.Min(float64(b.Dx()), float64(b.Dy()))
+				// Crop to square (centered) then resize to the avatar diameter.
+				sx := (float64(b.Dx()) - side) / 2
+				sy := (float64(b.Dy()) - side) / 2
+				diameter := int(math.Ceil(radius * 2))
+				if diameter < 1 {
+					diameter = 1
+				}
+				// Render the source into an intermediate context scaled to diameter.
+				scaled := gg.NewContext(diameter, diameter)
+				scale := float64(diameter) / side
+				scaled.Scale(scale, scale)
+				scaled.DrawImage(img, int(-sx), int(-sy))
+
 				dc.Push()
 				dc.DrawCircle(cx, cy, radius)
 				dc.Clip()
-				b := img.Bounds()
-				side := math.Min(float64(b.Dx()), float64(b.Dy()))
-				scale := (radius * 2) / side
-				scaled := gg.NewContext(int(radius*2)+2, int(radius*2)+2)
-				scaled.ScaleAbout(scale, scale, float64(b.Dx())/2, float64(b.Dy())/2)
-				scaled.DrawImageAnchored(img, int(radius), int(radius), 0.5, 0.5)
 				dc.DrawImageAnchored(scaled.Image(), int(cx), int(cy), 0.5, 0.5)
 				dc.ResetClip()
 				dc.Pop()
@@ -417,7 +439,7 @@ func quoteDrawAvatarCircle(dc *gg.Context, path string, cx, cy, radius float64, 
 	dc.ResetClip()
 	dc.Pop()
 
-	initials := quoteInitials(name)
+	initials := quoteInitials(firstName, lastName)
 	letterCount := len([]rune(initials))
 	fontSize := radius * 2 * 0.48
 	if letterCount > 1 {
@@ -440,10 +462,10 @@ type quoteLayout struct {
 	textSize   float64
 	replyName  float64
 	replyText  float64
-	avatarSize float64
-	avatarGap  float64
 	bubbleW    float64
 	contentW   float64
+	avatarSize float64
+	avatarGap  float64
 
 	nameH   float64
 	headerH float64
@@ -468,10 +490,10 @@ func quoteBuildLayout(measureCtx *gg.Context, scene quoteScene, bgOne, bgTwo col
 		handleSize: 14 * s,
 		textSize:   24 * s,
 		replyName:  16 * s,
-		replyText:  20 * s,
+		replyText:  21 * s,
+		bubbleW:    quoteWidthBase * s,
 		avatarSize: quoteAvatarSize * s,
 		avatarGap:  quoteAvatarGap * s,
-		bubbleW:    quoteWidthBase * s,
 	}
 	L.contentW = L.bubbleW - 2*quotePadX*s
 
@@ -488,7 +510,7 @@ func quoteBuildLayout(measureCtx *gg.Context, scene quoteScene, bgOne, bgTwo col
 
 	if scene.reply != nil {
 		L.hasReply = true
-		L.replyAccent = quoteNameColor(scene.reply.UserID, bgOne, bgTwo)
+		L.replyAccent = quoteNameColor(scene.reply.ChatID, bgOne, bgTwo)
 		innerW := L.contentW - 2*quoteBlockPadL*s - quoteBlockBar*s - 6*s
 
 		quoteLoadFont(measureCtx, L.replyName, true)
@@ -499,15 +521,7 @@ func quoteBuildLayout(measureCtx *gg.Context, scene quoteScene, bgOne, bgTwo col
 		nameLineH := L.replyName * 1.25
 
 		quoteLoadFont(measureCtx, L.replyText, false)
-		snippet := scene.reply.Text
-		if len(snippet) > 160 {
-			snippet = snippet[:160] + "…"
-		}
-		L.replyLines = quoteWrapLines(measureCtx, snippet, innerW)
-		if len(L.replyLines) > 2 {
-			L.replyLines = L.replyLines[:2]
-			L.replyLines[1] += "…"
-		}
+		L.replyLines = quoteWrapLines(measureCtx, scene.reply.Text, innerW)
 		textLineH := L.replyText * 1.25
 
 		innerH := float64(len(L.replyNameLines))*nameLineH + 4*s + float64(len(L.replyLines))*textLineH
@@ -533,23 +547,28 @@ func quoteBuildLayout(measureCtx *gg.Context, scene quoteScene, bgOne, bgTwo col
 	return L
 }
 
-func quoteDrawScene(dc *gg.Context, scene quoteScene, originX, originY float64, L quoteLayout, bgOne, bgTwo color.RGBA) {
+func quoteDrawScene(dc *gg.Context, scene quoteScene, bubbleX, bubbleY, canvasH float64, L quoteLayout, bgOne, bgTwo color.RGBA) {
 	s := L.s
 
-	bubbleX := originX + L.avatarSize + L.avatarGap
-	bubbleY := originY
 	bubbleW := L.bubbleW
 	bubbleH := L.bubbleH
 
-	radii := quoteRadii{tl: quoteRadius * s, tr: quoteRadius * s, br: quoteRadius * s, bl: quoteRadius * s}
-	tail := quoteTailSize * s
+	// Tail anchors against the left edge of the bubble (where it meets the
+	// avatar column). Drop the bottom-left radius so the tail bezier flows
+	// cleanly off the bubble.
+	tailSize := quoteTailSize * s
+	radii := quoteRadii{tl: quoteRadius * s, tr: quoteRadius * s, br: quoteRadius * s, bl: 0}
 
-	quoteDrawShadow(dc, bubbleX, bubbleY, bubbleW, bubbleH, radii, tail, s)
-	quoteDrawGradientBubble(dc, bubbleX, bubbleY, bubbleW, bubbleH, bgOne, bgTwo, radii, tail)
+	// Draw avatar at canvas x=0, vertically aligned so the avatar's bottom sits
+	// 2*s below the bubble's bottom edge (matches composer.js lines 271-276).
+	avatarRadius := L.avatarSize / 2
+	avatarCY := bubbleY + bubbleH + 2*s - avatarRadius
+	avatarCX := avatarRadius
+	quoteDrawAvatarCircle(dc, scene.main.Avatar, avatarCX, avatarCY, avatarRadius,
+		scene.main.UserID, scene.main.FirstName, scene.main.LastName)
 
-	avX := originX + L.avatarSize/2
-	avY := bubbleY + bubbleH - L.avatarSize/2 - 2*s
-	quoteDrawAvatarCircle(dc, scene.main.Avatar, avX, avY, L.avatarSize/2, scene.main.UserID, scene.main.Name)
+	quoteDrawShadow(dc, bubbleX, bubbleY, bubbleW, bubbleH, radii, tailSize, s)
+	quoteDrawGradientBubble(dc, bubbleX, bubbleY, bubbleW, bubbleH, bgOne, bgTwo, radii, tailSize)
 
 	textX := bubbleX + quotePadX*s
 	nameColor := quoteNameColor(scene.main.UserID, bgOne, bgTwo)
@@ -580,9 +599,9 @@ func quoteDrawScene(dc *gg.Context, scene quoteScene, originX, originY float64, 
 		}
 		quoteLoadFont(dc, L.replyText, false)
 		if quoteIsLight(bgOne) {
-			dc.SetRGB(0.1, 0.1, 0.1)
+			dc.SetRGB(0, 0, 0)
 		} else {
-			dc.SetRGB(0.92, 0.92, 0.94)
+			dc.SetRGB(1, 1, 1)
 		}
 		textLineH := L.replyText * 1.25
 		textBaseY := innerY + float64(len(L.replyNameLines))*nameLineH + 4*s + L.replyText*0.85
@@ -598,7 +617,7 @@ func quoteDrawScene(dc *gg.Context, scene quoteScene, originX, originY float64, 
 		if quoteIsLight(bgOne) {
 			dc.SetRGB(0, 0, 0)
 		} else {
-			dc.SetRGB(0.96, 0.96, 0.97)
+			dc.SetRGB(1, 1, 1)
 		}
 		bodyY := cursorY + L.textSize*0.85
 		lineH := L.textSize * 1.35
@@ -610,19 +629,20 @@ func quoteDrawScene(dc *gg.Context, scene quoteScene, originX, originY float64, 
 
 func quoteBuildBlock(m *tg.NewMessage, msg *tg.NewMessage, downloadAvatar bool) quoteBlock {
 	text := quoteSanitizeText(msg.RawText())
-	if text == "" {
-		text = "(no text)"
-	}
 	if len(text) > 600 {
 		text = text[:600] + "..."
 	}
 	name := "User"
+	firstName := ""
+	lastName := ""
 	handle := ""
 	var userID int64
 	if msg.SenderID() != 0 {
 		userID = msg.SenderID()
 		if u, uerr := m.Client.GetUser(userID); uerr == nil && u != nil {
-			name = strings.TrimSpace(u.FirstName + " " + u.LastName)
+			firstName = u.FirstName
+			lastName = u.LastName
+			name = strings.TrimSpace(firstName + " " + lastName)
 			if name == "" {
 				name = "User"
 			}
@@ -634,12 +654,15 @@ func quoteBuildBlock(m *tg.NewMessage, msg *tg.NewMessage, downloadAvatar bool) 
 		avatar = quoteDownloadAvatar(m.Client, userID)
 	}
 	return quoteBlock{
-		Name:   name,
-		Handle: handle,
-		Text:   text,
-		Avatar: avatar,
-		UserID: userID,
-		Date:   int64(msg.Date()),
+		Name:      name,
+		FirstName: firstName,
+		LastName:  lastName,
+		Handle:    handle,
+		Text:      text,
+		Avatar:    avatar,
+		UserID:    userID,
+		ChatID:    msg.ChatID(),
+		Date:      int64(msg.Date()),
 	}
 }
 
@@ -652,7 +675,9 @@ func quoteCollectScene(m *tg.NewMessage) (quoteScene, error) {
 	if main.IsReply() {
 		if prev, perr := main.GetReplyMessage(); perr == nil && prev != nil {
 			b := quoteBuildBlock(m, prev, false)
-			scene.reply = &b
+			if strings.TrimSpace(b.Name) != "" && strings.TrimSpace(b.Text) != "" {
+				scene.reply = &b
+			}
 		}
 	}
 	return scene, nil
@@ -666,14 +691,18 @@ func quoteRenderImage(scene quoteScene) (string, error) {
 	measureCtx := gg.NewContext(8, 8)
 	L := quoteBuildLayout(measureCtx, scene, bgOne, bgTwo)
 
-	pad := quoteShadowPad * s
-	tailReserve := quoteTailSize * s
-	canvasW := int(pad + L.avatarSize + L.avatarGap + L.bubbleW + pad)
-	canvasH := int(pad + L.bubbleH + tailReserve + pad)
+	// Bubble sits to the right of the avatar column. Shadow pad applied only
+	// to the right and bottom edges (the shadow is offset down/right).
+	shadowPad := quoteShadowPad * s
+	bubblePosX := L.avatarSize + L.avatarGap
+	canvasW := int(math.Ceil(bubblePosX + L.bubbleW + shadowPad))
+	// Avatar may extend 2*s below the bubble; take whichever is taller.
+	totalH := math.Max(L.bubbleH, L.avatarSize+2*s)
+	canvasH := int(math.Ceil(totalH + shadowPad))
 
 	rgba := image.NewRGBA(image.Rect(0, 0, canvasW, canvasH))
 	dc := gg.NewContextForRGBA(rgba)
-	quoteDrawScene(dc, scene, pad, pad, L, bgOne, bgTwo)
+	quoteDrawScene(dc, scene, bubblePosX, 0, float64(canvasH), L, bgOne, bgTwo)
 
 	outPath := filepath.Join(os.TempDir(), fmt.Sprintf("quote_%d.png", time.Now().UnixNano()))
 	f, err := os.Create(outPath)
@@ -722,6 +751,9 @@ func QuoteImageHandler(m *tg.NewMessage) error {
 	defer func() {
 		if scene.main.Avatar != "" {
 			os.Remove(scene.main.Avatar)
+		}
+		if scene.reply != nil && scene.reply.Avatar != "" {
+			os.Remove(scene.reply.Avatar)
 		}
 	}()
 
