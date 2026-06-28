@@ -11,7 +11,6 @@ import (
 	"image/png"
 	"main/modules/db"
 	"math"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -53,23 +52,154 @@ var quoteAvatarColors = [7][2]color.RGBA{
 var quoteDefaultBg = color.RGBA{0x29, 0x22, 0x32, 0xFF}
 
 var quoteCSSColors = map[string]color.RGBA{
-	"red":     {0xFF, 0x00, 0x00, 0xFF},
-	"green":   {0x00, 0x80, 0x00, 0xFF},
-	"blue":    {0x00, 0x00, 0xFF, 0xFF},
-	"black":   {0x00, 0x00, 0x00, 0xFF},
-	"white":   {0xFF, 0xFF, 0xFF, 0xFF},
-	"yellow":  {0xFF, 0xFF, 0x00, 0xFF},
-	"orange":  {0xFF, 0xA5, 0x00, 0xFF},
-	"purple":  {0x80, 0x00, 0x80, 0xFF},
-	"pink":    {0xFF, 0xC0, 0xCB, 0xFF},
-	"cyan":    {0x00, 0xFF, 0xFF, 0xFF},
-	"magenta": {0xFF, 0x00, 0xFF, 0xFF},
-	"gray":    {0x80, 0x80, 0x80, 0xFF},
-	"grey":    {0x80, 0x80, 0x80, 0xFF},
-	"brown":   {0xA5, 0x2A, 0x2A, 0xFF},
-	"navy":    {0x00, 0x00, 0x80, 0xFF},
-	"teal":    {0x00, 0x80, 0x80, 0xFF},
-	"lime":    {0x00, 0xFF, 0x00, 0xFF},
+	"aliceblue":            {0xF0, 0xF8, 0xFF, 0xFF},
+	"antiquewhite":         {0xFA, 0xEB, 0xD7, 0xFF},
+	"aqua":                 {0x00, 0xFF, 0xFF, 0xFF},
+	"aquamarine":           {0x7F, 0xFF, 0xD4, 0xFF},
+	"azure":                {0xF0, 0xFF, 0xFF, 0xFF},
+	"beige":                {0xF5, 0xF5, 0xDC, 0xFF},
+	"bisque":               {0xFF, 0xE4, 0xC4, 0xFF},
+	"black":                {0x00, 0x00, 0x00, 0xFF},
+	"blanchedalmond":       {0xFF, 0xEB, 0xCD, 0xFF},
+	"blue":                 {0x00, 0x00, 0xFF, 0xFF},
+	"blueviolet":           {0x8A, 0x2B, 0xE2, 0xFF},
+	"brown":                {0xA5, 0x2A, 0x2A, 0xFF},
+	"burlywood":            {0xDE, 0xB8, 0x87, 0xFF},
+	"cadetblue":            {0x5F, 0x9E, 0xA0, 0xFF},
+	"chartreuse":           {0x7F, 0xFF, 0x00, 0xFF},
+	"chocolate":            {0xD2, 0x69, 0x1E, 0xFF},
+	"coral":                {0xFF, 0x7F, 0x50, 0xFF},
+	"cornflowerblue":       {0x64, 0x95, 0xED, 0xFF},
+	"cornsilk":             {0xFF, 0xF8, 0xDC, 0xFF},
+	"crimson":              {0xDC, 0x14, 0x3C, 0xFF},
+	"cyan":                 {0x00, 0xFF, 0xFF, 0xFF},
+	"darkblue":             {0x00, 0x00, 0x8B, 0xFF},
+	"darkcyan":             {0x00, 0x8B, 0x8B, 0xFF},
+	"darkgoldenrod":        {0xB8, 0x86, 0x0B, 0xFF},
+	"darkgray":             {0xA9, 0xA9, 0xA9, 0xFF},
+	"darkgrey":             {0xA9, 0xA9, 0xA9, 0xFF},
+	"darkgreen":            {0x00, 0x64, 0x00, 0xFF},
+	"darkkhaki":            {0xBD, 0xB7, 0x6B, 0xFF},
+	"darkmagenta":          {0x8B, 0x00, 0x8B, 0xFF},
+	"darkolivegreen":       {0x55, 0x6B, 0x2F, 0xFF},
+	"darkorange":           {0xFF, 0x8C, 0x00, 0xFF},
+	"darkorchid":           {0x99, 0x32, 0xCC, 0xFF},
+	"darkred":              {0x8B, 0x00, 0x00, 0xFF},
+	"darksalmon":           {0xE9, 0x96, 0x7A, 0xFF},
+	"darkseagreen":         {0x8F, 0xBC, 0x8F, 0xFF},
+	"darkslateblue":        {0x48, 0x3D, 0x8B, 0xFF},
+	"darkslategray":        {0x2F, 0x4F, 0x4F, 0xFF},
+	"darkslategrey":        {0x2F, 0x4F, 0x4F, 0xFF},
+	"darkturquoise":        {0x00, 0xCE, 0xD1, 0xFF},
+	"darkviolet":           {0x94, 0x00, 0xD3, 0xFF},
+	"deeppink":             {0xFF, 0x14, 0x93, 0xFF},
+	"deepskyblue":          {0x00, 0xBF, 0xFF, 0xFF},
+	"dimgray":              {0x69, 0x69, 0x69, 0xFF},
+	"dimgrey":              {0x69, 0x69, 0x69, 0xFF},
+	"dodgerblue":           {0x1E, 0x90, 0xFF, 0xFF},
+	"firebrick":            {0xB2, 0x22, 0x22, 0xFF},
+	"floralwhite":          {0xFF, 0xFA, 0xF0, 0xFF},
+	"forestgreen":          {0x22, 0x8B, 0x22, 0xFF},
+	"fuchsia":              {0xFF, 0x00, 0xFF, 0xFF},
+	"gainsboro":            {0xDC, 0xDC, 0xDC, 0xFF},
+	"ghostwhite":           {0xF8, 0xF8, 0xFF, 0xFF},
+	"gold":                 {0xFF, 0xD7, 0x00, 0xFF},
+	"goldenrod":            {0xDA, 0xA5, 0x20, 0xFF},
+	"gray":                 {0x80, 0x80, 0x80, 0xFF},
+	"grey":                 {0x80, 0x80, 0x80, 0xFF},
+	"green":                {0x00, 0x80, 0x00, 0xFF},
+	"greenyellow":          {0xAD, 0xFF, 0x2F, 0xFF},
+	"honeydew":             {0xF0, 0xFF, 0xF0, 0xFF},
+	"hotpink":              {0xFF, 0x69, 0xB4, 0xFF},
+	"indianred":            {0xCD, 0x5C, 0x5C, 0xFF},
+	"indigo":               {0x4B, 0x00, 0x82, 0xFF},
+	"ivory":                {0xFF, 0xFF, 0xF0, 0xFF},
+	"khaki":                {0xF0, 0xE6, 0x8C, 0xFF},
+	"lavender":             {0xE6, 0xE6, 0xFA, 0xFF},
+	"lavenderblush":        {0xFF, 0xF0, 0xF5, 0xFF},
+	"lawngreen":            {0x7C, 0xFC, 0x00, 0xFF},
+	"lemonchiffon":         {0xFF, 0xFA, 0xCD, 0xFF},
+	"lightblue":            {0xAD, 0xD8, 0xE6, 0xFF},
+	"lightcoral":           {0xF0, 0x80, 0x80, 0xFF},
+	"lightcyan":            {0xE0, 0xFF, 0xFF, 0xFF},
+	"lightgoldenrodyellow": {0xFA, 0xFA, 0xD2, 0xFF},
+	"lightgray":            {0xD3, 0xD3, 0xD3, 0xFF},
+	"lightgrey":            {0xD3, 0xD3, 0xD3, 0xFF},
+	"lightgreen":           {0x90, 0xEE, 0x90, 0xFF},
+	"lightpink":            {0xFF, 0xB6, 0xC1, 0xFF},
+	"lightsalmon":          {0xFF, 0xA0, 0x7A, 0xFF},
+	"lightseagreen":        {0x20, 0xB2, 0xAA, 0xFF},
+	"lightskyblue":         {0x87, 0xCE, 0xFA, 0xFF},
+	"lightslategray":       {0x77, 0x88, 0x99, 0xFF},
+	"lightslategrey":       {0x77, 0x88, 0x99, 0xFF},
+	"lightsteelblue":       {0xB0, 0xC4, 0xDE, 0xFF},
+	"lightyellow":          {0xFF, 0xFF, 0xE0, 0xFF},
+	"lime":                 {0x00, 0xFF, 0x00, 0xFF},
+	"limegreen":            {0x32, 0xCD, 0x32, 0xFF},
+	"linen":                {0xFA, 0xF0, 0xE6, 0xFF},
+	"magenta":              {0xFF, 0x00, 0xFF, 0xFF},
+	"maroon":               {0x80, 0x00, 0x00, 0xFF},
+	"mediumaquamarine":     {0x66, 0xCD, 0xAA, 0xFF},
+	"mediumblue":           {0x00, 0x00, 0xCD, 0xFF},
+	"mediumorchid":         {0xBA, 0x55, 0xD3, 0xFF},
+	"mediumpurple":         {0x93, 0x70, 0xDB, 0xFF},
+	"mediumseagreen":       {0x3C, 0xB3, 0x71, 0xFF},
+	"mediumslateblue":      {0x7B, 0x68, 0xEE, 0xFF},
+	"mediumspringgreen":    {0x00, 0xFA, 0x9A, 0xFF},
+	"mediumturquoise":      {0x48, 0xD1, 0xCC, 0xFF},
+	"mediumvioletred":      {0xC7, 0x15, 0x85, 0xFF},
+	"midnightblue":         {0x19, 0x19, 0x70, 0xFF},
+	"mintcream":            {0xF5, 0xFF, 0xFA, 0xFF},
+	"mistyrose":            {0xFF, 0xE4, 0xE1, 0xFF},
+	"moccasin":             {0xFF, 0xE4, 0xB5, 0xFF},
+	"navajowhite":          {0xFF, 0xDE, 0xAD, 0xFF},
+	"navy":                 {0x00, 0x00, 0x80, 0xFF},
+	"oldlace":              {0xFD, 0xF5, 0xE6, 0xFF},
+	"olive":                {0x80, 0x80, 0x00, 0xFF},
+	"olivedrab":            {0x6B, 0x8E, 0x23, 0xFF},
+	"orange":               {0xFF, 0xA5, 0x00, 0xFF},
+	"orangered":            {0xFF, 0x45, 0x00, 0xFF},
+	"orchid":               {0xDA, 0x70, 0xD6, 0xFF},
+	"palegoldenrod":        {0xEE, 0xE8, 0xAA, 0xFF},
+	"palegreen":            {0x98, 0xFB, 0x98, 0xFF},
+	"paleturquoise":        {0xAF, 0xEE, 0xEE, 0xFF},
+	"palevioletred":        {0xDB, 0x70, 0x93, 0xFF},
+	"papayawhip":           {0xFF, 0xEF, 0xD5, 0xFF},
+	"peachpuff":            {0xFF, 0xDA, 0xB9, 0xFF},
+	"peru":                 {0xCD, 0x85, 0x3F, 0xFF},
+	"pink":                 {0xFF, 0xC0, 0xCB, 0xFF},
+	"plum":                 {0xDD, 0xA0, 0xDD, 0xFF},
+	"powderblue":           {0xB0, 0xE0, 0xE6, 0xFF},
+	"purple":               {0x80, 0x00, 0x80, 0xFF},
+	"rebeccapurple":        {0x66, 0x33, 0x99, 0xFF},
+	"red":                  {0xFF, 0x00, 0x00, 0xFF},
+	"rosybrown":            {0xBC, 0x8F, 0x8F, 0xFF},
+	"royalblue":            {0x41, 0x69, 0xE1, 0xFF},
+	"saddlebrown":          {0x8B, 0x45, 0x13, 0xFF},
+	"salmon":               {0xFA, 0x80, 0x72, 0xFF},
+	"sandybrown":           {0xF4, 0xA4, 0x60, 0xFF},
+	"seagreen":             {0x2E, 0x8B, 0x57, 0xFF},
+	"seashell":             {0xFF, 0xF5, 0xEE, 0xFF},
+	"sienna":               {0xA0, 0x52, 0x2D, 0xFF},
+	"silver":               {0xC0, 0xC0, 0xC0, 0xFF},
+	"skyblue":              {0x87, 0xCE, 0xEB, 0xFF},
+	"slateblue":            {0x6A, 0x5A, 0xCD, 0xFF},
+	"slategray":            {0x70, 0x80, 0x90, 0xFF},
+	"slategrey":            {0x70, 0x80, 0x90, 0xFF},
+	"snow":                 {0xFF, 0xFA, 0xFA, 0xFF},
+	"springgreen":          {0x00, 0xFF, 0x7F, 0xFF},
+	"steelblue":            {0x46, 0x82, 0xB4, 0xFF},
+	"tan":                  {0xD2, 0xB4, 0x8C, 0xFF},
+	"teal":                 {0x00, 0x80, 0x80, 0xFF},
+	"thistle":              {0xD8, 0xBF, 0xD8, 0xFF},
+	"tomato":               {0xFF, 0x63, 0x47, 0xFF},
+	"turquoise":            {0x40, 0xE0, 0xD0, 0xFF},
+	"violet":               {0xEE, 0x82, 0xEE, 0xFF},
+	"wheat":                {0xF5, 0xDE, 0xB3, 0xFF},
+	"white":                {0xFF, 0xFF, 0xFF, 0xFF},
+	"whitesmoke":           {0xF5, 0xF5, 0xF5, 0xFF},
+	"yellow":               {0xFF, 0xFF, 0x00, 0xFF},
+	"yellowgreen":          {0x9A, 0xCD, 0x32, 0xFF},
 }
 
 const (
@@ -82,8 +212,8 @@ const (
 	quoteShadowPad   = 6.0
 	quoteTailSize    = 14.0
 	quoteMinWidth    = 100.0
-	quoteAvatarSize  = 50.0
-	quoteAvatarGap   = 10.0
+	quoteAvatarSize  = 64.0
+	quoteAvatarGap   = 12.0
 	quoteBlockPadY   = 6.0
 	quoteBlockPadL   = 10.0
 	quoteBlockPadR   = 10.0
@@ -95,8 +225,6 @@ const (
 )
 
 var quotesBucket = []byte("quotes")
-
-var quotesRng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 type quoteRecord struct {
 	ID          uint64 `json:"id"`
@@ -122,6 +250,7 @@ type quoteBlock struct {
 	Date        int64
 	Media       image.Image
 	ForwardFrom string
+	Rank        string
 }
 
 func quoteIsLight(c color.RGBA) bool {
@@ -242,7 +371,7 @@ func quoteNameColor(userID int64, bgOne, bgTwo color.RGBA) color.RGBA {
 	if contrast < 1 {
 		contrast = 1 / contrast
 	}
-	if contrast > 90 || contrast < 30 {
+	if contrast < 4.5 {
 		nameColor = quoteAdjustContrast(quoteColorLuminance(bgTwo, 0.55), nameColor)
 	}
 	return nameColor
@@ -250,13 +379,9 @@ func quoteNameColor(userID int64, bgOne, bgTwo color.RGBA) color.RGBA {
 
 func quoteAvatarPair(userID int64) [2]color.RGBA {
 	if userID == 0 {
-		return quoteAvatarColors[quotesRng.Intn(7)]
+		return quoteAvatarColors[0]
 	}
-	v := userID
-	if v < 0 {
-		v = -v
-	}
-	return quoteAvatarColors[int(v%7)]
+	return quoteAvatarColors[int(uint64(userID)%uint64(len(quoteAvatarColors)))]
 }
 
 type quoteRadii struct{ tl, tr, br, bl float64 }
@@ -599,9 +724,13 @@ func quoteDownloadMedia(msg *tg.NewMessage, kind quoteMediaKind) image.Image {
 	dst := filepath.Join(os.TempDir(), fmt.Sprintf("quote_media_%d%s", time.Now().UnixNano(), ext))
 	path, err := msg.Download(&tg.DownloadOptions{FileName: dst})
 	if err != nil {
+		_ = os.Remove(dst)
 		return nil
 	}
 	defer os.Remove(path)
+	if st, e := os.Stat(path); e == nil && st.Size() > 8<<20 {
+		return nil
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil
@@ -609,6 +738,10 @@ func quoteDownloadMedia(msg *tg.NewMessage, kind quoteMediaKind) image.Image {
 	defer f.Close()
 	img, _, derr := image.Decode(f)
 	if derr != nil {
+		return nil
+	}
+	b := img.Bounds()
+	if b.Dx()*b.Dy() > 16_000_000 {
 		return nil
 	}
 	return img
@@ -655,15 +788,13 @@ type quoteLayout struct {
 
 func quoteBuildLayout(measureCtx *gg.Context, scene quoteScene, bgOne, bgTwo color.RGBA, scale float64) quoteLayout {
 	s := scale
-	// Logical sizes nudged up from LyoSU's defaults (22/24/16/21) so the
-	// resulting sticker reads punchy when Telegram downscales it to 512px.
 	L := quoteLayout{
 		s:          s,
 		nameSize:   26 * s,
 		handleSize: 16 * s,
-		textSize:   30 * s,
+		textSize:   36 * s,
 		replyName:  22 * s,
-		replyText:  28 * s,
+		replyText:  30 * s,
 		bubbleW:    quoteWidthBase * s,
 		avatarSize: quoteAvatarSize * s,
 		avatarGap:  quoteAvatarGap * s,
@@ -704,17 +835,21 @@ func quoteBuildLayout(measureCtx *gg.Context, scene quoteScene, bgOne, bgTwo col
 	L.textH = lineH * float64(len(L.textLines))
 
 	if scene.main.Media != nil {
-		L.hasMedia = true
 		iw := float64(scene.main.Media.Bounds().Dx())
 		ih := float64(scene.main.Media.Bounds().Dy())
-		maxMedia := L.bubbleW / 3.0
-		mw := iw * (maxMedia / ih)
-		mh := maxMedia
-		if mw >= maxMedia {
-			mw = maxMedia
-			mh = ih * (maxMedia / iw)
+		if iw <= 0 || ih <= 0 {
+			L.hasMedia = false
+		} else {
+			L.hasMedia = true
+			maxMedia := L.bubbleW / 3.0
+			mw := iw * (maxMedia / ih)
+			mh := maxMedia
+			if mw >= maxMedia {
+				mw = maxMedia
+				mh = ih * (maxMedia / iw)
+			}
+			L.mediaW, L.mediaH = mw, mh
 		}
-		L.mediaW, L.mediaH = mw, mh
 	}
 
 	if scene.main.ForwardFrom != "" {
@@ -756,16 +891,11 @@ func quoteDrawScene(dc *gg.Context, scene quoteScene, bubbleX, bubbleY, canvasH 
 	bubbleW := L.bubbleW
 	bubbleH := L.bubbleH
 
-	// Tail anchors against the left edge of the bubble (where it meets the
-	// avatar column). Drop the bottom-left radius so the tail bezier flows
-	// cleanly off the bubble.
 	tailSize := quoteTailSize * s
 	radii := quoteRadii{tl: quoteRadius * s, tr: quoteRadius * s, br: quoteRadius * s, bl: 0}
 
-	// Draw avatar at canvas x=0, vertically aligned so the avatar's bottom sits
-	// 2*s below the bubble's bottom edge (matches composer.js lines 271-276).
 	avatarRadius := L.avatarSize / 2
-	avatarCY := bubbleY + bubbleH + 2*s - avatarRadius
+	avatarCY := bubbleY + bubbleH - 2*s - avatarRadius
 	avatarCX := avatarRadius
 	quoteDrawAvatarCircle(dc, scene.main.Avatar, avatarCX, avatarCY, avatarRadius,
 		scene.main.UserID, scene.main.FirstName, scene.main.LastName)
@@ -781,15 +911,34 @@ func quoteDrawScene(dc *gg.Context, scene quoteScene, bubbleX, bubbleY, canvasH 
 	dc.SetRGBA255(int(nameColor.R), int(nameColor.G), int(nameColor.B), 255)
 	dc.DrawString(scene.main.Name, textX, nameY)
 
+	if scene.main.Rank != "" {
+		nameW, _ := dc.MeasureString(scene.main.Name)
+		rankFont := L.nameSize * 0.72
+		quoteLoadFont(dc, rankFont, false)
+		rank := scene.main.Rank
+		rankW, _ := dc.MeasureString(rank)
+		avail := L.contentW - nameW - 8*s
+		if rankW > avail {
+			r := []rune(rank)
+			for len(r) > 1 {
+				r = r[:len(r)-1]
+				if w, _ := dc.MeasureString(string(r) + "…"); w <= avail {
+					rank = string(r) + "…"
+					break
+				}
+			}
+		}
+		if avail > 0 {
+			dc.SetRGBA(0.62, 0.62, 0.70, 0.95)
+			dc.DrawString(rank, textX+nameW+8*s, nameY)
+		}
+	}
+
 	cursorY := bubbleY + quotePadY*s + L.headerH
 	if L.forwardH > 0 {
 		cursorY += quoteGap * s
 		quoteLoadFont(dc, L.replyName, true)
-		if L.hasReply {
-			dc.SetRGBA255(int(L.replyAccent.R), int(L.replyAccent.G), int(L.replyAccent.B), 255)
-		} else {
-			dc.SetRGBA255(int(nameColor.R), int(nameColor.G), int(nameColor.B), 255)
-		}
+		dc.SetRGBA255(int(nameColor.R), int(nameColor.G), int(nameColor.B), 255)
 		dc.DrawString(L.forwardText, textX, cursorY+L.replyName*0.85)
 		cursorY += L.forwardH
 	}
@@ -861,8 +1010,8 @@ func quoteDrawScene(dc *gg.Context, scene quoteScene, bubbleX, bubbleY, canvasH 
 
 func quoteBuildBlock(m *tg.NewMessage, msg *tg.NewMessage, downloadAvatar bool) quoteBlock {
 	text := quoteSanitizeText(msg.RawText())
-	if len(text) > 600 {
-		text = text[:600] + "..."
+	if r := []rune(text); len(r) > 600 {
+		text = string(r[:600]) + "..."
 	}
 	name := "User"
 	firstName := ""
@@ -885,6 +1034,23 @@ func quoteBuildBlock(m *tg.NewMessage, msg *tg.NewMessage, downloadAvatar bool) 
 	if downloadAvatar {
 		avatar = quoteDownloadAvatar(m.Client, userID)
 	}
+	rank := ""
+	if downloadAvatar && userID != 0 && !m.IsPrivate() && msg.ChatID() < 0 {
+		if p, perr := m.Client.GetChatMember(msg.ChatID(), userID); perr == nil && p != nil {
+			rank = quoteSanitizeText(p.Rank)
+			if rank == "" {
+				switch p.Status {
+				case "creator":
+					rank = "Creator"
+				case "admin":
+					rank = "Admin"
+				}
+			}
+			if r := []rune(rank); len(r) > 16 {
+				rank = string(r[:16])
+			}
+		}
+	}
 	mediaImg := quoteDownloadMedia(msg, quoteDetectMedia(msg))
 	forwardFrom := ""
 	if msg.Message != nil && msg.Message.FwdFrom != nil {
@@ -896,7 +1062,6 @@ func quoteBuildBlock(m *tg.NewMessage, msg *tg.NewMessage, downloadAvatar bool) 
 			}
 		case *tg.PeerChannel:
 			_ = p
-			// best-effort: leave blank if we can't resolve; PostAuthor fallback below
 		}
 		if forwardFrom == "" && fwd.PostAuthor != "" {
 			forwardFrom = fwd.PostAuthor
@@ -917,6 +1082,7 @@ func quoteBuildBlock(m *tg.NewMessage, msg *tg.NewMessage, downloadAvatar bool) 
 		Date:        int64(msg.Date()),
 		Media:       mediaImg,
 		ForwardFrom: forwardFrom,
+		Rank:        rank,
 	}
 }
 
@@ -944,12 +1110,9 @@ func quoteRenderImage(scene quoteScene, bgArg string, scale float64) (string, er
 	measureCtx := gg.NewContext(8, 8)
 	L := quoteBuildLayout(measureCtx, scene, bgOne, bgTwo, scale)
 
-	// Bubble sits to the right of the avatar column. Shadow pad applied only
-	// to the right and bottom edges (the shadow is offset down/right).
 	shadowPad := quoteShadowPad * s
 	bubblePosX := L.avatarSize + L.avatarGap
 	canvasW := int(math.Ceil(bubblePosX + L.bubbleW + shadowPad))
-	// Avatar may extend 2*s below the bubble; take whichever is taller.
 	totalH := math.Max(L.bubbleH, L.avatarSize+2*s)
 	canvasH := int(math.Ceil(totalH + shadowPad))
 
@@ -1018,7 +1181,10 @@ func quoteImageHandlerScaled(m *tg.NewMessage, scale float64) error {
 		}
 	}()
 
-	bgArg := strings.TrimSpace(m.Args())
+	bgArg := ""
+	if fields := strings.Fields(m.Args()); len(fields) > 0 {
+		bgArg = fields[0]
+	}
 	pngPath, rerr := quoteRenderImage(scene, bgArg, scale)
 	if rerr != nil || pngPath == "" {
 		errMsg := "render failed"
@@ -1032,7 +1198,6 @@ func quoteImageHandlerScaled(m *tg.NewMessage, scale float64) error {
 	}
 	defer os.Remove(pngPath)
 
-	// HD path: send PNG directly as photo, skip 512px sticker cap.
 	if scale >= 5 {
 		_, merr := m.ReplyMedia(pngPath, &tg.MediaOptions{
 			FileName: "quote.png",
