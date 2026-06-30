@@ -71,11 +71,32 @@ func ShellHandle(m *tg.NewMessage) error {
 
 // --------- Eval function ------------
 
-const boiler_code_for_eval = `
+const boiler_code_for_eval_fast = `
 package main
 
 import (
 	"fmt"
+)
+
+%s
+
+func evalCode() {
+	%s
+}
+
+func main() {
+	fmt.Println("output-start")
+	evalCode()
+}
+`
+
+const boiler_code_for_eval = `
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
@@ -83,7 +104,7 @@ import (
 
 var msgID int32 = %d
 var chatID int64 = %d
-var cacheJSON = %q
+var cacheJSON string
 
 var client *tg.Client
 var message *tg.NewMessage
@@ -94,10 +115,22 @@ func evalCode() {
 	%s
 }
 
+func readStdinValue() string {
+	r := bufio.NewReader(os.Stdin)
+	s, _ := r.ReadString('\x00')
+	if len(s) > 0 && s[len(s)-1] == '\x00' {
+		s = s[:len(s)-1]
+	}
+	return s
+}
+
 func main() {
+	sessionString := readStdinValue()
+	cacheJSON = readStdinValue()
+
 	var err error
 	client, err = tg.NewClient(tg.ClientConfig{
-		StringSession: %q,
+		StringSession: sessionString,
 		MemorySession: true,
 		LogLevel:      tg.LogDisable,
 	})
@@ -131,6 +164,8 @@ func main() {
 	evalCode()
 }
 `
+
+var evalNeedsClientRe = regexp.MustCompile(`\b(client|message|m\.|r\.|cacheJSON|chatID|msgID|sessionString)\b`)
 
 func resolveImports(code string) (string, []string) {
 	var imports []string
@@ -203,8 +238,15 @@ func perfomEval(code string, m *tg.NewMessage, imports []string) (string, bool) 
 		chatID = m.Sender.ID
 	}
 
-	cacheJSON, _ := m.Client.Cache.ExportJSON()
-	code_file := fmt.Sprintf(boiler_code_for_eval, importStatement, m.ID, chatID, cacheJSON, code, m.Client.ExportSession())
+	needsClient := evalNeedsClientRe.MatchString(code)
+
+	var code_file string
+	if needsClient {
+		code_file = fmt.Sprintf(boiler_code_for_eval, importStatement, m.ID, chatID, code)
+	} else {
+		code_file = fmt.Sprintf(boiler_code_for_eval_fast, importStatement, code)
+	}
+
 	tmp_dir := "tmp"
 	if _, err := os.ReadDir(tmp_dir); err != nil {
 		if err := os.Mkdir(tmp_dir, 0755); err != nil {
@@ -231,17 +273,18 @@ func perfomEval(code string, m *tg.NewMessage, imports []string) (string, bool) 
 	if runtime.GOOS == "windows" {
 		binaryPath += ".exe"
 	}
-	defer os.Remove(binaryPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	buildCmd := exec.CommandContext(ctx, "go", "build", "-o", filepath.Base(binaryPath), "eval.go")
+	buildArgs := []string{"build", "-trimpath", "-buildvcs=false", "-o", filepath.Base(binaryPath), "eval.go"}
+	buildCmd := exec.CommandContext(ctx, "go", buildArgs...)
 	buildCmd.Dir = tmp_dir
 	var buildErr bytes.Buffer
 	buildCmd.Stderr = &buildErr
 
 	if err := buildCmd.Run(); err != nil {
+		os.Remove(binaryPath)
 		stderr := strings.TrimSpace(buildErr.String())
 		if stderr != "" {
 			regexErr := regexp.MustCompile(`eval\.go:(\d+):(\d+):\s*`)
@@ -252,11 +295,18 @@ func perfomEval(code string, m *tg.NewMessage, imports []string) (string, bool) 
 		}
 		return fmt.Sprintf("❌ <b>Build Error</b>\n<code>%s</code>", err.Error()), false
 	}
+	defer os.Remove(binaryPath)
 
 	cmd := exec.CommandContext(ctx, binaryPath)
 	var stdOut, stdErr bytes.Buffer
 	cmd.Stdout = &stdOut
 	cmd.Stderr = &stdErr
+
+	if needsClient {
+		sessionString := m.Client.ExportSession()
+		cacheJSON, _ := m.Client.Cache.ExportJSON()
+		cmd.Stdin = strings.NewReader(sessionString + "\x00" + string(cacheJSON) + "\x00")
+	}
 
 	err := cmd.Run()
 	stdout := strings.TrimSpace(stdOut.String())
@@ -1032,8 +1082,43 @@ func devUploadSpacebin(content string) (string, error) {
 	return loc, nil
 }
 
+func warmEvalBuildCache() {
+	tmp_dir := "tmp"
+	if _, err := os.Stat(tmp_dir); err != nil {
+		if err := os.Mkdir(tmp_dir, 0755); err != nil {
+			return
+		}
+	}
+	tmpGoMod := tmp_dir + "/go.mod"
+	if _, err := os.Stat(tmpGoMod); os.IsNotExist(err) {
+		os.WriteFile(tmpGoMod, []byte(goModContents), 0644)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		cmd := exec.CommandContext(ctx, "go", "mod", "tidy")
+		cmd.Dir = tmp_dir
+		cmd.Run()
+		cancel()
+	}
+	warmFile := tmp_dir + "/eval_warm.go"
+	warmSrc := fmt.Sprintf(boiler_code_for_eval, "", 0, int64(0), "_ = 0")
+	if err := os.WriteFile(warmFile, []byte(warmSrc), 0644); err != nil {
+		return
+	}
+	defer os.Remove(warmFile)
+	binaryPath := tmp_dir + "/eval_warm_bin"
+	if runtime.GOOS == "windows" {
+		binaryPath += ".exe"
+	}
+	defer os.Remove(binaryPath)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", "build", "-trimpath", "-buildvcs=false", "-o", filepath.Base(binaryPath), filepath.Base(warmFile))
+	cmd.Dir = tmp_dir
+	cmd.Run()
+}
+
 func registerDevHandlers() {
 	c := Client
+	go warmEvalBuildCache()
 	c.On("cmd:sh", ShellHandle, tg.CustomFilter(FilterOwner))
 	c.On("cmd:bash", ShellHandle, tg.CustomFilter(FilterOwner))
 	c.On("cmd:eval", EvalHandle, tg.CustomFilter(FilterOwnerNoReply))
