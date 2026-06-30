@@ -7,6 +7,7 @@ import (
 	"html"
 	"image"
 	"image/color"
+	"image/gif"
 	_ "image/jpeg"
 	"image/png"
 	"main/modules/db"
@@ -214,7 +215,7 @@ const (
 	quoteShadowPad   = 6.0
 	quoteTailSize    = 14.0
 	quoteMinWidth    = 100.0
-	quoteAvatarSize  = 64.0
+	quoteAvatarSize  = 76.0
 	quoteAvatarGap   = 12.0
 	quoteBlockPadY   = 6.0
 	quoteBlockPadL   = 10.0
@@ -223,7 +224,7 @@ const (
 	quoteBlockRadius = 8.0
 	quoteBlockTint   = 0.12
 
-	quoteWidthBase = 512.0
+	quoteWidthBase = 560.0
 )
 
 var quotesBucket = []byte("quotes")
@@ -639,7 +640,10 @@ func quoteDrawAvatarCircle(dc *gg.Context, path string, cx, cy, radius float64, 
 				dc.Push()
 				dc.DrawCircle(cx, cy, radius)
 				dc.Clip()
-				dc.DrawImageAnchored(scaled.Image(), int(cx), int(cy), 0.5, 0.5)
+				dc.Push()
+				dc.Translate(cx-radius, cy-radius)
+				dc.DrawImage(scaled.Image(), 0, 0)
+				dc.Pop()
 				dc.ResetClip()
 				dc.Pop()
 				return
@@ -677,6 +681,10 @@ const (
 	qMediaNone quoteMediaKind = iota
 	qMediaPhoto
 	qMediaStickerStatic
+	qMediaStickerVideo
+	qMediaStickerLottie
+	qMediaGIF
+	qMediaVideoThumb
 )
 
 func quoteDetectMedia(msg *tg.NewMessage) quoteMediaKind {
@@ -692,44 +700,77 @@ func quoteDetectMedia(msg *tg.NewMessage) quoteMediaKind {
 		if !ok {
 			return qMediaNone
 		}
+		mime := strings.ToLower(doc.MimeType)
 		isSticker := false
+		isAnimated := false
+		hasVideoAttr := false
+		fileName := ""
 		for _, a := range doc.Attributes {
 			switch at := a.(type) {
 			case *tg.DocumentAttributeSticker:
 				_ = at
 				isSticker = true
+			case *tg.DocumentAttributeAnimated:
+				_ = at
+				isAnimated = true
+			case *tg.DocumentAttributeVideo:
+				_ = at
+				hasVideoAttr = true
 			case *tg.DocumentAttributeFilename:
-				if strings.HasSuffix(strings.ToLower(at.FileName), ".tgs") {
-					return qMediaNone
-				}
+				fileName = strings.ToLower(at.FileName)
 			}
 		}
-		// Skip video stickers (webm) — image.Decode can't handle them.
-		if isSticker && strings.HasPrefix(doc.MimeType, "video/") {
-			return qMediaNone
+		if mime == "application/x-tgsticker" || strings.HasSuffix(fileName, ".tgs") {
+			return qMediaStickerLottie
 		}
 		if isSticker {
+			if mime == "video/webm" || hasVideoAttr {
+				return qMediaStickerVideo
+			}
 			return qMediaStickerStatic
+		}
+		if mime == "image/gif" {
+			return qMediaGIF
+		}
+		if isAnimated {
+			return qMediaGIF
+		}
+		if mime == "video/webm" || mime == "video/mp4" || hasVideoAttr {
+			return qMediaVideoThumb
 		}
 	}
 	return qMediaNone
 }
 
-func quoteDownloadMedia(msg *tg.NewMessage, kind quoteMediaKind) image.Image {
-	if kind == qMediaNone {
-		return nil
+func quotePickLargestThumb(thumbs []tg.PhotoSize) tg.PhotoSize {
+	var best tg.PhotoSize
+	var bestArea int32 = -1
+	for _, t := range thumbs {
+		switch s := t.(type) {
+		case *tg.PhotoSizeObj:
+			area := s.W * s.H
+			if area > bestArea {
+				bestArea = area
+				best = s
+			}
+		case *tg.PhotoSizeProgressive:
+			area := s.W * s.H
+			if area > bestArea {
+				bestArea = area
+				best = s
+			}
+		case *tg.PhotoCachedSize:
+			area := s.W * s.H
+			if area > bestArea {
+				bestArea = area
+				best = s
+			}
+		}
 	}
-	ext := ".jpg"
-	if kind == qMediaStickerStatic {
-		ext = ".webp"
-	}
-	dst := filepath.Join(os.TempDir(), fmt.Sprintf("quote_media_%d%s", time.Now().UnixNano(), ext))
-	path, err := msg.Download(&tg.DownloadOptions{FileName: dst})
-	if err != nil {
-		_ = os.Remove(dst)
-		return nil
-	}
-	defer os.Remove(path)
+	return best
+}
+
+func quoteDecodeImageFile(path string) image.Image {
 	if st, e := os.Stat(path); e == nil && st.Size() > 8<<20 {
 		return nil
 	}
@@ -747,6 +788,120 @@ func quoteDownloadMedia(msg *tg.NewMessage, kind quoteMediaKind) image.Image {
 		return nil
 	}
 	return img
+}
+
+func quoteFfmpegFirstFrame(srcPath string) image.Image {
+	outPath := strings.TrimSuffix(srcPath, filepath.Ext(srcPath)) + "_frame.png"
+	cmd := exec.Command("ffmpeg",
+		"-loglevel", "error",
+		"-y",
+		"-i", srcPath,
+		"-vframes", "1",
+		"-f", "image2",
+		outPath,
+	)
+	if err := cmd.Run(); err != nil {
+		_ = os.Remove(outPath)
+		return nil
+	}
+	defer os.Remove(outPath)
+	return quoteDecodeImageFile(outPath)
+}
+
+func quoteDownloadThumb(msg *tg.NewMessage) image.Image {
+	if msg == nil || msg.Media() == nil {
+		return nil
+	}
+	md, ok := msg.Media().(*tg.MessageMediaDocument)
+	if !ok {
+		return nil
+	}
+	doc, ok := md.Document.(*tg.DocumentObj)
+	if !ok || len(doc.Thumbs) == 0 {
+		return nil
+	}
+	best := quotePickLargestThumb(doc.Thumbs)
+	if best == nil {
+		return nil
+	}
+	dst := filepath.Join(os.TempDir(), fmt.Sprintf("quote_thumb_%d.jpg", time.Now().UnixNano()))
+	path, err := msg.Download(&tg.DownloadOptions{
+		FileName:  dst,
+		ThumbOnly: true,
+		ThumbSize: best,
+	})
+	if err != nil {
+		_ = os.Remove(dst)
+		return nil
+	}
+	defer os.Remove(path)
+	return quoteDecodeImageFile(path)
+}
+
+func quoteDownloadMedia(msg *tg.NewMessage, kind quoteMediaKind) image.Image {
+	if kind == qMediaNone {
+		return nil
+	}
+
+	if kind == qMediaStickerLottie || kind == qMediaVideoThumb {
+		return quoteDownloadThumb(msg)
+	}
+
+	ext := ".bin"
+	switch kind {
+	case qMediaPhoto:
+		ext = ".jpg"
+	case qMediaStickerStatic:
+		ext = ".webp"
+	case qMediaStickerVideo:
+		ext = ".webm"
+	case qMediaGIF:
+		ext = ".gif"
+		if md, ok := msg.Media().(*tg.MessageMediaDocument); ok {
+			if doc, ok := md.Document.(*tg.DocumentObj); ok {
+				if doc.MimeType == "video/mp4" || doc.MimeType == "video/webm" {
+					ext = ".mp4"
+					if doc.MimeType == "video/webm" {
+						ext = ".webm"
+					}
+				}
+			}
+		}
+	}
+
+	dst := filepath.Join(os.TempDir(), fmt.Sprintf("quote_media_%d%s", time.Now().UnixNano(), ext))
+	path, err := msg.Download(&tg.DownloadOptions{FileName: dst})
+	if err != nil {
+		_ = os.Remove(dst)
+		return nil
+	}
+	defer os.Remove(path)
+	if st, e := os.Stat(path); e == nil && st.Size() > 16<<20 {
+		return nil
+	}
+
+	if kind == qMediaStickerVideo || (kind == qMediaGIF && (ext == ".mp4" || ext == ".webm")) {
+		return quoteFfmpegFirstFrame(path)
+	}
+
+	if kind == qMediaGIF && ext == ".gif" {
+		f, err := os.Open(path)
+		if err != nil {
+			return nil
+		}
+		defer f.Close()
+		img, derr := gif.Decode(f)
+		if derr != nil {
+			return nil
+		}
+		b := img.Bounds()
+		if b.Dx()*b.Dy() > 16_000_000 {
+			return nil
+		}
+		return img
+	}
+
+	return quoteDecodeImageFile(path)
 }
 
 type quoteScene struct {
@@ -792,11 +947,11 @@ func quoteBuildLayout(measureCtx *gg.Context, scene quoteScene, bgOne, bgTwo col
 	s := scale
 	L := quoteLayout{
 		s:          s,
-		nameSize:   26 * s,
+		nameSize:   28 * s,
 		handleSize: 16 * s,
-		textSize:   36 * s,
-		replyName:  22 * s,
-		replyText:  30 * s,
+		textSize:   30 * s,
+		replyName:  24 * s,
+		replyText:  26 * s,
 		bubbleW:    quoteWidthBase * s,
 		avatarSize: quoteAvatarSize * s,
 		avatarGap:  quoteAvatarGap * s,
@@ -843,7 +998,7 @@ func quoteBuildLayout(measureCtx *gg.Context, scene quoteScene, bgOne, bgTwo col
 			L.hasMedia = false
 		} else {
 			L.hasMedia = true
-			maxMedia := L.bubbleW / 3.0
+			maxMedia := L.bubbleW * 0.6
 			mw := iw * (maxMedia / ih)
 			mh := maxMedia
 			if mw >= maxMedia {
@@ -988,7 +1143,10 @@ func quoteDrawScene(dc *gg.Context, scene quoteScene, bubbleX, bubbleY float64, 
 		ih := float64(scene.main.Media.Bounds().Dy())
 		scaled.Scale(L.mediaW/iw, L.mediaH/ih)
 		scaled.DrawImage(scene.main.Media, 0, 0)
-		dc.DrawImage(scaled.Image(), int(mx), int(my))
+		dc.Push()
+		dc.Translate(mx, my)
+		dc.DrawImage(scaled.Image(), 0, 0)
+		dc.Pop()
 		dc.ResetClip()
 		dc.Pop()
 		cursorY += L.mediaH
