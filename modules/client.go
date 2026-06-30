@@ -1,6 +1,7 @@
 package modules
 
 import (
+	"main/modules/db"
 	"os"
 	"strconv"
 	"strings"
@@ -30,6 +31,12 @@ func RegisterHandlers() {
 
 	_, _ = Client.UpdatesGetState()
 	Client.SetCommandPrefixes("./!-?")
+
+	if me := Client.Me(); me != nil && me.Username != "" {
+		if purged, err := db.PurgeStickersIfBotChanged(me.Username); err == nil && purged {
+			Client.Logger.Info("Sticker DB purged: previous packs were owned by a different bot. Fresh start under @" + me.Username)
+		}
+	}
 
 	if !LoadModules {
 		return

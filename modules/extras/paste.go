@@ -1,305 +1,236 @@
 package extras
 
 import (
-	tg "github.com/amarnathcjd/gogram/telegram"
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"html"
 	"io"
-	modules "main/modules"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	tg "github.com/amarnathcjd/gogram/telegram"
+	modules "main/modules"
 )
 
-// === from paste_extras.go ===
-func pasteGetInput(m *tg.NewMessage) string {
-	text := strings.TrimSpace(m.Args())
-	if text == "" && m.IsReply() {
-		r, err := m.GetReplyMessage()
-		if err == nil {
-			text = strings.TrimSpace(r.Text())
-		}
-	}
-	return text
+type pasteService struct {
+	id     string
+	name   string
+	upload func(string) (string, error)
+}
+
+var pasteServices = []pasteService{
+	{id: "katbin", name: "katb.in", upload: pasteUploadKatbin},
+	{id: "spacebin", name: "spaceb.in", upload: pasteUploadSpacebin},
+	{id: "dpaste", name: "dpaste.com", upload: pasteUploadDpaste},
 }
 
 func pasteHTTPClient() *http.Client {
-	return &http.Client{Timeout: 30 * time.Second}
+	return &http.Client{Timeout: 25 * time.Second}
 }
 
-func tryDpasteCom(text string) (string, error) {
-	form := url.Values{}
-	form.Set("content", text)
-	form.Set("syntax", "text")
-	form.Set("expiry_days", "7")
+func pasteUploadKatbin(content string) (string, error) {
+	body, err := json.Marshal(map[string]map[string]string{
+		"paste": {"content": content},
+	})
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequest("POST", "https://katb.in/api/paste", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := pasteHTTPClient().Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("katb.in HTTP %d", resp.StatusCode)
+	}
+	var out struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", err
+	}
+	if out.ID == "" {
+		return "", fmt.Errorf("katb.in: empty id")
+	}
+	return "https://katb.in/" + out.ID, nil
+}
+
+func pasteUploadSpacebin(content string) (string, error) {
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	if err := w.WriteField("content", content); err != nil {
+		return "", err
+	}
+	w.Close()
+	req, err := http.NewRequest("POST", "https://spaceb.in/", &body)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	client := &http.Client{
+		Timeout: 25 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	loc := resp.Header.Get("Location")
+	if loc == "" {
+		return "", fmt.Errorf("spaceb.in: no Location (HTTP %d)", resp.StatusCode)
+	}
+	if strings.HasPrefix(loc, "/") {
+		loc = "https://spaceb.in" + loc
+	}
+	return loc, nil
+}
+
+func pasteUploadDpaste(content string) (string, error) {
+	form := url.Values{
+		"content": {content},
+		"syntax":  {"text"},
+	}
 	req, err := http.NewRequest("POST", "https://dpaste.com/api/v2/", strings.NewReader(form.Encode()))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", "JuliaBot/1.0")
 	resp, err := pasteHTTPClient().Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+		return "", fmt.Errorf("dpaste HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+	}
 	if loc := resp.Header.Get("Location"); loc != "" {
 		return strings.TrimSpace(loc), nil
 	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+	u := strings.TrimSpace(string(b))
+	if strings.HasPrefix(u, "http") {
+		return u, nil
 	}
-	s := strings.TrimSpace(string(body))
-	if strings.HasPrefix(s, "http") {
-		return s, nil
-	}
-	return "", nil
+	return "", fmt.Errorf("dpaste: no URL in response")
 }
 
-func tryDpasteOrg(text string) (string, error) {
-	form := url.Values{}
-	form.Set("content", text)
-	form.Set("lexer", "_text")
-	form.Set("expires", "604800")
-	form.Set("format", "url")
-	req, err := http.NewRequest("POST", "https://dpaste.org/api/", strings.NewReader(form.Encode()))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", "JuliaBot/1.0")
-	resp, err := pasteHTTPClient().Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	s := strings.TrimSpace(string(body))
-	s = strings.Trim(s, "\"")
-	if strings.HasPrefix(s, "http") {
-		return s, nil
-	}
-	return "", nil
-}
-
-func tryPasteRs(text string) (string, error) {
-	req, err := http.NewRequest("POST", "https://paste.rs/", strings.NewReader(text))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "text/plain")
-	req.Header.Set("User-Agent", "JuliaBot/1.0")
-	resp, err := pasteHTTPClient().Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	s := strings.TrimSpace(string(body))
-	if strings.HasPrefix(s, "http") {
-		return s, nil
-	}
-	return "", nil
-}
-
-func DpasteHandler(m *tg.NewMessage) error {
-	text := pasteGetInput(m)
-	if text == "" {
-		m.Reply("usage: /dpaste &lt;text&gt; or reply to a message")
-		return nil
-	}
-	edit, _ := m.Reply("uploading paste...")
-	if u, err := tryDpasteCom(text); err == nil && u != "" {
-		if edit != nil {
-			edit.Edit("paste: " + html.EscapeString(u) + "\n<i>via dpaste.com</i>")
-		} else {
-			m.Reply("paste: " + html.EscapeString(u))
+func pasteParseFlag(args string) (string, string) {
+	args = strings.TrimSpace(args)
+	for _, flag := range [][2]string{
+		{"-s", "spacebin"},
+		{"-d", "dpaste"},
+		{"-k", "katbin"},
+	} {
+		if strings.HasPrefix(args, flag[0]+" ") {
+			return flag[1], strings.TrimSpace(args[len(flag[0]):])
 		}
-		return nil
-	}
-	if u, err := tryDpasteOrg(text); err == nil && u != "" {
-		if edit != nil {
-			edit.Edit("paste: " + html.EscapeString(u) + "\n<i>via dpaste.org</i>")
-		} else {
-			m.Reply("paste: " + html.EscapeString(u))
+		if args == flag[0] {
+			return flag[1], ""
 		}
-		return nil
 	}
-	if u, err := tryPasteRs(text); err == nil && u != "" {
-		if edit != nil {
-			edit.Edit("paste: " + html.EscapeString(u) + "\n<i>via paste.rs</i>")
-		} else {
-			m.Reply("paste: " + html.EscapeString(u))
-		}
-		return nil
-	}
-	if edit != nil {
-		edit.Edit("all paste providers failed")
-	} else {
-		m.Reply("all paste providers failed")
-	}
-	return nil
+	return "", args
 }
 
-func tryHastebin(text string) (string, error) {
-	req, err := http.NewRequest("POST", "https://hastebin.com/documents", strings.NewReader(text))
-	if err != nil {
-		return "", err
+func pasteOrderedServices(preferredID string) []pasteService {
+	if preferredID == "" {
+		return pasteServices
 	}
-	req.Header.Set("Content-Type", "text/plain")
-	req.Header.Set("User-Agent", "JuliaBot/1.0")
-	resp, err := pasteHTTPClient().Do(req)
-	if err != nil {
-		return "", err
+	out := make([]pasteService, 0, len(pasteServices))
+	for _, s := range pasteServices {
+		if s.id == preferredID {
+			out = append(out, s)
+			break
+		}
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
+	for _, s := range pasteServices {
+		if s.id != preferredID {
+			out = append(out, s)
+		}
 	}
-	s := strings.TrimSpace(string(body))
-	idx := strings.Index(s, "\"key\"")
-	if idx == -1 {
-		return "", nil
-	}
-	rest := s[idx+5:]
-	colon := strings.Index(rest, ":")
-	if colon == -1 {
-		return "", nil
-	}
-	rest = rest[colon+1:]
-	q1 := strings.Index(rest, "\"")
-	if q1 == -1 {
-		return "", nil
-	}
-	rest = rest[q1+1:]
-	q2 := strings.Index(rest, "\"")
-	if q2 == -1 {
-		return "", nil
-	}
-	key := rest[:q2]
-	if key == "" {
-		return "", nil
-	}
-	return "https://hastebin.com/" + key, nil
+	return out
 }
 
-func HastebinHandler(m *tg.NewMessage) error {
-	text := pasteGetInput(m)
-	if text == "" {
-		m.Reply("usage: /hastebin &lt;text&gt; or reply to a message")
-		return nil
-	}
-	edit, _ := m.Reply("uploading to hastebin...")
-	if u, err := tryHastebin(text); err == nil && u != "" {
-		if edit != nil {
-			edit.Edit("paste: " + html.EscapeString(u))
-		} else {
-			m.Reply("paste: " + html.EscapeString(u))
-		}
-		return nil
-	}
-	if u, err := tryDpasteCom(text); err == nil && u != "" {
-		if edit != nil {
-			edit.Edit("hastebin failed, fallback: " + html.EscapeString(u))
-		} else {
-			m.Reply("paste: " + html.EscapeString(u))
-		}
-		return nil
-	}
-	if edit != nil {
-		edit.Edit("hastebin upload failed")
-	} else {
-		m.Reply("hastebin upload failed")
-	}
-	return nil
-}
+func PasteHandler(m *tg.NewMessage) error {
+	preferred, rest := pasteParseFlag(m.Args())
+	content := rest
 
-func pasteNormalizeRawURL(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if strings.Contains(raw, "dpaste.com/") && !strings.HasSuffix(raw, ".txt") {
-		return strings.TrimRight(raw, "/") + ".txt"
-	}
-	if strings.Contains(raw, "dpaste.org/") {
-		parts := strings.Split(strings.TrimRight(raw, "/"), "/")
-		if len(parts) > 0 {
-			last := parts[len(parts)-1]
-			if last != "" && !strings.Contains(last, ".") {
-				return "https://dpaste.org/" + last + "/raw"
+	if content == "" && m.IsReply() {
+		r, err := m.GetReplyMessage()
+		if err == nil && r != nil {
+			if t := r.Text(); strings.TrimSpace(t) != "" {
+				content = t
 			}
 		}
 	}
-	if strings.Contains(raw, "hastebin.com/") && !strings.Contains(raw, "/raw/") {
-		parts := strings.Split(strings.TrimRight(raw, "/"), "/")
-		if len(parts) > 0 {
-			last := parts[len(parts)-1]
-			if last != "" {
-				return "https://hastebin.com/raw/" + last
-			}
-		}
-	}
-	return raw
-}
 
-func PasteGetHandler(m *tg.NewMessage) error {
-	arg := strings.TrimSpace(m.Args())
-	if arg == "" {
-		m.Reply("usage: /paste_get &lt;url&gt;")
+	if strings.TrimSpace(content) == "" {
+		m.Reply("usage: <code>/paste [-s|-d|-k] &lt;text&gt;</code> or reply to a message\n\n" +
+			"<b>backends:</b>\n" +
+			"  default → katb.in\n" +
+			"  -s → spaceb.in\n" +
+			"  -d → dpaste.com\n" +
+			"  -k → katb.in (explicit)\n\n" +
+			"<i>autofalls back to the others if the chosen service is down</i>")
 		return nil
 	}
-	if !strings.HasPrefix(arg, "http://") && !strings.HasPrefix(arg, "https://") {
-		arg = "https://" + arg
+
+	status, _ := m.Reply("uploading paste...")
+
+	services := pasteOrderedServices(preferred)
+	var errs []string
+	for _, svc := range services {
+		urlStr, err := svc.upload(content)
+		if err == nil && urlStr != "" {
+			msg := "paste: " + html.EscapeString(urlStr) + "\n<i>via " + svc.name + "</i>"
+			if len(errs) > 0 {
+				msg += "\n<i>(fallback after: " + html.EscapeString(strings.Join(errs, ", ")) + ")</i>"
+			}
+			if status != nil {
+				status.Edit(msg)
+			} else {
+				m.Reply(msg)
+			}
+			return nil
+		}
+		errs = append(errs, svc.name+": "+truncErr(err))
 	}
-	raw := pasteNormalizeRawURL(arg)
-	req, err := http.NewRequest("GET", raw, nil)
-	if err != nil {
-		m.Reply("request error: " + html.EscapeString(err.Error()))
-		return nil
+
+	msg := "all paste services failed:\n<code>" + html.EscapeString(strings.Join(errs, "\n")) + "</code>"
+	if status != nil {
+		status.Edit(msg)
+	} else {
+		m.Reply(msg)
 	}
-	req.Header.Set("User-Agent", "JuliaBot/1.0")
-	resp, err := pasteHTTPClient().Do(req)
-	if err != nil {
-		m.Reply("fetch failed: " + html.EscapeString(err.Error()))
-		return nil
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		m.Reply("fetch failed: HTTP " + html.EscapeString(resp.Status))
-		return nil
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 200000))
-	if err != nil {
-		m.Reply("read failed: " + html.EscapeString(err.Error()))
-		return nil
-	}
-	content := strings.TrimSpace(string(body))
-	if content == "" {
-		m.Reply("paste appears empty")
-		return nil
-	}
-	escaped := html.EscapeString(content)
-	if len(escaped) > 3800 {
-		escaped = escaped[:3800] + "\n... (truncated)"
-	}
-	m.Reply("<pre>" + escaped + "</pre>")
 	return nil
 }
 
-func initFromSrc_paste_extras_0_1() { modules.QueueHandlerRegistration(registerPasteExtrasHandlers) }
-func registerPasteExtrasHandlers() {
-	c := modules.Client
-	c.On("cmd:dpaste", DpasteHandler)
-	c.On("cmd:hastebin", HastebinHandler)
-	c.On("cmd:paste_get", PasteGetHandler)
+func truncErr(err error) string {
+	if err == nil {
+		return ""
+	}
+	s := err.Error()
+	if len(s) > 120 {
+		s = s[:120] + "..."
+	}
+	return s
 }
 
 func init() {
-	initFromSrc_paste_extras_0_1()
+	modules.QueueHandlerRegistration(func() {
+		c := modules.Client
+		c.On("cmd:paste", PasteHandler)
+	})
 }

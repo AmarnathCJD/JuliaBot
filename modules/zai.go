@@ -391,7 +391,7 @@ func zaiRunChat(m *tg.NewMessage, prompt string) error {
 		answer = string([]rune(answer)[:4000])
 	}
 
-	out := MdToTelegramHTML(answer)
+	out := mdToTelegramHTML(answer)
 	opts := &tg.SendOptions{ParseMode: "HTML"}
 	if status != nil {
 		if _, eerr := status.Edit(out, opts); eerr != nil {
@@ -461,4 +461,139 @@ func registerZaiHandlers() {
 	c.On("cmd:zai", ZaiHandler)
 	c.On("cmd:glm", ZaiHandler)
 	c.On("cmd:ai", ZaiHandler)
+}
+
+func mdToTelegramHTML(md string) string {
+	md = strings.ReplaceAll(md, "\r\n", "\n")
+	md = strings.ReplaceAll(md, "\r", "\n")
+	lines := strings.Split(md, "\n")
+
+	var out strings.Builder
+	out.Grow(len(md) + 64)
+
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+		trim := strings.TrimLeft(line, " \t")
+		if strings.HasPrefix(trim, "```") {
+			lang := strings.TrimSpace(trim[3:])
+			if lang != "" {
+				out.WriteString(`<pre><code class="language-` + html.EscapeString(lang) + `">`)
+			} else {
+				out.WriteString("<pre><code>")
+			}
+			i++
+			first := true
+			for i < len(lines) && !strings.HasPrefix(strings.TrimLeft(lines[i], " \t"), "```") {
+				if !first {
+					out.WriteByte('\n')
+				}
+				out.WriteString(html.EscapeString(lines[i]))
+				first = false
+				i++
+			}
+			out.WriteString("</code></pre>")
+			if i+1 < len(lines) {
+				out.WriteByte('\n')
+			}
+			continue
+		}
+
+		hdr := trim
+		level := 0
+		for strings.HasPrefix(hdr, "#") && level < 6 {
+			hdr = hdr[1:]
+			level++
+		}
+		if level > 0 && strings.HasPrefix(hdr, " ") {
+			out.WriteString("<b>")
+			out.WriteString(zaiInlineMD(strings.TrimSpace(hdr)))
+			out.WriteString("</b>")
+		} else {
+			out.WriteString(zaiInlineMD(line))
+		}
+		if i+1 < len(lines) {
+			out.WriteByte('\n')
+		}
+	}
+
+	result := out.String()
+	for strings.Contains(result, "\n\n\n") {
+		result = strings.ReplaceAll(result, "\n\n\n", "\n\n")
+	}
+	return strings.TrimRight(strings.TrimLeft(result, "\n"), "\n")
+}
+
+func zaiInlineMD(s string) string {
+	var out strings.Builder
+	out.Grow(len(s) + 16)
+	i := 0
+	for i < len(s) {
+		c := s[i]
+		switch c {
+		case '\\':
+			if i+1 < len(s) {
+				out.WriteString(html.EscapeString(string(s[i+1])))
+				i += 2
+				continue
+			}
+		case '`':
+			end := strings.IndexByte(s[i+1:], '`')
+			if end >= 0 {
+				out.WriteString("<code>")
+				out.WriteString(html.EscapeString(s[i+1 : i+1+end]))
+				out.WriteString("</code>")
+				i += end + 2
+				continue
+			}
+		case '*':
+			if i+1 < len(s) && s[i+1] == '*' {
+				end := strings.Index(s[i+2:], "**")
+				if end >= 0 {
+					out.WriteString("<b>")
+					out.WriteString(zaiInlineMD(s[i+2 : i+2+end]))
+					out.WriteString("</b>")
+					i += end + 4
+					continue
+				}
+			}
+			end := strings.IndexByte(s[i+1:], '*')
+			if end >= 0 && end > 0 {
+				out.WriteString("<i>")
+				out.WriteString(zaiInlineMD(s[i+1 : i+1+end]))
+				out.WriteString("</i>")
+				i += end + 2
+				continue
+			}
+		case '_':
+			if i+1 < len(s) && s[i+1] == '_' {
+				end := strings.Index(s[i+2:], "__")
+				if end >= 0 {
+					out.WriteString("<b>")
+					out.WriteString(zaiInlineMD(s[i+2 : i+2+end]))
+					out.WriteString("</b>")
+					i += end + 4
+					continue
+				}
+			}
+		case '[':
+			closeBracket := strings.IndexByte(s[i:], ']')
+			if closeBracket > 0 && closeBracket+1 < len(s)-i && s[i+closeBracket+1] == '(' {
+				closeParen := strings.IndexByte(s[i+closeBracket+2:], ')')
+				if closeParen >= 0 {
+					linkText := s[i+1 : i+closeBracket]
+					linkURL := s[i+closeBracket+2 : i+closeBracket+2+closeParen]
+					out.WriteString(`<a href="`)
+					out.WriteString(html.EscapeString(linkURL))
+					out.WriteString(`">`)
+					out.WriteString(zaiInlineMD(linkText))
+					out.WriteString("</a>")
+					i += closeBracket + closeParen + 3
+					continue
+				}
+			}
+		}
+		out.WriteString(html.EscapeString(string(c)))
+		i++
+	}
+	return out.String()
 }

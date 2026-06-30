@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -473,7 +475,7 @@ func MediaInfoHandler(m *tg.NewMessage) error {
 	}
 
 	// Otherwise, post to pastebin
-	url, _, err := PostToSpaceBin(mediaInfoOutput)
+	url, err := devUploadSpacebin(mediaInfoOutput)
 	if err != nil {
 		m.Reply("Error: " + err.Error())
 		return nil
@@ -995,6 +997,39 @@ func init() {
 - <code>/restart</code> - Restart the bot
 - <code>/post -c &lt;channel&gt; [-nm] [-fw] &lt;content&gt;</code> - Post content to a channel
 `)
+}
+
+func devUploadSpacebin(content string) (string, error) {
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	if err := w.WriteField("content", content); err != nil {
+		return "", err
+	}
+	w.Close()
+	req, err := http.NewRequest("POST", "https://spaceb.in/", &body)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	client := &http.Client{
+		Timeout: 25 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	loc := resp.Header.Get("Location")
+	if loc == "" {
+		return "", fmt.Errorf("spaceb.in: no Location (HTTP %d)", resp.StatusCode)
+	}
+	if strings.HasPrefix(loc, "/") {
+		loc = "https://spaceb.in" + loc
+	}
+	return loc, nil
 }
 
 func registerDevHandlers() {

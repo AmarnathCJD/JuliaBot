@@ -55,6 +55,8 @@ func GetFileIDHandle(m *telegram.NewMessage) error {
 	return nil
 }
 
+const defaultTransferSpeedCap int64 = 20 * 1024 * 1024
+
 func UploadHandle(m *telegram.NewMessage) error {
 	filename := m.Args()
 	if filename == "" {
@@ -68,6 +70,9 @@ func UploadHandle(m *telegram.NewMessage) error {
 		filename = strings.ReplaceAll(filename, "-s", "")
 	}
 
+	speedCap := defaultTransferSpeedCap
+	filename = strings.TrimSpace(filename)
+
 	msg, _ := m.Reply("Uploading...")
 	uploadStartTimestamp := time.Now()
 
@@ -75,8 +80,8 @@ func UploadHandle(m *telegram.NewMessage) error {
 		ForceDocument: strings.Contains(filename, "--doc"),
 		Spoiler:       spoiler,
 		Upload: &telegram.UploadOptions{
-
 			ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+			MaxBytesPerSec:  speedCap,
 		},
 	}); err != nil {
 		msg.Edit("Error: " + err.Error())
@@ -176,6 +181,7 @@ func DownloadHandle(m *telegram.NewMessage) error {
 		FileName:        fn,
 		Ctx:             ctx,
 		Delay:           150,
+		MaxBytesPerSec:  defaultTransferSpeedCap,
 	}); err != nil {
 		if err == context.Canceled {
 			msg.Edit("Download cancelled.")

@@ -383,7 +383,6 @@ func registerWarnsHandlers() {
 	c.On("cmd:warnsettings", WarnSettingsHandler)
 	c.On("cmd:twarn", TemporaryWarnHandler)
 	c.On("callback:rmwarn_", RemoveWarnCallback)
-	c.On("callback:undo_", UndoActionHandler)
 }
 
 func init() {
@@ -409,36 +408,6 @@ func init() {
 <i>💡 Click undo buttons within 5 minutes to reverse warning actions</i>
 
 Actions: ban, mute, kick`)
-}
-
-type ActionHistory struct {
-	ActionID  string
-	Type      string
-	UserID    int64
-	ChatID    int64
-	AdminID   int64
-	Timestamp time.Time
-	Data      map[string]interface{}
-}
-
-var actionHistories = make(map[int64][]ActionHistory)
-
-func RecordAction(chatID, userID, adminID int64, actionType string, data map[string]interface{}) {
-	action := ActionHistory{
-		ActionID:  fmt.Sprintf("%d_%d_%s", chatID, time.Now().UnixNano(), actionType),
-		Type:      actionType,
-		UserID:    userID,
-		ChatID:    chatID,
-		AdminID:   adminID,
-		Timestamp: time.Now(),
-		Data:      data,
-	}
-
-	actionHistories[chatID] = append(actionHistories[chatID], action)
-
-	if len(actionHistories[chatID]) > 50 {
-		actionHistories[chatID] = actionHistories[chatID][1:]
-	}
 }
 
 func TemporaryWarnHandler(m *tg.NewMessage) error {
@@ -496,20 +465,9 @@ func TemporaryWarnHandler(m *tg.NewMessage) error {
 		userName = userInfo.FirstName
 	}
 
-	modules.RecordAction(m.ChatID(), userID, m.SenderID(), "twarn", map[string]interface{}{
-		"reason":   reason,
-		"duration": duration.String(),
-	})
-
-	b := tg.Button
 	m.Reply(
 		fmt.Sprintf("Warning issued to %s (%d/%d)\nReason: %s\nAutomatic removal in: %s",
 			userName, count, settings.MaxWarns, reason, duration.String()),
-		&tg.SendOptions{
-			ReplyMarkup: tg.NewKeyboard().AddRow(
-				b.Data("Undo Warning", fmt.Sprintf("undo_twarn_%d_%d", userID, m.SenderID())),
-			).Build(),
-		},
 	)
 
 	go func() {
@@ -526,119 +484,3 @@ func TemporaryWarnHandler(m *tg.NewMessage) error {
 	return nil
 }
 
-// UndoActionHandler - Undo recent actions within 5 minutes
-func UndoActionHandler(c *tg.CallbackQuery) error {
-	data := c.DataString()
-
-	if !strings.HasPrefix(data, "undo_") {
-		return nil
-	}
-
-	parts := strings.Split(strings.TrimPrefix(data, "undo_"), "_")
-	if len(parts) < 3 {
-		return nil
-	}
-
-	actionType := parts[0]
-	userID, _ := strconv.ParseInt(parts[1], 10, 64)
-	adminID, _ := strconv.ParseInt(parts[2], 10, 64)
-
-	if c.SenderID != adminID && !modules.IsUserAdmin(c.Client, c.SenderID, c.ChatID, "ban") {
-		c.Answer("Only the admin who took this action can undo it", &tg.CallbackOptions{Alert: true})
-		return nil
-	}
-
-	if actionHistories[c.ChatID] == nil {
-		c.Answer("No recent actions to undo", &tg.CallbackOptions{Alert: true})
-		return nil
-	}
-
-	var targetAction *ActionHistory
-	for i := len(actionHistories[c.ChatID]) - 1; i >= 0; i-- {
-		action := actionHistories[c.ChatID][i]
-		if action.Type == actionType &&
-			action.UserID == userID &&
-			time.Since(action.Timestamp) < 5*time.Minute {
-			targetAction = &action
-			break
-		}
-	}
-
-	if targetAction == nil {
-		c.Answer("Action not found or expired (5-minute window)", &tg.CallbackOptions{Alert: true})
-		return nil
-	}
-
-	// Handle different action types
-	switch actionType {
-	case "twarn", "warn":
-		// Remove the warning
-		warns, _ := db.GetWarns(c.ChatID, userID)
-		if len(warns) > 0 {
-			db.ResetWarns(c.ChatID, userID)
-			// Re-add all warnings except the last one
-			for i := 0; i < len(warns)-1; i++ {
-				db.AddWarn(c.ChatID, userID, warns[i])
-			}
-			c.Answer("Warning removed", &tg.CallbackOptions{Alert: false})
-			c.Edit("Warning has been removed")
-		}
-
-	case "ban":
-		// Unban the user
-		user, err := c.Client.ResolvePeer(userID)
-		if err == nil && user != nil {
-			_, err := c.Client.EditBanned(c.ChatID, user, &tg.BannedOptions{Unban: true})
-			if err == nil {
-				c.Answer("Ban removed", &tg.CallbackOptions{Alert: false})
-				c.Edit("User has been unbanned")
-			} else {
-				c.Answer("Failed to unban user: "+err.Error(), &tg.CallbackOptions{Alert: true})
-			}
-		}
-
-	case "tban":
-		// Temporarily ban - unban the user
-		user, err := c.Client.ResolvePeer(userID)
-		if err == nil && user != nil {
-			_, err := c.Client.EditBanned(c.ChatID, user, &tg.BannedOptions{Unban: true})
-			if err == nil {
-				c.Answer("Temporary ban removed", &tg.CallbackOptions{Alert: false})
-				c.Edit("Temporary ban has been reversed")
-			} else {
-				c.Answer("Failed to remove ban: "+err.Error(), &tg.CallbackOptions{Alert: true})
-			}
-		}
-
-	case "mute":
-		// Unmute the user
-		user, err := c.Client.ResolvePeer(userID)
-		if err == nil && user != nil {
-			_, err := c.Client.EditBanned(c.ChatID, user, &tg.BannedOptions{Unmute: true})
-			if err == nil {
-				c.Answer("Mute removed", &tg.CallbackOptions{Alert: false})
-				c.Edit("User has been unmuted")
-			} else {
-				c.Answer("Failed to unmute user: "+err.Error(), &tg.CallbackOptions{Alert: true})
-			}
-		}
-
-	case "tmute":
-		// Temporarily mute - unmute the user
-		user, err := c.Client.ResolvePeer(userID)
-		if err == nil && user != nil {
-			_, err := c.Client.EditBanned(c.ChatID, user, &tg.BannedOptions{Unmute: true})
-			if err == nil {
-				c.Answer("Temporary mute removed", &tg.CallbackOptions{Alert: false})
-				c.Edit("Temporary mute has been reversed")
-			} else {
-				c.Answer("Failed to remove mute: "+err.Error(), &tg.CallbackOptions{Alert: true})
-			}
-		}
-
-	default:
-		c.Answer("Unknown action type", &tg.CallbackOptions{Alert: true})
-	}
-
-	return nil
-}

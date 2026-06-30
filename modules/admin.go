@@ -186,8 +186,6 @@ func performBan(client *tg.Client, chatID int64, user tg.InputPeer, reason strin
 		return "", err
 	}
 
-	userID := client.GetPeerID(user)
-	RecordAction(chatID, userID, adminID, "ban", map[string]interface{}{"reason": reason})
 
 	name := GetPeerDisplayName(client, user)
 	msg := fmt.Sprintf("Done. %s has been banned.", name)
@@ -372,8 +370,6 @@ func performTban(client *tg.Client, chatID int64, user tg.InputPeer, durationStr
 		return "", err
 	}
 
-	userID := client.GetPeerID(user)
-	RecordAction(chatID, userID, adminID, "tban", map[string]interface{}{"reason": reason, "duration": duration.String()})
 
 	name := GetPeerDisplayName(client, user)
 	msg := fmt.Sprintf("Done. %s has been banned for %s.", name, formatAdminDuration(duration))
@@ -443,8 +439,6 @@ func performTmute(client *tg.Client, chatID int64, user tg.InputPeer, durationSt
 		return "", err
 	}
 
-	userID := client.GetPeerID(user)
-	RecordAction(chatID, userID, adminID, "tmute", map[string]interface{}{"reason": reason, "duration": duration.String()})
 
 	name := GetPeerDisplayName(client, user)
 	msg := fmt.Sprintf("Done. %s has been muted for %s.", name, formatAdminDuration(duration))
@@ -492,8 +486,6 @@ func performMute(client *tg.Client, chatID int64, user tg.InputPeer, reason stri
 		return "", err
 	}
 
-	userID := client.GetPeerID(user)
-	RecordAction(chatID, userID, adminID, "mute", map[string]interface{}{"reason": reason})
 
 	name := GetPeerDisplayName(client, user)
 	msg := fmt.Sprintf("Done. %s has been muted.", name)

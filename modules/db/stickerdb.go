@@ -209,6 +209,83 @@ func GetPackByShortName(userID int64, shortName string) (*PackInfo, error) {
 	return pack, err
 }
 
+func PurgeStickersIfBotChanged(botUsername string) (bool, error) {
+	if botUsername == "" {
+		return false, nil
+	}
+	suffix := "_by_" + botUsername
+	db, err := GetDB()
+	if err != nil {
+		return false, err
+	}
+	if err := ensureStickerBuckets(db); err != nil {
+		return false, err
+	}
+
+	stale := false
+	err = db.View(func(tx *bolt.Tx) error {
+		usersBucket := tx.Bucket([]byte("sticker_users"))
+		if usersBucket == nil {
+			return nil
+		}
+		return usersBucket.ForEach(func(uid, _ []byte) error {
+			userBucket := usersBucket.Bucket(uid)
+			if userBucket == nil {
+				return nil
+			}
+			for _, packType := range []string{"normal", "webm", "tgs"} {
+				tb := userBucket.Bucket([]byte(packType))
+				if tb == nil {
+					continue
+				}
+				if e := tb.ForEach(func(_, v []byte) error {
+					var p PackInfo
+					if err := json.Unmarshal(v, &p); err != nil {
+						return nil
+					}
+					if p.ShortName != "" && !endsWithSuffix(p.ShortName, suffix) {
+						stale = true
+						return errStop
+					}
+					return nil
+				}); e != nil && e != errStop {
+					return e
+				}
+				if stale {
+					return errStop
+				}
+			}
+			return nil
+		})
+	})
+	if err != nil && err != errStop {
+		return false, err
+	}
+	if !stale {
+		return false, nil
+	}
+	err = db.Update(func(tx *bolt.Tx) error {
+		_ = tx.DeleteBucket([]byte("sticker_users"))
+		_ = tx.DeleteBucket([]byte("sticker_packs"))
+		_, e := tx.CreateBucketIfNotExists([]byte("sticker_users"))
+		if e != nil {
+			return e
+		}
+		_, e = tx.CreateBucketIfNotExists([]byte("sticker_packs"))
+		return e
+	})
+	return err == nil, err
+}
+
+var errStop = fmt.Errorf("stop")
+
+func endsWithSuffix(s, suffix string) bool {
+	if len(s) < len(suffix) {
+		return false
+	}
+	return s[len(s)-len(suffix):] == suffix
+}
+
 func CloseStickerDB() error {
 
 	return nil
