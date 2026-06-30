@@ -46,6 +46,7 @@ userxy
 userxyz
 *.zip
 aigen2.go
+modules/extras/aigen.go
 *.jpg
 yt.go
 insta.go

@@ -3,9 +3,6 @@ package extras
 import (
 	"context"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/amarnathcjd/gogram/telegram"
@@ -49,43 +46,6 @@ func Ungban(m *telegram.NewMessage) error {
 		return nil
 	}, 600)
 	message.Edit(fmt.Sprintf("Global ban removed in %d groups.", done))
-	return nil
-}
-
-func mathQuery(query string) (string, error) {
-	c := &http.Client{}
-	url := "https://evaluate-expression.p.rapidapi.com/?expression=" + url.QueryEscape(query)
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Add("x-rapidapi-host", "evaluate-expression.p.rapidapi.com")
-	req.Header.Add("x-rapidapi-key", "cf9e67ea99mshecc7e1ddb8e93d1p1b9e04jsn3f1bb9103c3f")
-	resp, err := c.Do(req)
-	if err != nil {
-		return "", err
-	}
-
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if string(body) == "" {
-		return "", fmt.Errorf("invalid math expression")
-	}
-
-	return string(body), nil
-}
-
-func MathHandler(m *telegram.NewMessage) error {
-	q := m.Args()
-	if q == "" {
-		m.Reply("please provide a mathematical expression")
-		return nil
-	}
-
-	result, err := mathQuery(q)
-	if err != nil {
-		m.Reply("Error: " + err.Error())
-		return nil
-	}
-
-	m.Reply(fmt.Sprintf("Evaluated: <code>%s</code>", result))
 	return nil
 }
 
@@ -141,7 +101,6 @@ func NightModeHandler(m *telegram.NewMessage) error {
 
 func registerMiscHandlers() {
 	c := modules.Client
-	c.On("command:math", MathHandler)
 	c.On("cmd:help", modules.HelpHandle)
 	c.On("cmd:nightmode", NightModeHandler)
 	c.On("cmd:tempnote", SaveTempNoteHandler)
