@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	tg "github.com/amarnathcjd/gogram/telegram"
@@ -17,6 +18,7 @@ type AFK struct {
 }
 
 var afkList = make(map[int64]AFK)
+var afkMu sync.RWMutex
 
 var randomAFKMessages = []string{
 	"<b>%s</b> is AFK since <b>%s</b>.",
@@ -28,35 +30,55 @@ var randomAFKMessages = []string{
 }
 
 func AFKHandler(m *tg.NewMessage) error {
-	if strings.HasPrefix(m.Text(), "/afk") || strings.HasPrefix(m.Text(), "!afk") || strings.HasPrefix(m.Text(), ".afk") {
+	if m.Sender == nil {
+		return nil
+	}
+	text := m.Text()
+	cmd := ""
+	if fields := strings.Fields(text); len(fields) > 0 {
+		cmd = fields[0]
+	}
+	isAfkCmd := cmd == "/afk" || cmd == "!afk" || cmd == ".afk" ||
+		strings.HasPrefix(cmd, "/afk@") || strings.HasPrefix(cmd, "!afk@") || strings.HasPrefix(cmd, ".afk@")
+	if isAfkCmd {
 		media := ""
 		if m.IsReply() {
 			r, err := m.GetReplyMessage()
 			if err == nil {
-				if r.IsMedia() {
+				if r.IsMedia() && r.File != nil {
 					media = r.File.FileID
 				}
 			}
 		}
+		afkMu.Lock()
 		afkList[m.Sender.ID] = AFK{
 			Name:    m.Sender.Username,
 			Message: m.Args(),
 			Media:   media,
 			Time:    time.Now().Unix(),
 		}
+		afkMu.Unlock()
 
 		m.Reply("You are now AFK.")
 		return nil
 	} else {
-		if afk, ok := afkList[m.SenderID()]; ok {
+		afkMu.RLock()
+		afk, ok := afkList[m.SenderID()]
+		afkMu.RUnlock()
+		if ok {
+			afkMu.Lock()
 			delete(afkList, m.SenderID())
+			afkMu.Unlock()
 			duration := time.Since(time.Unix(afk.Time, 0)).String()
 			m.Reply(fmt.Sprintf("Welcome back <b>%s</b>! You were AFK for %s.", afk.Name, duration))
 		} else {
 			if m.IsReply() {
 				r, err := m.GetReplyMessage()
 				if err == nil {
-					if afk, ok := afkList[r.SenderID()]; ok {
+					afkMu.RLock()
+					afk, ok := afkList[r.SenderID()]
+					afkMu.RUnlock()
+					if ok {
 						duration := time.Since(time.Unix(afk.Time, 0)).String()
 						msg := randomAFKMessages[rand.Intn(len(randomAFKMessages))]
 						if afk.Media != "" {
@@ -88,7 +110,10 @@ func AFKHandler(m *tg.NewMessage) error {
 					for _, entity := range m.Message.Entities {
 						switch e := entity.(type) {
 						case *tg.MessageEntityMentionName:
-							if afk, ok := afkList[e.UserID]; ok {
+							afkMu.RLock()
+							afk, ok := afkList[e.UserID]
+							afkMu.RUnlock()
+							if ok {
 								duration := time.Since(time.Unix(afk.Time, 0)).String()
 								msg := randomAFKMessages[rand.Intn(len(randomAFKMessages))]
 								if afk.Media != "" {
@@ -119,7 +144,13 @@ func AFKHandler(m *tg.NewMessage) error {
 							length := e.Length
 
 							username := m.Text()[offset : offset+length]
-							for _, afk := range afkList {
+							afkMu.RLock()
+							afkSnap := make(map[int64]AFK, len(afkList))
+							for k, v := range afkList {
+								afkSnap[k] = v
+							}
+							afkMu.RUnlock()
+							for _, afk := range afkSnap {
 								if afk.Name == username {
 									duration := time.Since(time.Unix(afk.Time, 0)).String()
 									msg := randomAFKMessages[rand.Intn(len(randomAFKMessages))]
@@ -151,7 +182,10 @@ func AFKHandler(m *tg.NewMessage) error {
 							user, err := m.Client.ResolvePeer(username)
 							if err == nil {
 								peerId := m.Client.GetPeerID(user)
-								if afk, ok := afkList[peerId]; ok {
+								afkMu.RLock()
+								afk, ok := afkList[peerId]
+								afkMu.RUnlock()
+								if ok {
 									duration := time.Since(time.Unix(afk.Time, 0)).String()
 									msg := randomAFKMessages[rand.Intn(len(randomAFKMessages))]
 									if afk.Media != "" {

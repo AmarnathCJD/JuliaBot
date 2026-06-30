@@ -450,7 +450,9 @@ func TemporaryWarnHandler(m *tg.NewMessage) error {
 		reason = strings.Join(args[2:], " ")
 	}
 
+	warnID := fmt.Sprintf("%d-%d", time.Now().UnixNano(), m.SenderID())
 	warn := &db.Warn{
+		ID:        warnID,
 		Reason:    reason,
 		AdminID:   m.SenderID(),
 		Timestamp: time.Now(),
@@ -473,9 +475,19 @@ func TemporaryWarnHandler(m *tg.NewMessage) error {
 	go func() {
 		<-time.After(duration)
 		warns, _ := db.GetWarns(m.ChatID(), userID)
-		if len(warns) > 0 && warns[len(warns)-1].Reason == reason {
+		idx := -1
+		for i, w := range warns {
+			if w.ID == warnID {
+				idx = i
+				break
+			}
+		}
+		if idx >= 0 {
 			db.ResetWarns(m.ChatID(), userID)
-			for i := 0; i < len(warns)-1; i++ {
+			for i := 0; i < len(warns); i++ {
+				if i == idx {
+					continue
+				}
 				db.AddWarn(m.ChatID(), userID, warns[i])
 			}
 		}

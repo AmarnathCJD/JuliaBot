@@ -27,9 +27,9 @@ type chatStatsData struct {
 	Users map[int64]int64
 }
 
-func ChatStatsLoad(chatID int64) *chatStatsData {
+func ChatStatsLoad(_ int64) *chatStatsData {
 	return &chatStatsData{Users: map[int64]int64{}}
 }
 
-func ChatStatsSave(chatID int64, m *chatStatsData) {
+func ChatStatsSave(_ int64, _ *chatStatsData) {
 }

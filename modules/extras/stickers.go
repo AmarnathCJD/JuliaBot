@@ -2,8 +2,6 @@ package extras
 
 import (
 	"fmt"
-	tg "github.com/amarnathcjd/gogram/telegram"
-	_ "golang.org/x/image/webp"
 	"html"
 	"image"
 	"image/color"
@@ -17,6 +15,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	tg "github.com/amarnathcjd/gogram/telegram"
+	_ "golang.org/x/image/webp"
 )
 
 // === from stickers.go ===
@@ -146,7 +147,6 @@ func KangSticker(m *tg.NewMessage) error {
 				stickerFile.ID = document.ID
 				stickerFile.AccessHash = document.AccessHash
 				stickerFile.FileReference = document.FileReference
-				stickerFile.Type = packType
 			}
 		}
 		if reply.Document().MimeType == "application/x-tgsticker" {
@@ -175,7 +175,7 @@ func KangSticker(m *tg.NewMessage) error {
 		packNumber := len(packs[packType]) + 1
 
 		shortName = fmt.Sprintf("x%s_%s_%d_by_%s", username, packType, packNumber, m.Client.Me().Username)
-		title = fmt.Sprintf("%s's %s Stickers #%d", username, strings.Title(packType), packNumber)
+		title = fmt.Sprintf("%s's %s Stickers #%d", username, asciiTitle(packType), packNumber)
 
 		pack = &db.PackInfo{
 			ShortName:    shortName,
@@ -528,6 +528,7 @@ func registerStickersHandlers() {
 func initFromSrc_stickers_0_1() {
 	modules.QueueHandlerRegistration(registerStickersHandlers)
 }
+
 // === from sticker_pack_info.go ===
 func StickerInfoHandler(m *tg.NewMessage) error {
 	if !m.IsReply() {
@@ -639,6 +640,7 @@ func registerStickerPackInfoHandlers() {
 func initFromSrc_sticker_pack_info_1_1() {
 	modules.QueueHandlerRegistration(registerStickerPackInfoHandlers)
 }
+
 // === from sticker_to_image.go ===
 func stickerExtractDoc(reply *tg.NewMessage) (*tg.DocumentObj, string) {
 	if reply.Media() == nil {
@@ -843,6 +845,7 @@ func registerStickerToImageHandlers() {
 func initFromSrc_sticker_to_image_2_1() {
 	modules.QueueHandlerRegistration(registerStickerToImageHandlers)
 }
+
 // === from webp_to_jpg.go ===
 func webpToJpgExtractDoc(reply *tg.NewMessage) (*tg.DocumentObj, string, string) {
 	if reply.Media() == nil {
@@ -1043,4 +1046,20 @@ func init() {
 	initFromSrc_sticker_pack_info_1_1()
 	initFromSrc_sticker_to_image_2_1()
 	initFromSrc_webp_to_jpg_3_1()
+}
+
+func asciiTitle(s string) string {
+	if s == "" {
+		return s
+	}
+	b := []byte(s)
+	if b[0] >= 'a' && b[0] <= 'z' {
+		b[0] -= 32
+	}
+	for i := 1; i < len(b); i++ {
+		if b[i-1] == ' ' && b[i] >= 'a' && b[i] <= 'z' {
+			b[i] -= 32
+		}
+	}
+	return string(b)
 }

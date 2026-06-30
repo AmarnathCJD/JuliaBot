@@ -362,6 +362,11 @@ func SnipeHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
+	if !modules.IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "") {
+		m.Reply("Admins only.")
+		return nil
+	}
+
 	arg := strings.TrimSpace(m.Args())
 	argLower := strings.ToLower(arg)
 	switch argLower {
@@ -401,6 +406,10 @@ func SnipeHandler(m *tg.NewMessage) error {
 func ESnipeHandler(m *tg.NewMessage) error {
 	if m.IsPrivate() {
 		m.Reply("<b>Snipe works in groups only.</b>")
+		return nil
+	}
+	if !modules.IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "") {
+		m.Reply("Admins only.")
 		return nil
 	}
 	if !loadSnipeCfg(m.ChatID()).Enabled {
@@ -500,6 +509,10 @@ func snipesKeyboard(page, totalPages int, userID int64) *tg.ReplyInlineMarkup {
 func SnipesHandler(m *tg.NewMessage) error {
 	if m.IsPrivate() {
 		m.Reply("<b>Snipe works in groups only.</b>")
+		return nil
+	}
+	if !modules.IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "") {
+		m.Reply("Admins only.")
 		return nil
 	}
 	if !loadSnipeCfg(m.ChatID()).Enabled {

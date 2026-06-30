@@ -434,7 +434,7 @@ func MediaInfoHandler(m *tg.NewMessage) error {
 	msg, _ := m.Reply("<code>Gathering media info...</code>")
 
 	var downloadedFileName string
-	if r.File.Size > 40*1024*1024 { // 20MB
+	if r.File != nil && r.File.Size > 40*1024*1024 { // 20MB
 		// download first 40MB of the file
 
 		bytes, _, err := m.Client.DownloadChunk(r.Media(), 0, 40*1024*1024, 512*1024)

@@ -3,7 +3,6 @@ package extras
 import (
 	"encoding/json"
 	"fmt"
-	tg "github.com/amarnathcjd/gogram/telegram"
 	"html"
 	"io"
 	modules "main/modules"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
 // === from dictionary.go ===
@@ -128,6 +129,7 @@ func registerDictionaryHandlers() {
 	c := modules.Client
 	c.On("cmd:define", DefineHandler)
 }
+
 // === from kanji_lookup.go ===
 type kanjiLookupResponse struct {
 	Kanji        string   `json:"kanji"`
@@ -221,6 +223,7 @@ func registerKanjiLookupHandlers() {
 	c := modules.Client
 	c.On("cmd:kanji", KanjiLookupHandler)
 }
+
 // === from urban.go ===
 type urbanDefinition struct {
 	Word       string `json:"word"`
@@ -429,6 +432,7 @@ func registerUrbanHandlers() {
 	c.On("cmd:urban", UrbanHandler)
 	c.On("callback:urban:", UrbanCallback)
 }
+
 // === from definewiki.go ===
 type wikiThumbnail struct {
 	Source string `json:"source"`
@@ -455,7 +459,6 @@ type wikiSummaryResponse struct {
 	Originalimg  *wikiThumbnail `json:"originalimage"`
 	ContentURLs  wikiURLBundle  `json:"content_urls"`
 	Detail       string         `json:"detail"`
-	Title404     string         `json:"title"`
 }
 
 func wikiHTTPClient() *http.Client {
@@ -660,6 +663,7 @@ func registerWikiHandlers() {
 	c := modules.Client
 	c.On("cmd:wiki", WikiHandler)
 }
+
 // === from numfact.go ===
 var numFactClient = &http.Client{Timeout: 30 * time.Second}
 
@@ -779,6 +783,7 @@ func registerNumFactHandlers() {
 func initFromSrc_numfact_4_1() {
 	modules.QueueHandlerRegistration(registerNumFactHandlers)
 }
+
 // === from random_fact_api.go ===
 var randomFactAPIClient = &http.Client{Timeout: 30 * time.Second}
 

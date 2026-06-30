@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/amarnathcjd/gogram/telegram"
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
@@ -17,14 +16,14 @@ var (
 	cancelMutex     sync.RWMutex
 )
 
-func SendFileByIDHandle(m *telegram.NewMessage) error {
+func SendFileByIDHandle(m *tg.NewMessage) error {
 	fileId := m.Args()
 	if fileId == "" {
 		m.Reply("No fileId provided")
 		return nil
 	}
 
-	file, err := telegram.ResolveBotFileID(fileId)
+	file, err := tg.ResolveBotFileID(fileId)
 	if err != nil {
 		m.Reply("Error: " + err.Error())
 		return nil
@@ -34,7 +33,7 @@ func SendFileByIDHandle(m *telegram.NewMessage) error {
 	return nil
 }
 
-func GetFileIDHandle(m *telegram.NewMessage) error {
+func GetFileIDHandle(m *tg.NewMessage) error {
 	if !m.IsReply() {
 		m.Reply("Reply to a file to get its fileId")
 		return nil
@@ -57,7 +56,7 @@ func GetFileIDHandle(m *telegram.NewMessage) error {
 
 const defaultTransferSpeedCap int64 = 20 * 1024 * 1024
 
-func UploadHandle(m *telegram.NewMessage) error {
+func UploadHandle(m *tg.NewMessage) error {
 	filename := m.Args()
 	if filename == "" {
 		m.Reply("No filename provided")
@@ -76,11 +75,11 @@ func UploadHandle(m *telegram.NewMessage) error {
 	msg, _ := m.Reply("Uploading...")
 	uploadStartTimestamp := time.Now()
 
-	if _, err := m.RespondMedia(filename, &telegram.MediaOptions{
+	if _, err := m.RespondMedia(filename, &tg.MediaOptions{
 		ForceDocument: strings.Contains(filename, "--doc"),
 		Spoiler:       spoiler,
-		Upload: &telegram.UploadOptions{
-			ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+		Upload: &tg.UploadOptions{
+			ProgressManager: tg.NewProgressManager(5).SetMessage(msg),
 			MaxBytesPerSec:  speedCap,
 		},
 	}); err != nil {
@@ -93,7 +92,7 @@ func UploadHandle(m *telegram.NewMessage) error {
 	return nil
 }
 
-func DownloadHandle(m *telegram.NewMessage) error {
+func DownloadHandle(m *tg.NewMessage) error {
 	if !m.IsReply() && m.Args() == "" {
 		m.Reply("Reply to a file to download it")
 		return nil
@@ -101,7 +100,7 @@ func DownloadHandle(m *telegram.NewMessage) error {
 
 	fn := m.Args()
 
-	var r, msg *telegram.NewMessage
+	var r, msg *tg.NewMessage
 	if m.IsReply() {
 		reply, err := m.GetReplyMessage()
 		if err != nil {
@@ -110,7 +109,11 @@ func DownloadHandle(m *telegram.NewMessage) error {
 		}
 
 		r = reply
-		msg, _ = m.Reply("Downloading...")
+		var rerr error
+		msg, rerr = m.Reply("Downloading...")
+		if rerr != nil || msg == nil {
+			return nil
+		}
 	} else {
 		reg := regexp.MustCompile(`t.me/(\w+)/(\d+)`)
 		match := reg.FindStringSubmatch(m.Args())
@@ -141,8 +144,15 @@ func DownloadHandle(m *telegram.NewMessage) error {
 				return nil
 			}
 			r = msgX
+			if r == nil || r.File == nil {
+				m.Reply("Not a file.")
+				return nil
+			}
 			fn = r.File.Name
-			msg, _ = m.Reply("Downloading... (from c " + strconv.Itoa(id) + ")")
+			msg, err = m.Reply("Downloading... (from c " + strconv.Itoa(id) + ")")
+			if err != nil || msg == nil {
+				return nil
+			}
 		} else {
 			username := match[1]
 			id, err := strconv.Atoi(match[2])
@@ -157,8 +167,15 @@ func DownloadHandle(m *telegram.NewMessage) error {
 				return nil
 			}
 			r = msgX
+			if r == nil || r.File == nil {
+				m.Reply("Not a file.")
+				return nil
+			}
 			fn = r.File.Name
-			msg, _ = m.Reply("Downloading... (from " + username + " " + strconv.Itoa(id) + ")")
+			msg, err = m.Reply("Downloading... (from " + username + " " + strconv.Itoa(id) + ")")
+			if err != nil || msg == nil {
+				return nil
+			}
 		}
 	}
 
@@ -176,8 +193,8 @@ func DownloadHandle(m *telegram.NewMessage) error {
 		cancelMutex.Unlock()
 	}()
 
-	if fi, err := r.Download(&telegram.DownloadOptions{
-		ProgressManager: telegram.NewProgressManager(5).SetMessage(msg),
+	if fi, err := r.Download(&tg.DownloadOptions{
+		ProgressManager: tg.NewProgressManager(5).SetMessage(msg),
 		FileName:        fn,
 		Ctx:             ctx,
 		Delay:           150,
@@ -196,7 +213,7 @@ func DownloadHandle(m *telegram.NewMessage) error {
 	return nil
 }
 
-func CancelDownloadHandle(m *telegram.NewMessage) error {
+func CancelDownloadHandle(m *tg.NewMessage) error {
 	if !m.IsReply() {
 		m.Reply("Reply to a download message to cancel it")
 		return nil
@@ -222,7 +239,7 @@ func CancelDownloadHandle(m *telegram.NewMessage) error {
 	return nil
 }
 
-func FileInfoHandle(m *telegram.NewMessage) error {
+func FileInfoHandle(m *tg.NewMessage) error {
 	if !m.IsReply() {
 		m.Reply("Reply to a file to get its info")
 		return nil
@@ -241,6 +258,7 @@ func FileInfoHandle(m *telegram.NewMessage) error {
 		FileID     string
 		Attributes map[string]string
 	}
+	fi.Attributes = make(map[string]string)
 
 	if r.File != nil {
 		fi.FileName = r.File.Name
@@ -249,37 +267,37 @@ func FileInfoHandle(m *telegram.NewMessage) error {
 	}
 
 	switch m := r.Message.Media.(type) {
-	case *telegram.MessageMediaDocument:
+	case *tg.MessageMediaDocument:
 		fi.Type = "Document"
-		for _, attr := range m.Document.(*telegram.DocumentObj).Attributes {
+		for _, attr := range m.Document.(*tg.DocumentObj).Attributes {
 			switch a := attr.(type) {
-			case *telegram.DocumentAttributeVideo:
+			case *tg.DocumentAttributeVideo:
 				fi.Type = "Video"
 				fi.Attributes["Duration"] = strconv.Itoa(int(a.Duration)) + " seconds"
 				fi.Attributes["Width"] = strconv.Itoa(int(a.W)) + " px"
 				fi.Attributes["Height"] = strconv.Itoa(int(a.H)) + " px"
-			case *telegram.DocumentAttributeAudio:
+			case *tg.DocumentAttributeAudio:
 				fi.Type = "Audio"
 				fi.Attributes["Duration"] = strconv.Itoa(int(a.Duration)) + " seconds"
 				fi.Attributes["Title"] = a.Title
 				fi.Attributes["Performer"] = a.Performer
 				fi.Attributes["Voice"] = strconv.FormatBool(a.Voice)
-			case *telegram.DocumentAttributeAnimated:
+			case *tg.DocumentAttributeAnimated:
 				fi.Type = "Animated"
-			case *telegram.DocumentAttributeSticker:
+			case *tg.DocumentAttributeSticker:
 				fi.Type = "Sticker"
 				fi.Attributes["Alt"] = a.Alt
 			}
 		}
-	case *telegram.MessageMediaPhoto:
+	case *tg.MessageMediaPhoto:
 		fi.Type = "Photo"
-	case *telegram.MessageMediaPoll:
+	case *tg.MessageMediaPoll:
 		fi.Type = "Poll"
-	case *telegram.MessageMediaGeo:
+	case *tg.MessageMediaGeo:
 		fi.Type = "Geo"
-		fi.Attributes["AccuracyRadius"] = strconv.Itoa(int(m.Geo.(*telegram.GeoPointObj).AccuracyRadius)) + " meters"
-		fi.Attributes["Latitude"] = strconv.FormatFloat(m.Geo.(*telegram.GeoPointObj).Lat, 'f', 6, 64)
-		fi.Attributes["Longitude"] = strconv.FormatFloat(m.Geo.(*telegram.GeoPointObj).Long, 'f', 6, 64)
+		fi.Attributes["AccuracyRadius"] = strconv.Itoa(int(m.Geo.(*tg.GeoPointObj).AccuracyRadius)) + " meters"
+		fi.Attributes["Latitude"] = strconv.FormatFloat(m.Geo.(*tg.GeoPointObj).Lat, 'f', 6, 64)
+		fi.Attributes["Longitude"] = strconv.FormatFloat(m.Geo.(*tg.GeoPointObj).Long, 'f', 6, 64)
 	default:
 		fi.Type = "Unknown"
 	}

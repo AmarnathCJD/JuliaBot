@@ -2,9 +2,6 @@ package extras
 
 import (
 	"fmt"
-	tg "github.com/amarnathcjd/gogram/telegram"
-	"github.com/fogleman/gg"
-	"golang.org/x/image/font/basicfont"
 	"html"
 	"image"
 	"image/color"
@@ -14,6 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	tg "github.com/amarnathcjd/gogram/telegram"
+	"github.com/fogleman/gg"
+	"golang.org/x/image/font/basicfont"
 )
 
 // === from meme.go ===
@@ -109,9 +110,9 @@ func memeStripQuotes(s string) string {
 }
 
 func memeSkyGradientBg(dc *gg.Context, w, h int) {
-	top := color.RGBA{0x87, 0xce, 0xeb, 0xff}
-	mid := color.RGBA{0xb0, 0xe0, 0xff, 0xff}
-	bottom := color.RGBA{0xe6, 0xf4, 0xff, 0xff}
+	top := color.RGBA{R: 0x87, G: 0xce, B: 0xeb}
+	mid := color.RGBA{R: 0xb0, G: 0xe0, B: 0xff}
+	bottom := color.RGBA{R: 0xe6, G: 0xf4, B: 0xff}
 	for y := 0; y < h; y++ {
 		t := float64(y) / float64(h-1)
 		var r, g, b float64
@@ -394,6 +395,7 @@ func registerMemeHandlers() {
 func initFromSrc_meme_0_1() {
 	modules.QueueHandlerRegistration(registerMemeHandlers)
 }
+
 // === from meme_generator.go ===
 var dramaMemeRng = rand.New(rand.NewSource(time.Now().UnixNano()))
 

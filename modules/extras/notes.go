@@ -21,12 +21,33 @@ import (
 // Variable replacements supported in notes
 var variableReplacements = map[string]func(*tg.NewMessage) string{
 	"{mention}": func(m *tg.NewMessage) string {
+		if m.Sender == nil {
+			return ""
+		}
 		return fmt.Sprintf("<a href='tg://user?id=%d'>%s</a>", m.SenderID(), m.Sender.FirstName)
 	},
-	"{firstname}": func(m *tg.NewMessage) string { return m.Sender.FirstName },
-	"{lastname}":  func(m *tg.NewMessage) string { return m.Sender.LastName },
-	"{fullname}":  func(m *tg.NewMessage) string { return m.Sender.FirstName + " " + m.Sender.LastName },
+	"{firstname}": func(m *tg.NewMessage) string {
+		if m.Sender == nil {
+			return ""
+		}
+		return m.Sender.FirstName
+	},
+	"{lastname}": func(m *tg.NewMessage) string {
+		if m.Sender == nil {
+			return ""
+		}
+		return m.Sender.LastName
+	},
+	"{fullname}": func(m *tg.NewMessage) string {
+		if m.Sender == nil {
+			return ""
+		}
+		return m.Sender.FirstName + " " + m.Sender.LastName
+	},
 	"{username}": func(m *tg.NewMessage) string {
+		if m.Sender == nil {
+			return ""
+		}
 		if m.Sender.Username != "" {
 			return "@" + m.Sender.Username
 		}
@@ -570,16 +591,6 @@ func SaveTempNoteHandler(m *tg.NewMessage) error {
 	return nil
 }
 
-func formatDurationv2(d time.Duration) string {
-	if d < time.Minute {
-		return fmt.Sprintf("%.0f seconds", d.Seconds())
-	} else if d < time.Hour {
-		return fmt.Sprintf("%.0f minutes", d.Minutes())
-	} else if d < 24*time.Hour {
-		return fmt.Sprintf("%.1f hours", d.Hours())
-	}
-	return fmt.Sprintf("%.1f days", d.Hours()/24)
-}
 
 func registerNoteHandlers() {
 	c := modules.Client

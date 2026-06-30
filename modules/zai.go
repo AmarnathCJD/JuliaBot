@@ -39,7 +39,6 @@ type zaiSession struct {
 	deviceID  string
 	convID    string
 	expiry    time.Time
-	lastBotID int32
 }
 
 var (

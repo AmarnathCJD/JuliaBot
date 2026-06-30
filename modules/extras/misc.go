@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/amarnathcjd/gogram/telegram"
 	tg "github.com/amarnathcjd/gogram/telegram"
 	modules "main/modules"
 )
 
-func Gban(m *telegram.NewMessage) error {
+func Gban(m *tg.NewMessage) error {
 	user, reason, err := modules.GetUserFromContext(m)
 	if err != nil {
 		m.Reply("Error: " + err.Error())
@@ -18,8 +17,8 @@ func Gban(m *telegram.NewMessage) error {
 	}
 	message, _ := m.Reply("Enforcing global ban...")
 	done := 0
-	m.Client.Broadcast(context.Background(), nil, func(c telegram.Chat) error {
-		_, err := m.Client.EditBanned(c, user, &telegram.BannedOptions{Ban: true})
+	m.Client.Broadcast(context.Background(), nil, func(c tg.Chat) error {
+		_, err := m.Client.EditBanned(c, user, &tg.BannedOptions{Ban: true})
 		if err == nil {
 			done++
 		}
@@ -30,7 +29,7 @@ func Gban(m *telegram.NewMessage) error {
 	return nil
 }
 
-func Ungban(m *telegram.NewMessage) error {
+func Ungban(m *tg.NewMessage) error {
 	user, _, err := modules.GetUserFromContext(m)
 	if err != nil {
 		m.Reply("Error: " + err.Error())
@@ -38,8 +37,8 @@ func Ungban(m *telegram.NewMessage) error {
 	}
 	message, _ := m.Reply("Removing global ban...")
 	done := 0
-	m.Client.Broadcast(context.Background(), nil, func(c telegram.Chat) error {
-		_, err := m.Client.EditBanned(c, user, &telegram.BannedOptions{Ban: false})
+	m.Client.Broadcast(context.Background(), nil, func(c tg.Chat) error {
+		_, err := m.Client.EditBanned(c, user, &tg.BannedOptions{Ban: false})
 		if err == nil {
 			done++
 		}
@@ -49,7 +48,7 @@ func Ungban(m *telegram.NewMessage) error {
 	return nil
 }
 
-func NightModeHandler(m *telegram.NewMessage) error {
+func NightModeHandler(m *tg.NewMessage) error {
 	if !modules.IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 		m.Reply("You need Change Info rights to use this command")
 		return nil
@@ -80,7 +79,7 @@ func NightModeHandler(m *telegram.NewMessage) error {
 
 	current := chat.DefaultBannedRights
 	if current == nil {
-		current = &telegram.ChatBannedRights{}
+		current = &tg.ChatBannedRights{}
 	}
 
 	current.SendMessages = enable

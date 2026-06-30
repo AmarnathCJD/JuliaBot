@@ -1,19 +1,16 @@
 package main
 
 import (
-	"encoding/base64"
 	"io"
 	"log"
 	"main/modules"
 	"main/modules/db"
-	_ "main/modules/extras" // side-effect: each extras command file registers its handler via init()
+	_ "main/modules/extras"
 	"net"
 	"net/http"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
-	"unicode"
 
 	tg "github.com/amarnathcjd/gogram/telegram"
 	_ "github.com/joho/godotenv/autoload"
@@ -24,16 +21,7 @@ import (
 var ownerId int64 = 0
 var LoadModules = os.Getenv("ENV") != "development"
 
-var aesEncryptedTextRegex = regexp.MustCompile(`(?i)^(?:U2FsdGVkX1[0-9A-Za-z+/=]{8,}|(?:[0-9A-F]{2}){16,}|[A-Za-z0-9+/]{16,}={0,2})$`)
 
-func containsNonEnglishLetters(text string) bool {
-	for _, r := range text {
-		if unicode.IsLetter(r) && r > unicode.MaxASCII {
-			return true
-		}
-	}
-	return false
-}
 
 func main() {
 	logZap, err := os.OpenFile("log.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
@@ -83,10 +71,6 @@ func main() {
 	client.Logger.Info("Bot stopped")
 }
 
-func b64toBytes(s string) []byte {
-	a, _ := base64.StdEncoding.DecodeString(s)
-	return a
-}
 
 func buildSocksProxy() *tg.Socks5Proxy {
 	raw := strings.TrimSpace(os.Getenv("PROXY"))

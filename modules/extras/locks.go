@@ -214,14 +214,6 @@ func saveLocks(chatID int64, m map[string]bool) error {
 	return nil
 }
 
-func anyLockedExceptAll(locks map[string]bool) bool {
-	for k, v := range locks {
-		if v && k != "all" {
-			return true
-		}
-	}
-	return false
-}
 
 func messageHasURL(m *tg.NewMessage) bool {
 	if m.Message != nil {

@@ -17,6 +17,7 @@ const (
 )
 
 type Warn struct {
+	ID        string    `json:"id"`
 	Reason    string    `json:"reason"`
 	AdminID   int64     `json:"admin_id"`
 	Timestamp time.Time `json:"timestamp"`
@@ -186,7 +187,7 @@ func GetWarnSettings(chatID int64) (*WarnSettings, error) {
 
 func itob(v int) []byte {
 	b := make([]byte, 8)
-	for i := uint(0); i < 8; i++ {
+	for i := range uint(8) {
 		b[7-i] = byte(v >> (i * 8))
 	}
 	return b

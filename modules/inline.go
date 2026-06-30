@@ -255,7 +255,11 @@ func fetchPinterestImages(query string, lim int, offset int) ([]string, error) {
 		if offset > len(imageUrls) {
 			return nil, fmt.Errorf("no more images")
 		}
-		imageUrls = imageUrls[offset : offset+lim]
+		end := offset + lim
+		if end > len(imageUrls) {
+			end = len(imageUrls)
+		}
+		imageUrls = imageUrls[offset:end]
 	}
 
 	return imageUrls, nil

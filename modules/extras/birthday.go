@@ -9,11 +9,13 @@ import (
 	"strings"
 	"time"
 
-	tg "github.com/amarnathcjd/gogram/telegram"
 	"main/modules/db"
 
-	"go.etcd.io/bbolt"
+	tg "github.com/amarnathcjd/gogram/telegram"
+
 	modules "main/modules"
+
+	"go.etcd.io/bbolt"
 )
 
 type birthdayEntry struct {
@@ -166,6 +168,9 @@ func formatBirthdayDate(day, month, year int) string {
 }
 
 func BirthdayHandler(m *tg.NewMessage) error {
+	if m.Sender == nil {
+		return nil
+	}
 	args := strings.TrimSpace(m.Args())
 	if args == "" {
 		entry, _ := loadBirthday(m.SenderID())
@@ -310,9 +315,10 @@ func UpcomingBirthdaysHandler(m *tg.NewMessage) error {
 			name = strconv.FormatInt(e.UserID, 10)
 		}
 		when := fmt.Sprintf("in %d day(s)", days)
-		if days == 0 {
+		switch days {
+		case 0:
 			when = "today"
-		} else if days == 1 {
+		case 1:
 			when = "tomorrow"
 		}
 		sb.WriteString(fmt.Sprintf(" • <b>%s</b> — %s (%s)\n", html.EscapeString(name), formatBirthdayDate(e.Day, e.Month, e.Year), when))

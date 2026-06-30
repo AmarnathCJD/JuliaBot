@@ -3,7 +3,6 @@ package modules
 import (
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"os/exec"
 	"runtime"
@@ -154,13 +153,6 @@ func HumanBytes(bytes uint64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-func trimString(s string, length int) string {
-	if len(s) > length {
-		return s[:length] + ""
-	}
-
-	return s
-}
 
 func IsUserAdmin(bot *telegram.Client, userID int64, chatID int64, right string) bool {
 	member, err := bot.GetChatMember(chatID, userID)
@@ -406,29 +398,7 @@ func (u *UserDateEstimator) FormatTime(unixTime int64) (string, string) {
 	return formattedDate, fmt.Sprintf("%d years ago", years)
 }
 
-func polyfit(x, y []float64, degree int) []float64 {
-	n := len(x)
-	coeffs := make([]float64, degree+1)
 
-	for i := 0; i <= degree; i++ {
-		for j := 0; j < n; j++ {
-			pow := math.Pow(x[j], float64(i))
-			for k := 0; k <= degree; k++ {
-				coeffs[k] += pow * math.Pow(x[j], float64(k)) * y[j]
-			}
-		}
-	}
-
-	return coeffs
-}
-
-func polyeval(coeffs []float64, x float64) float64 {
-	result := 0.0
-	for i, c := range coeffs {
-		result += c * math.Pow(x, float64(i))
-	}
-	return result
-}
 
 func GetPeerDisplayName(client *telegram.Client, peer telegram.InputPeer) string {
 	switch p := peer.(type) {

@@ -278,9 +278,16 @@ func BlacklistWatcher(m *tg.NewMessage) error {
 	if m.IsPrivate() {
 		return nil
 	}
+	if m.Sender == nil {
+		return nil
+	}
 
 	entries, err := db.GetBlacklist(m.ChatID())
 	if err != nil || len(entries) == 0 {
+		return nil
+	}
+
+	if modules.IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "") {
 		return nil
 	}
 

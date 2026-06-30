@@ -1,4 +1,4 @@
-package extras
+package modules
 
 import (
 	"encoding/binary"
@@ -19,8 +19,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	modules "main/modules"
 
 	tg "github.com/amarnathcjd/gogram/telegram"
 	"github.com/fogleman/gg"
@@ -887,7 +885,7 @@ func quoteBuildLayout(measureCtx *gg.Context, scene quoteScene, bgOne, bgTwo col
 	return L
 }
 
-func quoteDrawScene(dc *gg.Context, scene quoteScene, bubbleX, bubbleY float64, L quoteLayout, bgOne, bgTwo color.RGBA) {
+func quoteDrawScene(dc *gg.Context, scene quoteScene, bubbleX, bubbleY, canvasH float64, L quoteLayout, bgOne, bgTwo color.RGBA) {
 	s := L.s
 
 	bubbleW := L.bubbleW
@@ -1120,7 +1118,7 @@ func quoteRenderImage(scene quoteScene, bgArg string, scale float64) (string, er
 
 	rgba := image.NewRGBA(image.Rect(0, 0, canvasW, canvasH))
 	dc := gg.NewContextForRGBA(rgba)
-	quoteDrawScene(dc, scene, bubblePosX, 0, L, bgOne, bgTwo)
+	quoteDrawScene(dc, scene, bubblePosX, 0, float64(canvasH), L, bgOne, bgTwo)
 
 	outPath := filepath.Join(os.TempDir(), fmt.Sprintf("quote_%d.png", time.Now().UnixNano()))
 	f, err := os.Create(outPath)
@@ -1468,7 +1466,7 @@ func QuotesListHandler(m *tg.NewMessage) error {
 
 func QuoteDeleteHandler(m *tg.NewMessage) error {
 	if !m.IsPrivate() {
-		if !modules.IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
+		if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "change_info") {
 			m.Reply("<b>Permission denied.</b> Admins only.")
 			return nil
 		}
@@ -1559,7 +1557,7 @@ func QuotesSearchHandler(m *tg.NewMessage) error {
 }
 
 func registerQuotesHandlers() {
-	c := modules.Client
+	c := Client
 	c.On("cmd:q", QuoteImageHandler)
 	c.On("cmd:qhd", QuoteHDImageHandler)
 	c.On("cmd:qsave", QuoteSaveHandler)
@@ -1569,5 +1567,5 @@ func registerQuotesHandlers() {
 }
 
 func init() {
-	modules.QueueHandlerRegistration(registerQuotesHandlers)
+	QueueHandlerRegistration(registerQuotesHandlers)
 }

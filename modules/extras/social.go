@@ -78,7 +78,7 @@ func reverseX(s string) string {
 	return string(runes)
 }
 
-func decodeX(encodedString string, base int, alphabet string, shift, offset, length int) string {
+func decodeX(encodedString string, _ int, alphabet string, shift, offset int, _ int) string {
 	var decoded strings.Builder
 
 	for i := 0; i < len(encodedString); {
@@ -186,9 +186,10 @@ func fetchInstagramMedia(url string) (*SnapResponse, error) {
 			mediaType := match[1]
 			mediaURL := strings.ReplaceAll(match[2], "\\", "")
 
-			if mediaType == "image" {
+			switch mediaType {
+			case "image":
 				images = append(images, mediaURL)
-			} else if mediaType == "video" {
+			case "video":
 				videos = append(videos, mediaURL)
 			}
 		}

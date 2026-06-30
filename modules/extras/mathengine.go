@@ -7,8 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	tg "github.com/amarnathcjd/gogram/telegram"
 	modules "main/modules"
+
+	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
 type mathToken struct {
@@ -234,11 +235,6 @@ func CalcHandler(m *tg.NewMessage) error {
 	return err
 }
 
-type linTerm struct {
-	coef  float64
-	isVar bool
-}
-
 func eqParseSide(side string, varName byte) (float64, float64, error) {
 	side = strings.ReplaceAll(side, " ", "")
 	if side == "" {
@@ -251,12 +247,13 @@ func eqParseSide(side string, varName byte) (float64, float64, error) {
 	i := 0
 	for i < len(side) {
 		sign := 1.0
-		if side[i] == '+' {
+		switch side[i] {
+		case '+':
 			i++
-		} else if side[i] == '-' {
+		case '-':
 			sign = -1.0
 			i++
-		} else {
+		default:
 			return 0, 0, fmt.Errorf("unexpected '%c'", side[i])
 		}
 		j := i

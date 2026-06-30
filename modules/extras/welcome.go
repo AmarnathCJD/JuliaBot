@@ -67,19 +67,19 @@ func SetWelcomeHandler(m *tg.NewMessage) error {
 		}
 
 		if reply.IsMedia() {
-			if reply.Photo() != nil {
+			if reply.Photo() != nil && reply.File != nil {
 				welcomeMsg.MediaType = "photo"
 				welcomeMsg.FileID = reply.File.FileID
-			} else if reply.Document() != nil {
+			} else if reply.Document() != nil && reply.File != nil {
 				welcomeMsg.MediaType = "document"
 				welcomeMsg.FileID = reply.File.FileID
-			} else if reply.Video() != nil {
+			} else if reply.Video() != nil && reply.File != nil {
 				welcomeMsg.MediaType = "video"
 				welcomeMsg.FileID = reply.File.FileID
-			} else if reply.Animation() != nil {
+			} else if reply.Animation() != nil && reply.File != nil {
 				welcomeMsg.MediaType = "animation"
 				welcomeMsg.FileID = reply.File.FileID
-			} else if reply.Sticker() != nil {
+			} else if reply.Sticker() != nil && reply.File != nil {
 				welcomeMsg.MediaType = "sticker"
 				welcomeMsg.FileID = reply.File.FileID
 			}

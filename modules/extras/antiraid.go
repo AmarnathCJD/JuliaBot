@@ -206,6 +206,12 @@ func AntiraidParticipantHandler(p *tg.ParticipantUpdate) error {
 	now := time.Now()
 
 	if settings.LockedUntil > now.Unix() {
+		if p.User == nil || p.User.Bot {
+			return nil
+		}
+		if modules.IsUserAdmin(p.Client, p.User.ID, chatID, "") {
+			return nil
+		}
 		user, err := p.Client.ResolvePeer(p.User.ID)
 		if err == nil && user != nil {
 			_, _ = p.Client.EditBanned(chatID, user, &tg.BannedOptions{Ban: true})

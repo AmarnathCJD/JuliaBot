@@ -293,7 +293,7 @@ func ReportHandler(m *tg.NewMessage) error {
 			continue
 		}
 		seen[u.ID] = true
-		mentions = append(mentions, fmt.Sprintf("<a href=\"tg://user?id=%d\">⁣</a>", u.ID))
+		mentions = append(mentions, fmt.Sprintf("<a href=\"tg://user?id=%d\">\u2063</a>", u.ID))
 	}
 
 	var sb strings.Builder
