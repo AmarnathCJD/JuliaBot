@@ -320,7 +320,7 @@ func perfomEval(code string, m *tg.NewMessage, imports []string) (string, bool) 
 		if err != nil {
 			return fmt.Sprintf("❌ <b>Execution Error</b>\n<pre>%s</pre>", err.Error()), false
 		}
-		return "✅ <b>Eval Complete</b>\n<i>No output returned</i>", false
+		return "<i>✓ eval executed successfully</i>", false
 	}
 
 	if stdout != "" {
@@ -330,12 +330,16 @@ func perfomEval(code string, m *tg.NewMessage, imports []string) (string, bool) 
 			output = strings.TrimSpace(parts[1])
 		}
 
+		if output == "" {
+			return "<i>✓ eval executed successfully</i>", false
+		}
+
 		if len(output) > 4000 {
 			os.WriteFile("tmp/eval_out.txt", []byte(output), 0644)
 			return "tmp/eval_out.txt", true
 		}
 
-		return fmt.Sprintf("✅ <b>Eval Output</b>\n<pre>%s</pre>", output), false
+		return fmt.Sprintf("<pre>%s</pre>", output), false
 	}
 
 	if stderr != "" {
@@ -353,7 +357,7 @@ func perfomEval(code string, m *tg.NewMessage, imports []string) (string, bool) 
 		return fmt.Sprintf("❌ <b>Compilation Error</b>\n<pre>%s</pre>", errMsg), false
 	}
 
-	return "✅ <b>Eval Complete</b>\n<i>No output returned</i>", false
+	return "<i>✓ eval executed successfully</i>", false
 }
 
 func JsonHandle(m *tg.NewMessage) error {
