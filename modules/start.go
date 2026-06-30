@@ -753,7 +753,6 @@ func registerStartHandlers() {
 	c.On("cmd:sys", GatherSystemInfo)
 	c.On("cmd:info", UserHandle)
 	c.On("cmd:ud", UDHandler)
-	c.On("cmd:tr", TranslateHandler)
 }
 
 func init() {

@@ -40,7 +40,7 @@ func PromoteUserHandle(m *tg.NewMessage) error {
 	}})
 
 	if err != nil || !done {
-		m.Reply(adminFriendlyError(err, "promote"))
+		m.Reply(AdminFriendlyError(err, "promote"))
 		return nil
 	}
 
@@ -140,7 +140,7 @@ func DemoteUserHandle(m *tg.NewMessage) error {
 
 	done, err := m.Client.EditAdmin(m.ChatID(), user, &tg.AdminOptions{IsAdmin: false})
 	if err != nil || !done {
-		m.Reply(adminFriendlyError(err, "demote"))
+		m.Reply(AdminFriendlyError(err, "demote"))
 		return nil
 	}
 
@@ -162,7 +162,7 @@ func BanUserHandle(m *tg.NewMessage) error {
 
 	msg, opErr := performBan(m.Client, m.ChatID(), user, reason, m.SenderID())
 	if opErr != nil {
-		m.Reply(adminFriendlyError(opErr, "ban"))
+		m.Reply(AdminFriendlyError(opErr, "ban"))
 		return nil
 	}
 
@@ -211,7 +211,7 @@ func UnbanUserHandle(m *tg.NewMessage) error {
 
 	msg, opErr := performUnban(m.Client, m.ChatID(), user)
 	if opErr != nil {
-		m.Reply(adminFriendlyError(opErr, "unban"))
+		m.Reply(AdminFriendlyError(opErr, "unban"))
 		return nil
 	}
 	m.Reply(msg)
@@ -246,7 +246,7 @@ func KickUserHandle(m *tg.NewMessage) error {
 
 	msg, opErr := performKick(m.Client, m.ChatID(), user, reason)
 	if opErr != nil {
-		m.Reply(adminFriendlyError(opErr, "kick"))
+		m.Reply(AdminFriendlyError(opErr, "kick"))
 		return nil
 	}
 	m.Reply(msg)
@@ -307,7 +307,7 @@ func FullPromoteHandle(m *tg.NewMessage) error {
 	}})
 
 	if err != nil || !done {
-		m.Reply(adminFriendlyError(err, "promote"))
+		m.Reply(AdminFriendlyError(err, "promote"))
 		return nil
 	}
 
@@ -342,7 +342,7 @@ func TbanUserHandle(m *tg.NewMessage) error {
 
 	msg, opErr := performTban(m.Client, m.ChatID(), user, parts[0], reason, m.SenderID())
 	if opErr != nil {
-		m.Reply(adminFriendlyError(opErr, "temp-ban"))
+		m.Reply(AdminFriendlyError(opErr, "temp-ban"))
 		return nil
 	}
 
@@ -361,7 +361,7 @@ func performTban(client *tg.Client, chatID int64, user tg.InputPeer, durationStr
 		return "", errors.New("missing bot rights")
 	}
 
-	duration, err := parseAdminDuration(durationStr)
+	duration, err := ParseAdminDuration(durationStr)
 	if err != nil || duration == 0 {
 		return "", errors.New("invalid duration")
 	}
@@ -410,7 +410,7 @@ func TmuteUserHandle(m *tg.NewMessage) error {
 
 	msg, opErr := performTmute(m.Client, m.ChatID(), user, parts[0], reason, m.SenderID())
 	if opErr != nil {
-		m.Reply(adminFriendlyError(opErr, "temp-mute"))
+		m.Reply(AdminFriendlyError(opErr, "temp-mute"))
 		return nil
 	}
 
@@ -429,7 +429,7 @@ func performTmute(client *tg.Client, chatID int64, user tg.InputPeer, durationSt
 		return "", errors.New("missing bot rights")
 	}
 
-	duration, err := parseAdminDuration(durationStr)
+	duration, err := ParseAdminDuration(durationStr)
 	if err != nil || duration == 0 {
 		return "", errors.New("invalid duration")
 	}
@@ -468,7 +468,7 @@ func MuteUserHandle(m *tg.NewMessage) error {
 
 	msg, opErr := performMute(m.Client, m.ChatID(), user, reason, m.SenderID())
 	if opErr != nil {
-		m.Reply(adminFriendlyError(opErr, "mute"))
+		m.Reply(AdminFriendlyError(opErr, "mute"))
 		return nil
 	}
 
@@ -517,7 +517,7 @@ func UnmuteUserHandle(m *tg.NewMessage) error {
 
 	msg, opErr := performUnmute(m.Client, m.ChatID(), user)
 	if opErr != nil {
-		m.Reply(adminFriendlyError(opErr, "unmute"))
+		m.Reply(AdminFriendlyError(opErr, "unmute"))
 		return nil
 	}
 	m.Reply(msg)
@@ -542,25 +542,25 @@ func SbanUserHandle(m *tg.NewMessage) error {
 	m.Delete()
 
 	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
-		replyTemp(m, "You don't have permission to do that here.", 5)
+		ReplyTemp(m, "You don't have permission to do that here.", 5)
 		return nil
 	}
 	if !CanBot(m.Client, m.Channel, "ban") {
-		replyTemp(m, "I need admin permission to ban users in this chat.", 5)
+		ReplyTemp(m, "I need admin permission to ban users in this chat.", 5)
 		return nil
 	}
 
 	user, _, err := GetUserFromContext(m)
 	if err != nil {
-		replyTemp(m, "I couldn't find who to ban. "+adminUsage("ban"), 6)
+		ReplyTemp(m, "I couldn't find who to ban. "+adminUsage("ban"), 6)
 		return nil
 	}
 	_, opErr := performBan(m.Client, m.ChatID(), user, "", m.SenderID())
 	if opErr != nil {
-		replyTemp(m, adminFriendlyError(opErr, "ban"), 6)
+		ReplyTemp(m, AdminFriendlyError(opErr, "ban"), 6)
 		return nil
 	}
-	replyTemp(m, "Done.", 3)
+	ReplyTemp(m, "Done.", 3)
 	return nil
 }
 
@@ -568,25 +568,25 @@ func SmuteUserHandle(m *tg.NewMessage) error {
 	m.Delete()
 
 	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
-		replyTemp(m, "You don't have permission to do that here.", 5)
+		ReplyTemp(m, "You don't have permission to do that here.", 5)
 		return nil
 	}
 	if !CanBot(m.Client, m.Channel, "ban") {
-		replyTemp(m, "I need admin permission to mute users in this chat.", 5)
+		ReplyTemp(m, "I need admin permission to mute users in this chat.", 5)
 		return nil
 	}
 
 	user, _, err := GetUserFromContext(m)
 	if err != nil {
-		replyTemp(m, "I couldn't find who to mute. "+adminUsage("mute"), 6)
+		ReplyTemp(m, "I couldn't find who to mute. "+adminUsage("mute"), 6)
 		return nil
 	}
 	_, opErr := performMute(m.Client, m.ChatID(), user, "", m.SenderID())
 	if opErr != nil {
-		replyTemp(m, adminFriendlyError(opErr, "mute"), 6)
+		ReplyTemp(m, AdminFriendlyError(opErr, "mute"), 6)
 		return nil
 	}
-	replyTemp(m, "Done.", 3)
+	ReplyTemp(m, "Done.", 3)
 	return nil
 }
 
@@ -594,25 +594,25 @@ func SkickUserHandle(m *tg.NewMessage) error {
 	m.Delete()
 
 	if !IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "ban") {
-		replyTemp(m, "You don't have permission to do that here.", 5)
+		ReplyTemp(m, "You don't have permission to do that here.", 5)
 		return nil
 	}
 	if !CanBot(m.Client, m.Channel, "ban") {
-		replyTemp(m, "I need admin permission to kick users in this chat.", 5)
+		ReplyTemp(m, "I need admin permission to kick users in this chat.", 5)
 		return nil
 	}
 
 	user, _, err := GetUserFromContext(m)
 	if err != nil {
-		replyTemp(m, "I couldn't find who to kick. "+adminUsage("kick"), 6)
+		ReplyTemp(m, "I couldn't find who to kick. "+adminUsage("kick"), 6)
 		return nil
 	}
 	_, opErr := performKick(m.Client, m.ChatID(), user, "")
 	if opErr != nil {
-		replyTemp(m, adminFriendlyError(opErr, "kick"), 6)
+		ReplyTemp(m, AdminFriendlyError(opErr, "kick"), 6)
 		return nil
 	}
-	replyTemp(m, "Done.", 3)
+	ReplyTemp(m, "Done.", 3)
 	return nil
 }
 
@@ -668,7 +668,7 @@ func DBanUserHandle(m *tg.NewMessage) error {
 	m.Client.DeleteMessages(m.ChatID(), []int32{int32(reply.ID)})
 	msg, opErr := performBan(m.Client, m.ChatID(), peer, strings.TrimSpace(m.Args()), m.SenderID())
 	if opErr != nil {
-		m.Reply(adminFriendlyError(opErr, "ban"))
+		m.Reply(AdminFriendlyError(opErr, "ban"))
 		return nil
 	}
 	m.Reply(msg)
@@ -702,7 +702,7 @@ func DMuteUserHandle(m *tg.NewMessage) error {
 	m.Client.DeleteMessages(m.ChatID(), []int32{int32(reply.ID)})
 	msg, opErr := performMute(m.Client, m.ChatID(), peer, strings.TrimSpace(m.Args()), m.SenderID())
 	if opErr != nil {
-		m.Reply(adminFriendlyError(opErr, "mute"))
+		m.Reply(AdminFriendlyError(opErr, "mute"))
 		return nil
 	}
 	m.Reply(msg)
@@ -736,7 +736,7 @@ func DKickUserHandle(m *tg.NewMessage) error {
 	m.Client.DeleteMessages(m.ChatID(), []int32{int32(reply.ID)})
 	msg, opErr := performKick(m.Client, m.ChatID(), peer, strings.TrimSpace(m.Args()))
 	if opErr != nil {
-		m.Reply(adminFriendlyError(opErr, "kick"))
+		m.Reply(AdminFriendlyError(opErr, "kick"))
 		return nil
 	}
 	m.Reply(msg)
@@ -770,7 +770,7 @@ func PinMessageHandle(m *tg.NewMessage) error {
 
 	_, err = m.Client.PinMessage(m.ChatID(), int32(reply.ID), &tg.PinOptions{Silent: !notify})
 	if err != nil {
-		m.Reply(adminFriendlyError(err, "pin message"))
+		m.Reply(AdminFriendlyError(err, "pin message"))
 		return nil
 	}
 	m.Reply("Done. Message pinned.")
@@ -800,7 +800,7 @@ func UnpinMessageHandle(m *tg.NewMessage) error {
 
 	_, err = m.Client.UnpinMessage(m.ChatID(), int32(reply.ID))
 	if err != nil {
-		m.Reply(adminFriendlyError(err, "unpin message"))
+		m.Reply(AdminFriendlyError(err, "unpin message"))
 		return nil
 	}
 	m.Reply("Done. Message unpinned.")
@@ -961,7 +961,7 @@ func LockHandle(m *tg.NewMessage) error {
 		peerChannel, _ := m.Client.ResolvePeer(m.ChatID())
 		_, err := m.Client.MessagesEditChatDefaultBannedRights(peerChannel, defaultRights)
 		if err != nil {
-			m.Reply(adminFriendlyError(err, "update chat permissions"))
+			m.Reply(AdminFriendlyError(err, "update chat permissions"))
 			return nil
 		}
 		m.Reply(lockMsg)
@@ -1063,7 +1063,7 @@ func UnlockHandle(m *tg.NewMessage) error {
 		peerChannel, _ := m.Client.ResolvePeer(m.ChatID())
 		_, err := m.Client.MessagesEditChatDefaultBannedRights(peerChannel, defaultRights)
 		if err != nil {
-			m.Reply(adminFriendlyError(err, "update chat permissions"))
+			m.Reply(AdminFriendlyError(err, "update chat permissions"))
 			return nil
 		}
 		m.Reply(unlockMsg)
@@ -1233,7 +1233,7 @@ func AdminVerifyCallback(c *tg.CallbackQuery) error {
 	}
 
 	if opErr != nil {
-		c.Answer(adminFriendlyError(opErr, action), &tg.CallbackOptions{Alert: true})
+		c.Answer(AdminFriendlyError(opErr, action), &tg.CallbackOptions{Alert: true})
 	} else {
 		if resultMsg != "" {
 			c.Client.SendMessage(c.ChatID, resultMsg)
@@ -1313,7 +1313,7 @@ func formatAdminDuration(d time.Duration) string {
 	return d.Round(time.Second).String()
 }
 
-func adminFriendlyError(err error, action string) string {
+func AdminFriendlyError(err error, action string) string {
 	msg := parseAdminError(err, action)
 	if msg == "" {
 		return "I couldn't do that right now. Please try again."
@@ -1321,7 +1321,7 @@ func adminFriendlyError(err error, action string) string {
 	return msg
 }
 
-func replyTemp(m *tg.NewMessage, text string, seconds int) {
+func ReplyTemp(m *tg.NewMessage, text string, seconds int) {
 	msg, err := m.Reply(text)
 	if err != nil || msg == nil || seconds <= 0 {
 		return
@@ -1373,7 +1373,7 @@ func parseAdminError(err error, action string) string {
 	}
 }
 
-func parseAdminDuration(s string) (time.Duration, error) {
+func ParseAdminDuration(s string) (time.Duration, error) {
 	s = strings.TrimSpace(strings.ToLower(s))
 	if s == "" {
 		return 0, nil
@@ -1516,11 +1516,6 @@ func registerAdminHandlers() {
 	c.On("cmd:pin", PinMessageHandle)
 	c.On("cmd:unpin", UnpinMessageHandle)
 	c.On("cmd:purge", PurgeMessagesHandle)
-	c.On("cmd:lock", LockHandle)
-	c.On("cmd:unlock", UnlockHandle)
-	c.On("cmd:locks", LocksHandle)
 	c.On("cmd:restart", RestartHandle, tg.CustomFilter(FilterOwner))
 	c.On("cmd:id", IDHandle)
-	c.On("cmd:gban", Gban, tg.CustomFilter(FilterOwner))
-	c.On("cmd:ungban", Ungban, tg.CustomFilter(FilterOwner))
 }

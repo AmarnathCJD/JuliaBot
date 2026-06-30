@@ -6,6 +6,7 @@ import (
 	"log"
 	"main/modules"
 	"main/modules/db"
+	_ "main/modules/extras" // side-effect: each extras command file registers its handler via init()
 	"net"
 	"net/http"
 	"os"

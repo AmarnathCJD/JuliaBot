@@ -7,7 +7,7 @@ import (
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
-func extractText(m *tg.NewMessage) string {
+func ExtractText(m *tg.NewMessage) string {
 	args := strings.TrimSpace(m.Args())
 	if args != "" {
 		return args
@@ -21,15 +21,15 @@ func extractText(m *tg.NewMessage) string {
 	return ""
 }
 
-var chatStatsMu sync.Mutex
+var ChatStatsMu sync.Mutex
 
 type chatStatsData struct {
 	Users map[int64]int64
 }
 
-func chatStatsLoad(chatID int64) *chatStatsData {
+func ChatStatsLoad(chatID int64) *chatStatsData {
 	return &chatStatsData{Users: map[int64]int64{}}
 }
 
-func chatStatsSave(chatID int64, m *chatStatsData) {
+func ChatStatsSave(chatID int64, m *chatStatsData) {
 }

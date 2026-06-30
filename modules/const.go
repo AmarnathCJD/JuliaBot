@@ -24,6 +24,6 @@ var fonts = []string{
 	"Swiss 721 Black Extended BT.ttf",
 }
 
-func getRandomFont() string {
+func GetRandomFont() string {
 	return fonts[rand.Intn(len(fonts))]
 }

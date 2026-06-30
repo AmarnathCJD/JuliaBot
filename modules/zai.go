@@ -391,7 +391,7 @@ func zaiRunChat(m *tg.NewMessage, prompt string) error {
 		answer = string([]rune(answer)[:4000])
 	}
 
-	out := mdToTelegramHTML(answer)
+	out := MdToTelegramHTML(answer)
 	opts := &tg.SendOptions{ParseMode: "HTML"}
 	if status != nil {
 		if _, eerr := status.Edit(out, opts); eerr != nil {

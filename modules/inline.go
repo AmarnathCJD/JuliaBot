@@ -29,7 +29,7 @@ func DogeSticker(m *telegram.NewMessage) error {
 	dc.SetRGB(1, 1, 1)
 	dc.Clear()
 
-	fontPath := "./assets/" + getRandomFont()
+	fontPath := "./assets/" + GetRandomFont()
 	if err := dc.LoadFontFace(fontPath, 85); err != nil {
 		m.Reply("failed to load font")
 		return err
@@ -74,7 +74,7 @@ func DogeStickerInline(m *telegram.InlineQuery) error {
 	dc.SetRGB(1, 1, 1)
 	dc.Clear()
 
-	fontPath := "./assets/" + getRandomFont()
+	fontPath := "./assets/" + GetRandomFont()
 	if err := dc.LoadFontFace(fontPath, 85); err != nil {
 		return err
 	}

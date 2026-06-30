@@ -473,7 +473,7 @@ func MediaInfoHandler(m *tg.NewMessage) error {
 	}
 
 	// Otherwise, post to pastebin
-	url, _, err := postToSpaceBin(mediaInfoOutput)
+	url, _, err := PostToSpaceBin(mediaInfoOutput)
 	if err != nil {
 		m.Reply("Error: " + err.Error())
 		return nil
