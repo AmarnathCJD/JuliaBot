@@ -709,10 +709,6 @@ var pcardTitles = []string{
 	"Nightscribe", "Ashenroamer",
 }
 
-var pcardAuras = []string{
-	"✨", "\U0001f30c", "\U0001f525", "\U0001f30a", "⚡", "\U0001f33f",
-	"\U0001f31a", "\U0001f320", "\U0001f308", "\U0001f4ab", "\U0001f52e", "\U0001f343",
-}
 
 var pcardAuraColors = []color.RGBA{
 	{0xFF, 0xD7, 0x54, 0xFF}, {0x8B, 0x5C, 0xF6, 0xFF},
@@ -982,9 +978,6 @@ func pcardTitleFor(userID int64) string {
 	return pcardTitles[pcardPick(userID, "title", len(pcardTitles))]
 }
 
-func pcardAuraFor(userID int64) string {
-	return pcardAuras[pcardPick(userID, "aura", len(pcardAuras))]
-}
 
 func pcardMemberSinceLegacy(userID int64) string {
 	now := time.Now().Year()
@@ -1023,6 +1016,9 @@ func pcardMemberSinceLegacy(userID int64) string {
 }
 
 func pcardMemberSince(userID int64) string {
+	if ts := modules.NewUserDateEstimator().Estimate(userID); ts > 0 {
+		return time.Unix(ts, 0).Format("Jan 2006")
+	}
 	perf := UserPerfGet(userID)
 	if perf != nil && perf.FirstSeen > 0 {
 		return time.Unix(perf.FirstSeen, 0).Format("Jan 2006")
@@ -1055,7 +1051,7 @@ func pcardFontPath(name string) string {
 }
 
 func pcardLoadFont(dc *gg.Context, size float64) bool {
-	for _, name := range []string{"NotoSans-Bold.ttf", "Inter_28pt-Bold.ttf", "NotoSans-Regular.ttf"} {
+	for _, name := range []string{"GoNotoCurrent-Bold.ttf", "GoNotoCurrent-Regular.ttf", "NotoSans-Bold.ttf", "NotoSans-Regular.ttf", "Inter_28pt-Bold.ttf"} {
 		p := pcardFontPath(name)
 		if p == "" {
 			continue
@@ -1068,28 +1064,58 @@ func pcardLoadFont(dc *gg.Context, size float64) bool {
 	return false
 }
 
+func pcardStripEmoji(s string) string {
+	if s == "" {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if pcardIsEmojiRune(r) {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return strings.TrimSpace(b.String())
+}
 
+func pcardIsEmojiRune(r rune) bool {
+	switch {
+	case r == 0x200D, r == 0xFE0F, r == 0x20E3:
+		return true
+	case r >= 0x1F000 && r <= 0x1FFFF:
+		return true
+	case r >= 0x2600 && r <= 0x27BF:
+		return true
+	case r >= 0x1F1E6 && r <= 0x1F1FF:
+		return true
+	case r >= 0x2700 && r <= 0x27BF:
+		return true
+	case r >= 0x1F900 && r <= 0x1F9FF:
+		return true
+	case r >= 0x1FA70 && r <= 0x1FAFF:
+		return true
+	case r >= 0x2300 && r <= 0x23FF:
+		return true
+	case r >= 0x25A0 && r <= 0x25FF:
+		return true
+	case r == 0x2934 || r == 0x2935, r >= 0x2B00 && r <= 0x2BFF:
+		return true
+	case r >= 0x1F3FB && r <= 0x1F3FF:
+		return true
+	}
+	return false
+}
 
 
 func pcardDrawAvatarRing(dc *gg.Context, cx, cy, r float64, pal pcardPalette, userID int64, avatarPath string) {
-	for i := 0; i < 6; i++ {
-		alpha := 25 - i*3
-		if alpha < 4 {
-			alpha = 4
-		}
-		dc.SetRGBA255(int(pal.Accent.R), int(pal.Accent.G), int(pal.Accent.B), alpha)
-		dc.DrawCircle(cx, cy, r+18+float64(i)*4)
-		dc.Fill()
-	}
+	dc.SetRGBA255(int(pal.Accent.R), int(pal.Accent.G), int(pal.Accent.B), 30)
+	dc.DrawCircle(cx, cy, r+14)
+	dc.Fill()
 
-	dc.SetRGBA255(int(pal.Accent.R), int(pal.Accent.G), int(pal.Accent.B), 255)
-	dc.SetLineWidth(6)
-	dc.DrawCircle(cx, cy, r+10)
-	dc.Stroke()
-
-	dc.SetRGBA255(int(pal.Accent2.R), int(pal.Accent2.G), int(pal.Accent2.B), 220)
-	dc.SetLineWidth(2)
-	dc.DrawCircle(cx, cy, r+16)
+	dc.SetRGBA255(int(pal.Accent.R), int(pal.Accent.G), int(pal.Accent.B), 220)
+	dc.SetLineWidth(3)
+	dc.DrawCircle(cx, cy, r+6)
 	dc.Stroke()
 
 	if avatarPath != "" {
@@ -1167,30 +1193,33 @@ func pcardDrawInitialsAvatar(dc *gg.Context, cx, cy, r float64, initials string,
 }
 
 func pcardDrawStatBar(dc *gg.Context, x, y, w, h float64, label string, value int, pal pcardPalette) {
-	pcardLoadFont(dc, 20)
-	dc.SetRGBA(1, 1, 1, 0.55)
-	dc.DrawString(label, x, y-6)
+	pcardLoadFont(dc, 18)
+	dc.SetRGBA(1, 1, 1, 0.6)
+	dc.DrawString(label, x, y-8)
 
-	pcardLoadFont(dc, 22)
-	dc.SetRGBA255(int(pal.Accent2.R), int(pal.Accent2.G), int(pal.Accent2.B), 255)
+	pcardLoadFont(dc, 18)
+	dc.SetRGBA255(int(pal.Accent2.R), int(pal.Accent2.G), int(pal.Accent2.B), 240)
 	valStr := fmt.Sprintf("%d", value)
 	vw, _ := dc.MeasureString(valStr)
-	dc.DrawString(valStr, x+w-vw, y-6)
+	dc.DrawString(valStr, x+w-vw, y-8)
 
-	dc.SetRGBA(1, 1, 1, 0.1)
+	dc.SetRGBA(1, 1, 1, 0.09)
 	dc.DrawRoundedRectangle(x, y, w, h, h/2)
 	dc.Fill()
 
-	fillW := w * float64(value) / 100.0
+	fillPct := float64(value) / 100.0
+	if fillPct < 0 {
+		fillPct = 0
+	}
+	if fillPct > 1 {
+		fillPct = 1
+	}
+	fillW := w * fillPct
 	if fillW < h {
 		fillW = h
 	}
-	dc.SetRGBA255(int(pal.Accent.R), int(pal.Accent.G), int(pal.Accent.B), 255)
+	dc.SetRGBA255(int(pal.Accent.R), int(pal.Accent.G), int(pal.Accent.B), 235)
 	dc.DrawRoundedRectangle(x, y, fillW, h, h/2)
-	dc.Fill()
-
-	dc.SetRGBA255(int(pal.Accent2.R), int(pal.Accent2.G), int(pal.Accent2.B), 255)
-	dc.DrawCircle(x+fillW, y+h/2, h*0.55)
 	dc.Fill()
 }
 
@@ -1332,293 +1361,200 @@ func pcardRender(info pcardTarget, avatarPath string) (string, error) {
 		dc.Fill()
 	}
 
-	cardX := 50.0
-	cardY := 50.0
-	cardW := 1180.0
-	cardH := 620.0
+	const (
+		cardPadX = 40.0
+		cardPadY = 40.0
+	)
+	cardX := cardPadX
+	cardY := cardPadY
+	cardW := float64(W) - cardPadX*2
+	cardH := float64(H) - cardPadY*2
+	cardR := 28.0
 
-	dc.SetRGBA255(20, 24, 35, 230)
-	dc.DrawRoundedRectangle(cardX, cardY, cardW, cardH, 35)
+	dc.SetRGBA255(20, 24, 35, 235)
+	dc.DrawRoundedRectangle(cardX, cardY, cardW, cardH, cardR)
 	dc.Fill()
 
-	dc.SetRGBA255(
-		int(pal.Accent.R),
-		int(pal.Accent.G),
-		int(pal.Accent.B),
-		80,
-	)
-
-	dc.SetLineWidth(2)
-	dc.DrawRoundedRectangle(cardX, cardY, cardW, cardH, 35)
+	dc.SetRGBA255(int(pal.Accent.R), int(pal.Accent.G), int(pal.Accent.B), 60)
+	dc.SetLineWidth(1.5)
+	dc.DrawRoundedRectangle(cardX, cardY, cardW, cardH, cardR)
 	dc.Stroke()
 
-	sidebarW := 320.0
-
-	dc.SetRGBA255(255, 255, 255, 8)
-	dc.DrawRoundedRectangle(
-		cardX,
-		cardY,
-		sidebarW,
-		cardH,
-		35,
-	)
+	sidebarW := 340.0
+	sidebarX := cardX
+	dc.SetRGBA255(255, 255, 255, 6)
+	dc.DrawRoundedRectangle(sidebarX, cardY, sidebarW, cardH, cardR)
 	dc.Fill()
 
-	dc.SetRGBA255(255, 255, 255, 20)
-	dc.DrawLine(
-		cardX+sidebarW,
-		cardY,
-		cardX+sidebarW,
-		cardY+cardH,
-	)
+	dc.SetRGBA255(255, 255, 255, 22)
+	dc.SetLineWidth(1)
+	dc.DrawLine(sidebarX+sidebarW, cardY+24, sidebarX+sidebarW, cardY+cardH-24)
 	dc.Stroke()
 
-	avCX := cardX + sidebarW/2
-	avCY := cardY + 180
-	avR := 105.0
-
-	dc.SetRGBA255(
-		int(pal.Accent.R),
-		int(pal.Accent.G),
-		int(pal.Accent.B),
-		40,
-	)
-
-	dc.DrawCircle(avCX, avCY, avR+18)
-	dc.Fill()
-
-	dc.SetRGBA255(
-		int(pal.Accent2.R),
-		int(pal.Accent2.G),
-		int(pal.Accent2.B),
-		255,
-	)
-
-	dc.SetLineWidth(4)
-	dc.DrawCircle(avCX, avCY, avR+8)
-	dc.Stroke()
+	avCX := sidebarX + sidebarW/2
+	avCY := cardY + 190
+	avR := 100.0
 
 	if avatarPath != "" {
-		pcardDrawAvatarRing(
-			dc,
-			avCX,
-			avCY,
-			avR,
-			pal,
-			info.UserID,
-			avatarPath,
-		)
+		pcardDrawAvatarRing(dc, avCX, avCY, avR, pal, info.UserID, avatarPath)
 	} else {
-		name := strings.TrimSpace(
-			info.FirstName + " " + info.LastName,
-		)
-
-		pcardDrawInitialsAvatar(
-			dc,
-			avCX,
-			avCY,
-			avR,
-			pcardInitials(name),
-			pal,
-		)
+		dc.SetRGBA255(int(pal.Accent.R), int(pal.Accent.G), int(pal.Accent.B), 30)
+		dc.DrawCircle(avCX, avCY, avR+14)
+		dc.Fill()
+		dc.SetRGBA255(int(pal.Accent.R), int(pal.Accent.G), int(pal.Accent.B), 220)
+		dc.SetLineWidth(3)
+		dc.DrawCircle(avCX, avCY, avR+6)
+		dc.Stroke()
+		name := strings.TrimSpace(info.FirstName + " " + info.LastName)
+		pcardDrawInitialsAvatar(dc, avCX, avCY, avR, pcardInitials(name), pal)
 	}
 
-	leftX := cardX + 45
-	infoY := cardY + 390
+	sidebarInnerX := sidebarX + 32
+	infoY := cardY + 380
 
-	pcardLoadFont(dc, 20)
-	dc.SetRGBA(1, 1, 1, 0.45)
-	dc.DrawString("USER ID", leftX, infoY)
-
-	pcardLoadFont(dc, 28)
+	pcardLoadFont(dc, 18)
+	dc.SetRGBA(1, 1, 1, 0.4)
+	dc.DrawString("USER ID", sidebarInnerX, infoY)
+	pcardLoadFont(dc, 26)
 	dc.SetRGB(1, 1, 1)
-	dc.DrawString(
-		strconv.FormatInt(info.UserID, 10),
-		leftX,
-		infoY+35,
-	)
+	dc.DrawString(strconv.FormatInt(info.UserID, 10), sidebarInnerX, infoY+34)
 
-	infoY += 110
-
-	pcardLoadFont(dc, 20)
-	dc.SetRGBA(1, 1, 1, 0.45)
-	dc.DrawString("MEMBER SINCE", leftX, infoY)
-
-	pcardLoadFont(dc, 28)
+	infoY += 92
+	pcardLoadFont(dc, 18)
+	dc.SetRGBA(1, 1, 1, 0.4)
+	dc.DrawString("MEMBER SINCE", sidebarInnerX, infoY)
+	pcardLoadFont(dc, 26)
 	dc.SetRGB(1, 1, 1)
-	dc.DrawString(
-		pcardMemberSince(info.UserID),
-		leftX,
-		infoY+35,
-	)
+	dc.DrawString(pcardMemberSince(info.UserID), sidebarInnerX, infoY+34)
 
-	contentX := cardX + sidebarW + 55
+	contentX := sidebarX + sidebarW + 40
+	contentRight := cardX + cardW - 32
+	contentW := contentRight - contentX
 
-	displayName := strings.TrimSpace(
-		info.FirstName + " " + info.LastName,
-	)
+	perf := UserPerfGet(info.UserID)
 
+	pcardLoadFont(dc, 22)
+	dc.SetRGBA(1, 1, 1, 0.4)
+	wm := "JULIABOT"
+	wmW, _ := dc.MeasureString(wm)
+	dc.DrawString(wm, contentRight-wmW, cardY+58)
+
+	displayName := pcardStripEmoji(strings.TrimSpace(info.FirstName + " " + info.LastName))
 	if displayName == "" {
 		displayName = "User"
 	}
 
-	if len(displayName) > 24 {
-		displayName = displayName[:24] + "..."
+	titleY := cardY + 175
+	nameSize := 60.0
+	pcardLoadFont(dc, nameSize)
+	for {
+		w, _ := dc.MeasureString(displayName)
+		if w <= contentW-20 || nameSize <= 32 {
+			break
+		}
+		nameSize -= 4
+		pcardLoadFont(dc, nameSize)
 	}
-
-	titleY := cardY + 170
-
-	pcardLoadFont(dc, 60)
 	dc.SetRGB(1, 1, 1)
-	dc.DrawString(
-		displayName,
-		contentX,
-		titleY,
-	)
+	dc.DrawString(displayName, contentX, titleY)
 
-	if info.Username != "" {
-		pcardLoadFont(dc, 30)
-		dc.SetRGBA(1, 1, 1, 0.6)
-
-		dc.DrawString(
-			"@"+info.Username,
-			contentX,
-			titleY+50,
-		)
+	if uname := pcardStripEmoji(info.Username); uname != "" {
+		pcardLoadFont(dc, 26)
+		dc.SetRGBA(1, 1, 1, 0.55)
+		dc.DrawString("@"+uname, contentX, titleY+42)
 	}
 
-	badgeY := titleY + 95
-
-	dc.SetRGBA255(
-		int(pal.Accent.R),
-		int(pal.Accent.G),
-		int(pal.Accent.B),
-		60,
-	)
-
-	dc.DrawRoundedRectangle(
-		contentX,
-		badgeY,
-		240,
-		55,
-		20,
-	)
-	dc.Fill()
+	pillH := 44.0
+	pillR := pillH / 2
+	badgeY := titleY + 80
 
 	title := pcardTitleFor(info.UserID)
-
-	pcardLoadFont(dc, 24)
-	dc.SetRGBA255(
-		int(pal.Accent2.R),
-		int(pal.Accent2.G),
-		int(pal.Accent2.B),
-		255,
-	)
-
-	dc.DrawString(
-		title,
-		contentX+20,
-		badgeY+36,
-	)
-
+	pcardLoadFont(dc, 22)
+	titleTextW, _ := dc.MeasureString(title)
+	titlePillW := titleTextW + pillH
 	auraColor := pcardAuraColorFor(info.UserID)
+
+	dc.SetRGBA255(int(pal.Accent.R), int(pal.Accent.G), int(pal.Accent.B), 55)
+	dc.DrawRoundedRectangle(contentX, badgeY, titlePillW, pillH, pillR)
+	dc.Fill()
 	dc.SetRGBA255(int(auraColor.R), int(auraColor.G), int(auraColor.B), 255)
-	dc.DrawCircle(contentX+265, badgeY+27, 10)
+	dc.DrawCircle(contentX+pillR-4, badgeY+pillH/2, 6)
 	dc.Fill()
-	dc.SetRGBA255(int(auraColor.R), int(auraColor.G), int(auraColor.B), 90)
-	dc.DrawCircle(contentX+265, badgeY+27, 16)
+	dc.SetRGBA255(int(pal.Accent2.R), int(pal.Accent2.G), int(pal.Accent2.B), 255)
+	dc.DrawString(title, contentX+pillR+8, badgeY+pillH/2+8)
+
+	rank := pcardRankFor(perf)
+	rankGap := 12.0
+	rankX := contentX + titlePillW + rankGap
+	pcardLoadFont(dc, 20)
+	rankW, _ := dc.MeasureString(rank.Name)
+	rankPillW := rankW + pillH
+	dc.SetRGBA255(int(rank.Color.R), int(rank.Color.G), int(rank.Color.B), 45)
+	dc.DrawRoundedRectangle(rankX, badgeY, rankPillW, pillH, pillR)
 	dc.Fill()
+	dc.SetRGBA255(int(rank.Color.R), int(rank.Color.G), int(rank.Color.B), 180)
+	dc.SetLineWidth(1.5)
+	dc.DrawRoundedRectangle(rankX, badgeY, rankPillW, pillH, pillR)
+	dc.Stroke()
+	dc.SetRGBA255(int(rank.Color.R), int(rank.Color.G), int(rank.Color.B), 240)
+	dc.DrawString(rank.Name, rankX+pillR, badgeY+pillH/2+7)
 
 	statsX := contentX
-	statsY := cardY + 350
-	statsW := 700.0
+	statsW := contentW
+	statsY := cardY + 330
 	statsH := 220.0
 
 	dc.SetRGBA255(255, 255, 255, 8)
-	dc.DrawRoundedRectangle(
-		statsX,
-		statsY,
-		statsW,
-		statsH,
-		22,
-	)
+	dc.DrawRoundedRectangle(statsX, statsY, statsW, statsH, 20)
 	dc.Fill()
 
-	pcardLoadFont(dc, 24)
-	dc.SetRGBA(1, 1, 1, 0.7)
-	dc.DrawString(
-		"STATS",
-		statsX+25,
-		statsY+35,
-	)
+	pcardLoadFont(dc, 20)
+	dc.SetRGBA(1, 1, 1, 0.6)
+	dc.DrawString("STATS", statsX+24, statsY+32)
 
-	perf := UserPerfGet(info.UserID)
-	stats := pcardStatsFor(info.UserID)
-
-	for i, s := range stats {
-		y := statsY + 80 + float64(i)*50
-
-		pcardDrawStatBar(
-			dc,
-			statsX+25,
-			y,
-			statsW-50,
-			16,
-			s.Name,
-			s.Value,
-			pal,
-		)
+	provisional := !pcardHasRealData(perf)
+	if provisional {
+		pcardLoadFont(dc, 12)
+		dc.SetRGBA(1, 1, 1, 0.35)
+		tag := "PROVISIONAL · " + strconv.FormatInt(perf.TotalMsgs, 10) + "/25"
+		tagW, _ := dc.MeasureString(tag)
+		dc.DrawString(tag, statsX+statsW-tagW-24, statsY+32)
 	}
 
-	rank := pcardRankFor(perf)
-	rankX := contentX + 260
-	rankY := badgeY
-	pcardLoadFont(dc, 20)
-	rankW, _ := dc.MeasureString(rank.Name)
-	pillW := rankW + 40
-	dc.SetRGBA255(int(rank.Color.R), int(rank.Color.G), int(rank.Color.B), 55)
-	dc.DrawRoundedRectangle(rankX, rankY, pillW, 42, 16)
-	dc.Fill()
-	dc.SetRGBA255(int(rank.Color.R), int(rank.Color.G), int(rank.Color.B), 200)
-	dc.SetLineWidth(2)
-	dc.DrawRoundedRectangle(rankX, rankY, pillW, 42, 16)
-	dc.Stroke()
-	dc.SetRGBA255(int(rank.Color.R), int(rank.Color.G), int(rank.Color.B), 255)
-	dc.DrawString(rank.Name, rankX+20, rankY+28)
+	stats := pcardStatsFor(info.UserID)
+	statLeft := statsX + 24
+	statRight := statsX + statsW - 24
+	barW := statRight - statLeft
+	rowH := 46.0
+	firstRowY := statsY + 68
+	for i, s := range stats {
+		y := firstRowY + float64(i)*rowH
+		pcardDrawStatBar(dc, statLeft, y, barW, 14, s.Name, s.Value, pal)
+	}
 
 	badges := pcardBadgesFor(perf)
 	if len(badges) > 0 {
-		badgeRowY := statsY + statsH + 20
+		badgeRowY := statsY + statsH + 22
 		bx := statsX
-		pcardLoadFont(dc, 16)
+		pcardLoadFont(dc, 15)
 		for _, b := range badges {
 			bw, _ := dc.MeasureString(b)
-			padW := bw + 30
-			dc.SetRGBA255(int(pal.Accent2.R), int(pal.Accent2.G), int(pal.Accent2.B), 45)
-			dc.DrawRoundedRectangle(bx, badgeRowY, padW, 30, 12)
+			padW := bw + 26
+			if bx+padW > cardX+cardW-32 {
+				break
+			}
+			dc.SetRGBA255(int(pal.Accent2.R), int(pal.Accent2.G), int(pal.Accent2.B), 50)
+			dc.DrawRoundedRectangle(bx, badgeRowY, padW, 30, 15)
 			dc.Fill()
-			dc.SetRGBA255(int(pal.Accent2.R), int(pal.Accent2.G), int(pal.Accent2.B), 180)
+			dc.SetRGBA255(int(pal.Accent2.R), int(pal.Accent2.G), int(pal.Accent2.B), 160)
 			dc.SetLineWidth(1)
-			dc.DrawRoundedRectangle(bx, badgeRowY, padW, 30, 12)
+			dc.DrawRoundedRectangle(bx, badgeRowY, padW, 30, 15)
 			dc.Stroke()
 			dc.SetRGB(1, 1, 1)
-			dc.DrawString(b, bx+15, badgeRowY+21)
+			dc.DrawString(b, bx+13, badgeRowY+20)
 			bx += padW + 10
 		}
 	}
-
-	if !pcardHasRealData(perf) {
-		pcardLoadFont(dc, 14)
-		dc.SetRGBA(1, 1, 1, 0.35)
-		tag := "PROVISIONAL · sees " + strconv.FormatInt(perf.TotalMsgs, 10) + "/25 msgs"
-		dc.DrawString(tag, statsX+25, statsY+statsH-14)
-	}
-
-	pcardLoadFont(dc, 22)
-	dc.SetRGBA(1, 1, 1, 0.35)
-	wm := "JULIABOT"
-	wmW, _ := dc.MeasureString(wm)
-	dc.DrawString(wm, cardX+cardW-wmW-40, cardY+55)
 
 	outPath := filepath.Join(
 		os.TempDir(),
@@ -1681,21 +1617,18 @@ func ProfileCardHandler(m *tg.NewMessage) error {
 	if info.Username != "" {
 		caption += fmt.Sprintf(" · @%s", html.EscapeString(info.Username))
 	}
-	caption += fmt.Sprintf("\n<i>%s</i> %s", html.EscapeString(pcardTitleFor(info.UserID)), pcardAuraFor(info.UserID))
+	caption += fmt.Sprintf("\n<i>%s</i>", html.EscapeString(pcardTitleFor(info.UserID)))
 
-	_, merr := m.ReplyMedia(outPath, &tg.MediaOptions{
+	if status != nil {
+		_, _ = status.Delete()
+	}
+
+	if _, merr := m.ReplyMedia(outPath, &tg.MediaOptions{
 		Caption:  caption,
 		FileName: fmt.Sprintf("card_%d.png", info.UserID),
 		MimeType: "image/png",
-	})
-	if merr != nil {
-		if status != nil {
-			status.Edit("upload failed: " + html.EscapeString(merr.Error()))
-		}
-		return nil
-	}
-	if status != nil {
-		status.Delete()
+	}); merr != nil {
+		m.Reply("upload failed: " + html.EscapeString(merr.Error()))
 	}
 	return nil
 }
