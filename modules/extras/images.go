@@ -701,6 +701,12 @@ var pcardTitles = []string{
 	"Stormcaller", "Ironheart", "Lightbringer", "Shadowdancer", "Voidwalker", "Skyweaver",
 	"Frostborn", "Emberforged", "Tidecaller", "Worldshaper", "Mythmaker", "Realmrider",
 	"Spellbound", "Soulforged", "Runekeeper", "Echoseeker", "Phoenixsworn", "Starborn",
+	"Cloudwalker", "Duskbringer", "Ashborn", "Moonrider", "Sunseeker", "Wavebreaker",
+	"Thornheart", "Silvertongue", "Gladewatcher", "Suncrafter", "Emberwitch", "Rimebound",
+	"Windshaper", "Ravensworn", "Ashenwolf", "Steelmind", "Owlbound", "Riftwalker",
+	"Prismborn", "Grimshade", "Ironquill", "Songkeeper", "Firelark", "Coldforged",
+	"Latecomer", "Firstlight", "Solargazer", "Duneskipper", "Cinderpath", "Loomweaver",
+	"Nightscribe", "Ashenroamer",
 }
 
 var pcardAuras = []string{
@@ -709,25 +715,249 @@ var pcardAuras = []string{
 }
 
 var pcardAuraColors = []color.RGBA{
-	{0xFF, 0xD7, 0x54, 0xFF},
-	{0x8B, 0x5C, 0xF6, 0xFF},
-	{0xF9, 0x5D, 0x3B, 0xFF},
-	{0x38, 0xBD, 0xF8, 0xFF},
-	{0xFA, 0xCC, 0x15, 0xFF},
-	{0x4A, 0xDE, 0x80, 0xFF},
-	{0xFB, 0xBF, 0x24, 0xFF},
-	{0xEC, 0x4C, 0x8B, 0xFF},
-	{0xFF, 0x66, 0x99, 0xFF},
-	{0xA5, 0x8B, 0xFF, 0xFF},
-	{0x60, 0xA5, 0xFA, 0xFF},
-	{0x86, 0xEF, 0xAC, 0xFF},
+	{0xFF, 0xD7, 0x54, 0xFF}, {0x8B, 0x5C, 0xF6, 0xFF},
+	{0xF9, 0x5D, 0x3B, 0xFF}, {0x38, 0xBD, 0xF8, 0xFF},
+	{0xFA, 0xCC, 0x15, 0xFF}, {0x4A, 0xDE, 0x80, 0xFF},
+	{0xFB, 0xBF, 0x24, 0xFF}, {0xEC, 0x4C, 0x8B, 0xFF},
+	{0xFF, 0x66, 0x99, 0xFF}, {0xA5, 0x8B, 0xFF, 0xFF},
+	{0x60, 0xA5, 0xFA, 0xFF}, {0x86, 0xEF, 0xAC, 0xFF},
+	{0xF4, 0x72, 0xB6, 0xFF}, {0x2D, 0xD4, 0xBF, 0xFF},
+	{0xE1, 0x1D, 0x48, 0xFF}, {0x22, 0xC5, 0x5E, 0xFF},
+	{0xC0, 0x82, 0xFF, 0xFF}, {0xF8, 0x71, 0x71, 0xFF},
+	{0x0E, 0xA5, 0xE9, 0xFF}, {0x84, 0xCC, 0x16, 0xFF},
+	{0xF9, 0x73, 0x16, 0xFF}, {0xBE, 0x18, 0x5D, 0xFF},
+	{0x14, 0xB8, 0xA6, 0xFF}, {0xF5, 0x9E, 0x0B, 0xFF},
 }
 
 func pcardAuraColorFor(userID int64) color.RGBA {
 	return pcardAuraColors[pcardPick(userID, "auracolor", len(pcardAuraColors))]
 }
 
-var pcardStatNames = []string{"POWER", "AURA", "VIBE", "LUCK", "CHAOS", "GRACE", "MAGIC"}
+var pcardStatNames = []string{
+	"POWER", "AURA", "VIBE", "LUCK", "CHAOS", "GRACE", "MAGIC",
+	"FOCUS", "ECHO", "SPARK", "CHILL", "REACH", "PULSE", "GRIT", "FLOW",
+}
+
+type pcardMetric struct {
+	Name   string
+	Salt   string
+	FromFn func(*userPerf) int
+}
+
+var pcardRealMetrics = []pcardMetric{
+	{"POWER", "power", func(p *userPerf) int { return pcardScaleLog(p.TotalMsgs, 5000) }},
+	{"CHAOS", "chaos", func(p *userPerf) int { return pcardScaleRatio(p.NightMsgs, p.TotalMsgs) }},
+	{"AURA", "aura", func(p *userPerf) int { return pcardScaleLog(int64(len(p.Chats)), 40) }},
+	{"MAGIC", "magic", func(p *userPerf) int { return pcardScaleLog(int64(len(p.Commands)), 30) }},
+	{"VIBE", "vibe", func(p *userPerf) int { return pcardScaleRatio(p.ReplyMsgs, p.TotalMsgs) }},
+	{"ECHO", "echo", func(p *userPerf) int { return pcardScaleRatio(p.StickerMsgs, p.TotalMsgs) }},
+	{"SPARK", "spark", func(p *userPerf) int { return pcardScaleRatio(p.LinkMsgs, p.TotalMsgs) }},
+	{"REACH", "reach", func(p *userPerf) int { return pcardScaleRatio(p.MediaMsgs, p.TotalMsgs) }},
+	{"FLOW", "flow", func(p *userPerf) int {
+		if p.TotalMsgs == 0 {
+			return 0
+		}
+		avg := float64(p.CharSum) / float64(p.TotalMsgs)
+		v := int(avg * 1.4)
+		if v > 100 {
+			v = 100
+		}
+		return v
+	}},
+	{"FOCUS", "focus", func(p *userPerf) int { return pcardScaleRatio(p.CmdMsgs, p.TotalMsgs) }},
+	{"PULSE", "pulse", func(p *userPerf) int {
+		if p.LastSeen == 0 {
+			return 0
+		}
+		diff := time.Now().Unix() - p.LastSeen
+		if diff < 3600 {
+			return 100
+		}
+		if diff < 86400 {
+			return 80
+		}
+		if diff < 7*86400 {
+			return 50
+		}
+		if diff < 30*86400 {
+			return 25
+		}
+		return 5
+	}},
+	{"GRIT", "grit", func(p *userPerf) int {
+		if p.FirstSeen == 0 {
+			return 0
+		}
+		days := (time.Now().Unix() - p.FirstSeen) / 86400
+		return pcardScaleLog(days, 180)
+	}},
+}
+
+func pcardScaleLog(n, cap int64) int {
+	if n <= 0 {
+		return 0
+	}
+	if n >= cap {
+		return 100
+	}
+	f := float64(n) / float64(cap)
+	v := int(100 * (0.5 + 0.5*f*f))
+	if v > 100 {
+		v = 100
+	}
+	if v < 5 {
+		v = 5
+	}
+	return v
+}
+
+func pcardScaleRatio(part, total int64) int {
+	if total <= 0 {
+		return 0
+	}
+	ratio := float64(part) / float64(total)
+	v := int(ratio * 250)
+	if v > 100 {
+		v = 100
+	}
+	return v
+}
+
+func pcardHasRealData(p *userPerf) bool {
+	return p != nil && p.TotalMsgs >= 25
+}
+
+type pcardStat struct {
+	Name  string
+	Value int
+}
+
+func pcardStatsFor(userID int64) []pcardStat {
+	perf := UserPerfGet(userID)
+	if pcardHasRealData(perf) {
+		buckets := make([]pcardMetric, len(pcardRealMetrics))
+		copy(buckets, pcardRealMetrics)
+		type scored struct {
+			m pcardMetric
+			v int
+			s uint64
+		}
+		out := make([]scored, 0, len(buckets))
+		for _, m := range buckets {
+			v := m.FromFn(perf)
+			if v <= 0 {
+				continue
+			}
+			out = append(out, scored{m, v, pcardHash(userID, m.Salt)})
+		}
+		if len(out) >= 3 {
+			for i := range out {
+				j := i + int(out[i].s%uint64(len(out)-i))
+				out[i], out[j] = out[j], out[i]
+			}
+			out = out[:3]
+			result := make([]pcardStat, 0, 3)
+			for _, s := range out {
+				result = append(result, pcardStat{s.m.Name, s.v})
+			}
+			return result
+		}
+	}
+	used := map[int]bool{}
+	out := make([]pcardStat, 0, 3)
+	for i := 0; i < 3; i++ {
+		idx := pcardPick(userID, fmt.Sprintf("statname_%d", i), len(pcardStatNames))
+		for used[idx] {
+			idx = (idx + 1) % len(pcardStatNames)
+		}
+		used[idx] = true
+		val := 40 + int(pcardHash(userID, fmt.Sprintf("statval_%d", i))%61)
+		out = append(out, pcardStat{pcardStatNames[idx], val})
+	}
+	return out
+}
+
+type pcardRank struct {
+	Name  string
+	Color color.RGBA
+}
+
+var pcardRanks = []pcardRank{
+	{"BRONZE", color.RGBA{0xCD, 0x7F, 0x32, 0xFF}},
+	{"SILVER", color.RGBA{0xC0, 0xC0, 0xC0, 0xFF}},
+	{"GOLD", color.RGBA{0xFF, 0xD7, 0x00, 0xFF}},
+	{"PLATINUM", color.RGBA{0xE5, 0xE4, 0xE2, 0xFF}},
+	{"DIAMOND", color.RGBA{0x67, 0xE8, 0xF9, 0xFF}},
+	{"MYTHIC", color.RGBA{0xC0, 0x82, 0xFF, 0xFF}},
+}
+
+func pcardRankFor(perf *userPerf) pcardRank {
+	if perf == nil {
+		return pcardRanks[0]
+	}
+	n := perf.TotalMsgs
+	switch {
+	case n >= 20000:
+		return pcardRanks[5]
+	case n >= 8000:
+		return pcardRanks[4]
+	case n >= 3000:
+		return pcardRanks[3]
+	case n >= 1000:
+		return pcardRanks[2]
+	case n >= 250:
+		return pcardRanks[1]
+	default:
+		return pcardRanks[0]
+	}
+}
+
+func pcardBadgesFor(perf *userPerf) []string {
+	if perf == nil || perf.TotalMsgs < 50 {
+		return nil
+	}
+	var out []string
+	if perf.TotalMsgs >= 5000 {
+		out = append(out, "Chatterbox")
+	}
+	if perf.TotalMsgs > 0 && float64(perf.NightMsgs)/float64(perf.TotalMsgs) >= 0.35 {
+		out = append(out, "Night Owl")
+	}
+	if perf.TotalMsgs > 0 && float64(perf.StickerMsgs)/float64(perf.TotalMsgs) >= 0.25 {
+		out = append(out, "Sticker King")
+	}
+	if perf.TotalMsgs > 0 && float64(perf.MediaMsgs)/float64(perf.TotalMsgs) >= 0.4 {
+		out = append(out, "Media Hoarder")
+	}
+	if perf.TotalMsgs > 0 && float64(perf.ReplyMsgs)/float64(perf.TotalMsgs) >= 0.5 {
+		out = append(out, "Reply Guy")
+	}
+	if perf.TotalMsgs > 0 && float64(perf.LinkMsgs)/float64(perf.TotalMsgs) >= 0.2 {
+		out = append(out, "Linkposter")
+	}
+	if len(perf.Chats) >= 10 {
+		out = append(out, "Nomad")
+	}
+	if len(perf.Commands) >= 20 {
+		out = append(out, "Power User")
+	}
+	if perf.TotalMsgs > 0 && float64(perf.CmdMsgs)/float64(perf.TotalMsgs) >= 0.5 {
+		out = append(out, "Bot Whisperer")
+	}
+	if perf.TotalMsgs > 0 {
+		avg := float64(perf.CharSum) / float64(perf.TotalMsgs)
+		if avg >= 120 {
+			out = append(out, "Wordsmith")
+		}
+		if avg <= 8 && perf.TotalMsgs >= 200 {
+			out = append(out, "Terse")
+		}
+	}
+	if len(out) > 3 {
+		out = out[:3]
+	}
+	return out
+}
 
 func pcardHash(userID int64, salt string) uint64 {
 	h := fnv.New64a()
@@ -756,31 +986,7 @@ func pcardAuraFor(userID int64) string {
 	return pcardAuras[pcardPick(userID, "aura", len(pcardAuras))]
 }
 
-func pcardStatsFor(userID int64) []struct {
-	Name  string
-	Value int
-} {
-	used := map[int]bool{}
-	out := []struct {
-		Name  string
-		Value int
-	}{}
-	for i := 0; i < 3; i++ {
-		idx := pcardPick(userID, fmt.Sprintf("statname_%d", i), len(pcardStatNames))
-		for used[idx] {
-			idx = (idx + 1) % len(pcardStatNames)
-		}
-		used[idx] = true
-		val := 40 + int(pcardHash(userID, fmt.Sprintf("statval_%d", i))%61)
-		out = append(out, struct {
-			Name  string
-			Value int
-		}{pcardStatNames[idx], val})
-	}
-	return out
-}
-
-func pcardMemberSince(userID int64) string {
+func pcardMemberSinceLegacy(userID int64) string {
 	now := time.Now().Year()
 	years := []int{2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024}
 	if userID < 1_000_000 {
@@ -814,6 +1020,14 @@ func pcardMemberSince(userID int64) string {
 		now = 2024
 	}
 	return strconv.Itoa(years[len(years)-1])
+}
+
+func pcardMemberSince(userID int64) string {
+	perf := UserPerfGet(userID)
+	if perf != nil && perf.FirstSeen > 0 {
+		return time.Unix(perf.FirstSeen, 0).Format("Jan 2006")
+	}
+	return pcardMemberSinceLegacy(userID)
 }
 
 func pcardFontPath(name string) string {
@@ -1338,6 +1552,7 @@ func pcardRender(info pcardTarget, avatarPath string) (string, error) {
 		statsY+35,
 	)
 
+	perf := UserPerfGet(info.UserID)
 	stats := pcardStatsFor(info.UserID)
 
 	for i, s := range stats {
@@ -1353,6 +1568,50 @@ func pcardRender(info pcardTarget, avatarPath string) (string, error) {
 			s.Value,
 			pal,
 		)
+	}
+
+	rank := pcardRankFor(perf)
+	rankX := contentX + 260
+	rankY := badgeY
+	pcardLoadFont(dc, 20)
+	rankW, _ := dc.MeasureString(rank.Name)
+	pillW := rankW + 40
+	dc.SetRGBA255(int(rank.Color.R), int(rank.Color.G), int(rank.Color.B), 55)
+	dc.DrawRoundedRectangle(rankX, rankY, pillW, 42, 16)
+	dc.Fill()
+	dc.SetRGBA255(int(rank.Color.R), int(rank.Color.G), int(rank.Color.B), 200)
+	dc.SetLineWidth(2)
+	dc.DrawRoundedRectangle(rankX, rankY, pillW, 42, 16)
+	dc.Stroke()
+	dc.SetRGBA255(int(rank.Color.R), int(rank.Color.G), int(rank.Color.B), 255)
+	dc.DrawString(rank.Name, rankX+20, rankY+28)
+
+	badges := pcardBadgesFor(perf)
+	if len(badges) > 0 {
+		badgeRowY := statsY + statsH + 20
+		bx := statsX
+		pcardLoadFont(dc, 16)
+		for _, b := range badges {
+			bw, _ := dc.MeasureString(b)
+			padW := bw + 30
+			dc.SetRGBA255(int(pal.Accent2.R), int(pal.Accent2.G), int(pal.Accent2.B), 45)
+			dc.DrawRoundedRectangle(bx, badgeRowY, padW, 30, 12)
+			dc.Fill()
+			dc.SetRGBA255(int(pal.Accent2.R), int(pal.Accent2.G), int(pal.Accent2.B), 180)
+			dc.SetLineWidth(1)
+			dc.DrawRoundedRectangle(bx, badgeRowY, padW, 30, 12)
+			dc.Stroke()
+			dc.SetRGB(1, 1, 1)
+			dc.DrawString(b, bx+15, badgeRowY+21)
+			bx += padW + 10
+		}
+	}
+
+	if !pcardHasRealData(perf) {
+		pcardLoadFont(dc, 14)
+		dc.SetRGBA(1, 1, 1, 0.35)
+		tag := "PROVISIONAL · sees " + strconv.FormatInt(perf.TotalMsgs, 10) + "/25 msgs"
+		dc.DrawString(tag, statsX+25, statsY+statsH-14)
 	}
 
 	pcardLoadFont(dc, 22)
