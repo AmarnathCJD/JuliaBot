@@ -32,6 +32,7 @@ const (
 	zaiDefaultAssistant = "65940acff94777010aa6b796"
 	zaiSessionTTL       = 25 * time.Minute
 	zaiTrigger          = "@glm"
+	zaiAIMsgHistoryMax  = 64
 )
 
 type zaiSession struct {
@@ -354,12 +355,15 @@ func zaiRunChat(m *tg.NewMessage, prompt string) error {
 		prompt = prompt[:8000]
 	}
 
+	chatID := m.ChatID()
 	status, _ := m.Reply("<code>thinking...</code>", &tg.SendOptions{ParseMode: "HTML"})
+	if status != nil {
+		zaiMarkAIMessage(chatID, status.ID)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	chatID := m.ChatID()
 	lock := zaiChatLock(chatID)
 	lock.Lock()
 	answer, err := zaiChat(ctx, chatID, zaiDefaultAssistant, prompt)
@@ -369,7 +373,9 @@ func zaiRunChat(m *tg.NewMessage, prompt string) error {
 		if status != nil {
 			status.Edit(msg)
 		} else {
-			m.Reply(msg)
+			if r, rerr := m.Reply(msg); rerr == nil && r != nil {
+				zaiMarkAIMessage(chatID, r.ID)
+			}
 		}
 		return nil
 	}
@@ -380,7 +386,10 @@ func zaiRunChat(m *tg.NewMessage, prompt string) error {
 		tmp := filepath.Join(os.TempDir(), fmt.Sprintf("zai_%d.txt", time.Now().UnixNano()))
 		if werr := os.WriteFile(tmp, []byte(answer), 0644); werr == nil {
 			defer os.Remove(tmp)
-			if _, merr := m.ReplyMedia(tmp, &tg.MediaOptions{Caption: "<i>response sent as file</i>", FileName: "response.txt"}); merr == nil {
+			if media, merr := m.ReplyMedia(tmp, &tg.MediaOptions{Caption: "<i>response sent as file</i>", FileName: "response.txt"}); merr == nil {
+				if media != nil {
+					zaiMarkAIMessage(chatID, media.ID)
+				}
 				if status != nil {
 					status.Delete()
 				}
@@ -395,11 +404,15 @@ func zaiRunChat(m *tg.NewMessage, prompt string) error {
 	if status != nil {
 		if _, eerr := status.Edit(out, opts); eerr != nil {
 			if _, e2 := status.Edit(html.EscapeString(answer), opts); e2 != nil {
-				m.Reply(out, opts)
+				if r, rerr := m.Reply(out, opts); rerr == nil && r != nil {
+					zaiMarkAIMessage(chatID, r.ID)
+				}
 			}
 		}
 	} else {
-		m.Reply(out, opts)
+		if r, rerr := m.Reply(out, opts); rerr == nil && r != nil {
+			zaiMarkAIMessage(chatID, r.ID)
+		}
 	}
 	return nil
 }
@@ -414,15 +427,68 @@ func ZaiResetHandler(m *tg.NewMessage) error {
 	return nil
 }
 
+var zaiTriggers = []string{"@glm", "@z"}
+
 func zaiStripTrigger(text string) (string, bool) {
 	trimmed := strings.TrimLeft(text, " \t")
 	lower := strings.ToLower(trimmed)
-	if strings.HasPrefix(lower, zaiTrigger) {
-		rest := trimmed[len(zaiTrigger):]
-		rest = strings.TrimLeft(rest, " \t:,\n")
+	for _, trig := range zaiTriggers {
+		if !strings.HasPrefix(lower, trig) {
+			continue
+		}
+		after := trimmed[len(trig):]
+		if after != "" {
+			r := rune(after[0])
+			if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' {
+				continue
+			}
+		}
+		rest := strings.TrimLeft(after, " \t:,\n")
 		return rest, true
 	}
 	return "", false
+}
+
+var (
+	zaiAIMsgMu      sync.Mutex
+	zaiAIMsgIDs     = map[int64]map[int32]struct{}{}
+	zaiAIMsgHistory = map[int64][]int32{}
+)
+
+func zaiMarkAIMessage(chatID int64, msgID int32) {
+	if msgID == 0 {
+		return
+	}
+	zaiAIMsgMu.Lock()
+	defer zaiAIMsgMu.Unlock()
+	set, ok := zaiAIMsgIDs[chatID]
+	if !ok {
+		set = map[int32]struct{}{}
+		zaiAIMsgIDs[chatID] = set
+	}
+	if _, exists := set[msgID]; exists {
+		return
+	}
+	set[msgID] = struct{}{}
+	hist := append(zaiAIMsgHistory[chatID], msgID)
+	if len(hist) > zaiAIMsgHistoryMax {
+		drop := hist[:len(hist)-zaiAIMsgHistoryMax]
+		hist = hist[len(hist)-zaiAIMsgHistoryMax:]
+		for _, id := range drop {
+			delete(set, id)
+		}
+	}
+	zaiAIMsgHistory[chatID] = hist
+}
+
+func zaiIsAIMessage(chatID int64, msgID int32) bool {
+	zaiAIMsgMu.Lock()
+	defer zaiAIMsgMu.Unlock()
+	if set, ok := zaiAIMsgIDs[chatID]; ok {
+		_, hit := set[msgID]
+		return hit
+	}
+	return false
 }
 
 func ZaiWatcher(m *tg.NewMessage) error {
@@ -438,14 +504,8 @@ func ZaiWatcher(m *tg.NewMessage) error {
 		return zaiRunChat(m, prompt)
 	}
 
-	if m.IsReply() {
-		reply, err := m.GetReplyMessage()
-		if err == nil && reply != nil {
-			botID := Client.Me().ID
-			if reply.SenderID() == botID {
-				return zaiRunChat(m, text)
-			}
-		}
+	if m.IsReply() && zaiIsAIMessage(m.ChatID(), m.ReplyToMsgID()) {
+		return zaiRunChat(m, text)
 	}
 	return nil
 }
