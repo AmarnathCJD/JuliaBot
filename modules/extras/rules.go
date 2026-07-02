@@ -250,7 +250,7 @@ func RulesButtonCallback(c *tg.CallbackQuery) error {
 		if len(rules.Content) < 200 {
 			c.Answer(rules.Content, &tg.CallbackOptions{Alert: true})
 		} else {
-			c.Answer("Showing rules...", nil)
+			c.Answer("Showing rules...")
 			c.Respond("Rules:\n\n" + rules.Content)
 		}
 	}
@@ -262,7 +262,7 @@ func RulesButtonCallback(c *tg.CallbackQuery) error {
 			return nil
 		}
 
-		c.Answer("Showing rules...", nil)
+		c.Answer("Showing rules...")
 		if len(rules.Content) < 200 {
 			c.Answer(rules.Content, &tg.CallbackOptions{Alert: true})
 		} else {

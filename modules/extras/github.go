@@ -380,40 +380,62 @@ func ghBuildUserCaption(c *ghUserCache) string {
 	if displayName == "" {
 		displayName = u.Login
 	}
-	sb.WriteString("<b>" + html.EscapeString(displayName) + "</b>")
+	sb.WriteString("<b>")
+	sb.WriteString(html.EscapeString(displayName))
+	sb.WriteString("</b>")
 	if u.Login != "" {
-		sb.WriteString(" (<a href=\"" + html.EscapeString(u.HTMLURL) + "\">@" + html.EscapeString(u.Login) + "</a>)")
+		sb.WriteString(" (<a href=\"")
+		sb.WriteString(html.EscapeString(u.HTMLURL))
+		sb.WriteString("\">@")
+		sb.WriteString(html.EscapeString(u.Login))
+		sb.WriteString("</a>)")
 	}
 	sb.WriteString("\n")
 	if u.Bio != "" {
-		sb.WriteString("<i>" + html.EscapeString(ghTrim(u.Bio, 240)) + "</i>\n")
+		sb.WriteString("<i>")
+		sb.WriteString(html.EscapeString(ghTrim(u.Bio, 240)))
+		sb.WriteString("</i>\n")
 	}
 	sb.WriteString("\n")
 	if u.Location != "" {
-		sb.WriteString("<b>Location:</b> " + html.EscapeString(u.Location) + "\n")
+		sb.WriteString("<b>Location:</b> ")
+		sb.WriteString(html.EscapeString(u.Location))
+		sb.WriteString("\n")
 	}
 	if u.Company != "" {
-		sb.WriteString("<b>Company:</b> " + html.EscapeString(u.Company) + "\n")
+		sb.WriteString("<b>Company:</b> ")
+		sb.WriteString(html.EscapeString(u.Company))
+		sb.WriteString("\n")
 	}
 	if u.Blog != "" {
 		blog := u.Blog
 		if !strings.HasPrefix(blog, "http") {
 			blog = "https://" + blog
 		}
-		sb.WriteString("<b>Blog:</b> <a href=\"" + html.EscapeString(blog) + "\">" + html.EscapeString(u.Blog) + "</a>\n")
+		sb.WriteString("<b>Blog:</b> <a href=\"")
+		sb.WriteString(html.EscapeString(blog))
+		sb.WriteString("\">")
+		sb.WriteString(html.EscapeString(u.Blog))
+		sb.WriteString("</a>\n")
 	}
 	if u.TwitterUser != "" {
-		sb.WriteString("<b>Twitter:</b> @" + html.EscapeString(u.TwitterUser) + "\n")
+		sb.WriteString("<b>Twitter:</b> @")
+		sb.WriteString(html.EscapeString(u.TwitterUser))
+		sb.WriteString("\n")
 	}
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("<b>Followers:</b> <code>%d</code>  <b>Following:</b> <code>%d</code>\n", u.Followers, u.Following))
 	sb.WriteString(fmt.Sprintf("<b>Repos:</b> <code>%d</code>  <b>Gists:</b> <code>%d</code>\n", u.PublicRepos, u.PublicGists))
 	sb.WriteString("\n")
 	if u.CreatedAt != "" {
-		sb.WriteString("<b>Joined:</b> " + html.EscapeString(ghFormatDate(u.CreatedAt)) + "\n")
+		sb.WriteString("<b>Joined:</b> ")
+		sb.WriteString(html.EscapeString(ghFormatDate(u.CreatedAt)))
+		sb.WriteString("\n")
 	}
 	if u.UpdatedAt != "" {
-		sb.WriteString("<b>Updated:</b> " + html.EscapeString(ghFormatRelative(u.UpdatedAt)) + "\n")
+		sb.WriteString("<b>Updated:</b> ")
+		sb.WriteString(html.EscapeString(ghFormatRelative(u.UpdatedAt)))
+		sb.WriteString("\n")
 	}
 
 	if len(c.owned) > 0 {
@@ -440,9 +462,15 @@ func ghBuildUserCaption(c *ghUserCache) string {
 func ghBuildRepoCaption(c *ghRepoCache) string {
 	r := c.repo
 	var sb strings.Builder
-	sb.WriteString("<b><a href=\"" + html.EscapeString(r.HTMLURL) + "\">" + html.EscapeString(r.FullName) + "</a></b>\n")
+	sb.WriteString("<b><a href=\"")
+	sb.WriteString(html.EscapeString(r.HTMLURL))
+	sb.WriteString("\">")
+	sb.WriteString(html.EscapeString(r.FullName))
+	sb.WriteString("</a></b>\n")
 	if r.Description != "" {
-		sb.WriteString("<i>" + html.EscapeString(ghTrim(r.Description, 280)) + "</i>\n")
+		sb.WriteString("<i>")
+		sb.WriteString(html.EscapeString(ghTrim(r.Description, 280)))
+		sb.WriteString("</i>\n")
 	}
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("<b>Stars:</b> <code>%d</code>  <b>Forks:</b> <code>%d</code>  <b>Watchers:</b> <code>%d</code>\n", r.StargazersCount, r.ForksCount, r.WatchersCount))
@@ -453,22 +481,36 @@ func ghBuildRepoCaption(c *ghRepoCache) string {
 	sb.WriteString(fmt.Sprintf("<b>Open Issues:</b> <code>%d</code>  <b>Open PRs:</b> <code>%d</code>\n", issues, c.openPRs))
 	sb.WriteString("\n")
 	if r.Language != "" {
-		sb.WriteString("<b>Language:</b> " + html.EscapeString(r.Language) + "\n")
+		sb.WriteString("<b>Language:</b> ")
+		sb.WriteString(html.EscapeString(r.Language))
+		sb.WriteString("\n")
 	}
 	if r.DefaultBranch != "" {
-		sb.WriteString("<b>Default Branch:</b> <code>" + html.EscapeString(r.DefaultBranch) + "</code>\n")
+		sb.WriteString("<b>Default Branch:</b> <code>")
+		sb.WriteString(html.EscapeString(r.DefaultBranch))
+		sb.WriteString("</code>\n")
 	}
 	if r.License != nil && r.License.Name != "" {
-		sb.WriteString("<b>License:</b> " + html.EscapeString(r.License.Name) + "\n")
+		sb.WriteString("<b>License:</b> ")
+		sb.WriteString(html.EscapeString(r.License.Name))
+		sb.WriteString("\n")
 	}
 	if r.Homepage != "" {
-		sb.WriteString("<b>Homepage:</b> <a href=\"" + html.EscapeString(r.Homepage) + "\">" + html.EscapeString(r.Homepage) + "</a>\n")
+		sb.WriteString("<b>Homepage:</b> <a href=\"")
+		sb.WriteString(html.EscapeString(r.Homepage))
+		sb.WriteString("\">")
+		sb.WriteString(html.EscapeString(r.Homepage))
+		sb.WriteString("</a>\n")
 	}
 	if r.UpdatedAt != "" {
-		sb.WriteString("<b>Updated:</b> " + html.EscapeString(ghFormatRelative(r.UpdatedAt)) + "\n")
+		sb.WriteString("<b>Updated:</b> ")
+		sb.WriteString(html.EscapeString(ghFormatRelative(r.UpdatedAt)))
+		sb.WriteString("\n")
 	}
 	if r.PushedAt != "" {
-		sb.WriteString("<b>Last Push:</b> " + html.EscapeString(ghFormatRelative(r.PushedAt)) + "\n")
+		sb.WriteString("<b>Last Push:</b> ")
+		sb.WriteString(html.EscapeString(ghFormatRelative(r.PushedAt)))
+		sb.WriteString("\n")
 	}
 
 	if len(r.Topics) > 0 {
@@ -476,7 +518,9 @@ func ghBuildRepoCaption(c *ghRepoCache) string {
 		for _, t := range r.Topics {
 			tags = append(tags, "<code>#"+html.EscapeString(t)+"</code>")
 		}
-		sb.WriteString("\n<b>Topics:</b> " + strings.Join(tags, " ") + "\n")
+		sb.WriteString("\n<b>Topics:</b> ")
+		sb.WriteString(strings.Join(tags, " "))
+		sb.WriteString("\n")
 	}
 
 	if len(c.commits) > 0 {
@@ -1056,7 +1100,11 @@ func ghIssueStateBadge(i *ghIssue) string {
 
 func ghBuildIssueListCaption(full string, issues []ghIssue) string {
 	var sb strings.Builder
-	sb.WriteString("<b>Latest open issues in <a href=\"https://github.com/" + html.EscapeString(full) + "/issues\">" + html.EscapeString(full) + "</a></b>\n\n")
+	sb.WriteString("<b>Latest open issues in <a href=\"https://github.com/")
+	sb.WriteString(html.EscapeString(full))
+	sb.WriteString("/issues\">")
+	sb.WriteString(html.EscapeString(full))
+	sb.WriteString("</a></b>\n\n")
 	shown := 0
 	for _, it := range issues {
 		if it.PullRequest != nil {
@@ -1069,7 +1117,9 @@ func ghBuildIssueListCaption(full string, issues []ghIssue) string {
 		title := ghTrim(it.Title, 110)
 		sb.WriteString(fmt.Sprintf("<b>#%d</b> <a href=\"%s\">%s</a>\n", it.Number, html.EscapeString(it.HTMLURL), html.EscapeString(title)))
 		meta := fmt.Sprintf("by @%s &middot; %s &middot; %d comments", html.EscapeString(it.User.Login), html.EscapeString(ghFormatRelative(it.CreatedAt)), it.Comments)
-		sb.WriteString("<i>" + meta + "</i>\n")
+		sb.WriteString("<i>")
+		sb.WriteString(meta)
+		sb.WriteString("</i>\n")
 		if len(it.Labels) > 0 {
 			tags := make([]string, 0, len(it.Labels))
 			for _, l := range it.Labels {
@@ -1082,7 +1132,8 @@ func ghBuildIssueListCaption(full string, issues []ghIssue) string {
 				}
 			}
 			if len(tags) > 0 {
-				sb.WriteString(strings.Join(tags, " ") + "\n")
+				sb.WriteString(strings.Join(tags, " "))
+				sb.WriteString("\n")
 			}
 		}
 		sb.WriteString("\n")
@@ -1100,20 +1151,38 @@ func ghBuildIssueDetailCaption(full string, i *ghIssue) string {
 		kind = "Pull Request"
 	}
 	sb.WriteString(fmt.Sprintf("<b>%s #%d</b> &middot; <a href=\"https://github.com/%s\">%s</a>\n", kind, i.Number, html.EscapeString(full), html.EscapeString(full)))
-	sb.WriteString("<b><a href=\"" + html.EscapeString(i.HTMLURL) + "\">" + html.EscapeString(ghTrim(i.Title, 220)) + "</a></b>\n\n")
-	sb.WriteString("<b>State:</b> <code>" + html.EscapeString(ghIssueStateBadge(i)) + "</code>\n")
+	sb.WriteString("<b><a href=\"")
+	sb.WriteString(html.EscapeString(i.HTMLURL))
+	sb.WriteString("\">")
+	sb.WriteString(html.EscapeString(ghTrim(i.Title, 220)))
+	sb.WriteString("</a></b>\n\n")
+	sb.WriteString("<b>State:</b> <code>")
+	sb.WriteString(html.EscapeString(ghIssueStateBadge(i)))
+	sb.WriteString("</code>\n")
 	if i.User.Login != "" {
-		sb.WriteString("<b>Author:</b> <a href=\"" + html.EscapeString(i.User.HTMLURL) + "\">@" + html.EscapeString(i.User.Login) + "</a>\n")
+		sb.WriteString("<b>Author:</b> <a href=\"")
+		sb.WriteString(html.EscapeString(i.User.HTMLURL))
+		sb.WriteString("\">@")
+		sb.WriteString(html.EscapeString(i.User.Login))
+		sb.WriteString("</a>\n")
 	}
 	sb.WriteString(fmt.Sprintf("<b>Comments:</b> <code>%d</code>\n", i.Comments))
 	if i.CreatedAt != "" {
-		sb.WriteString("<b>Created:</b> " + html.EscapeString(ghFormatDate(i.CreatedAt)) + " <i>(" + html.EscapeString(ghFormatRelative(i.CreatedAt)) + ")</i>\n")
+		sb.WriteString("<b>Created:</b> ")
+		sb.WriteString(html.EscapeString(ghFormatDate(i.CreatedAt)))
+		sb.WriteString(" <i>(")
+		sb.WriteString(html.EscapeString(ghFormatRelative(i.CreatedAt)))
+		sb.WriteString(")</i>\n")
 	}
 	if i.UpdatedAt != "" {
-		sb.WriteString("<b>Updated:</b> " + html.EscapeString(ghFormatRelative(i.UpdatedAt)) + "\n")
+		sb.WriteString("<b>Updated:</b> ")
+		sb.WriteString(html.EscapeString(ghFormatRelative(i.UpdatedAt)))
+		sb.WriteString("\n")
 	}
 	if i.State == "closed" && i.ClosedAt != "" {
-		sb.WriteString("<b>Closed:</b> " + html.EscapeString(ghFormatRelative(i.ClosedAt)) + "\n")
+		sb.WriteString("<b>Closed:</b> ")
+		sb.WriteString(html.EscapeString(ghFormatRelative(i.ClosedAt)))
+		sb.WriteString("\n")
 	}
 	if len(i.Assignees) > 0 {
 		names := make([]string, 0, len(i.Assignees))
@@ -1127,7 +1196,9 @@ func ghBuildIssueDetailCaption(full string, i *ghIssue) string {
 			}
 		}
 		if len(names) > 0 {
-			sb.WriteString("<b>Assignees:</b> " + strings.Join(names, ", ") + "\n")
+			sb.WriteString("<b>Assignees:</b> ")
+			sb.WriteString(strings.Join(names, ", "))
+			sb.WriteString("\n")
 		}
 	}
 	if len(i.Labels) > 0 {
@@ -1142,13 +1213,17 @@ func ghBuildIssueDetailCaption(full string, i *ghIssue) string {
 			}
 		}
 		if len(tags) > 0 {
-			sb.WriteString("<b>Labels:</b> " + strings.Join(tags, " ") + "\n")
+			sb.WriteString("<b>Labels:</b> ")
+			sb.WriteString(strings.Join(tags, " "))
+			sb.WriteString("\n")
 		}
 	}
 	body := strings.TrimSpace(i.Body)
 	if body != "" {
 		sb.WriteString("\n<b>Description:</b>\n")
-		sb.WriteString("<blockquote>" + html.EscapeString(ghTrim(body, 600)) + "</blockquote>")
+		sb.WriteString("<blockquote>")
+		sb.WriteString(html.EscapeString(ghTrim(body, 600)))
+		sb.WriteString("</blockquote>")
 	}
 	return sb.String()
 }
@@ -1364,10 +1439,20 @@ func ghrelBuildCaption(full string, r *ghrelRelease) string {
 	if title == "" {
 		title = r.TagName
 	}
-	sb.WriteString("<b>Latest Release - <a href=\"https://github.com/" + html.EscapeString(full) + "\">" + html.EscapeString(full) + "</a></b>\n\n")
-	sb.WriteString("<b>Release:</b> <a href=\"" + html.EscapeString(r.HTMLURL) + "\">" + html.EscapeString(title) + "</a>\n")
+	sb.WriteString("<b>Latest Release - <a href=\"https://github.com/")
+	sb.WriteString(html.EscapeString(full))
+	sb.WriteString("\">")
+	sb.WriteString(html.EscapeString(full))
+	sb.WriteString("</a></b>\n\n")
+	sb.WriteString("<b>Release:</b> <a href=\"")
+	sb.WriteString(html.EscapeString(r.HTMLURL))
+	sb.WriteString("\">")
+	sb.WriteString(html.EscapeString(title))
+	sb.WriteString("</a>\n")
 	if r.TagName != "" {
-		sb.WriteString("<b>Tag:</b> <code>" + html.EscapeString(r.TagName) + "</code>\n")
+		sb.WriteString("<b>Tag:</b> <code>")
+		sb.WriteString(html.EscapeString(r.TagName))
+		sb.WriteString("</code>\n")
 	}
 	flags := []string{}
 	if r.Prerelease {
@@ -1377,15 +1462,25 @@ func ghrelBuildCaption(full string, r *ghrelRelease) string {
 		flags = append(flags, "draft")
 	}
 	if len(flags) > 0 {
-		sb.WriteString("<b>Type:</b> <code>" + html.EscapeString(strings.Join(flags, ", ")) + "</code>\n")
+		sb.WriteString("<b>Type:</b> <code>")
+		sb.WriteString(html.EscapeString(strings.Join(flags, ", ")))
+		sb.WriteString("</code>\n")
 	}
 	if r.Author.Login != "" {
-		sb.WriteString("<b>Author:</b> <a href=\"" + html.EscapeString(r.Author.HTMLURL) + "\">@" + html.EscapeString(r.Author.Login) + "</a>\n")
+		sb.WriteString("<b>Author:</b> <a href=\"")
+		sb.WriteString(html.EscapeString(r.Author.HTMLURL))
+		sb.WriteString("\">@")
+		sb.WriteString(html.EscapeString(r.Author.Login))
+		sb.WriteString("</a>\n")
 	}
-	sb.WriteString("<b>Published:</b> " + html.EscapeString(ghrelFormatDate(r.PublishedAt)) + "\n")
+	sb.WriteString("<b>Published:</b> ")
+	sb.WriteString(html.EscapeString(ghrelFormatDate(r.PublishedAt)))
+	sb.WriteString("\n")
 
 	if len(r.Assets) > 0 {
-		sb.WriteString("\n<b>Assets (" + fmt.Sprintf("%d", len(r.Assets)) + "):</b>\n")
+		sb.WriteString("\n<b>Assets (")
+		sb.WriteString(fmt.Sprintf("%d", len(r.Assets)))
+		sb.WriteString("):</b>\n")
 		shown := r.Assets
 		if len(shown) > 8 {
 			shown = shown[:8]
@@ -1408,7 +1503,9 @@ func ghrelBuildCaption(full string, r *ghrelRelease) string {
 
 	body := strings.TrimSpace(r.Body)
 	if body != "" {
-		sb.WriteString("\n<b>Notes:</b>\n<blockquote>" + html.EscapeString(ghrelTrim(body, 500)) + "</blockquote>")
+		sb.WriteString("\n<b>Notes:</b>\n<blockquote>")
+		sb.WriteString(html.EscapeString(ghrelTrim(body, 500)))
+		sb.WriteString("</blockquote>")
 	}
 
 	return sb.String()

@@ -289,7 +289,9 @@ func ClosePollHandler(m *tg.NewMessage) error {
 
 	var sb strings.Builder
 	sb.WriteString("<b>Poll Closed</b>\n")
-	sb.WriteString("<b>Q:</b> " + html.EscapeString(p.Question) + "\n\n")
+	sb.WriteString("<b>Q:</b> ")
+	sb.WriteString(html.EscapeString(p.Question))
+	sb.WriteString("\n\n")
 	sb.WriteString("<b>Final Results:</b>\n")
 	total := 0
 	for _, r := range results {

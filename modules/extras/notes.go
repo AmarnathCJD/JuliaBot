@@ -387,7 +387,9 @@ func ListNotesHandler(m *tg.NewMessage) error {
 	}
 
 	if len(stats) > 0 {
-		resp.WriteString("\n<i>" + strings.Join(stats, " • ") + "</i>")
+		resp.WriteString("\n<i>")
+		resp.WriteString(strings.Join(stats, " • "))
+		resp.WriteString("</i>")
 	}
 
 	resp.WriteString("\n\n<i>Type #notename to get a note</i>")

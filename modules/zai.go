@@ -476,7 +476,9 @@ func mdToTelegramHTML(md string) string {
 		if strings.HasPrefix(trim, "```") {
 			lang := strings.TrimSpace(trim[3:])
 			if lang != "" {
-				out.WriteString(`<pre><code class="language-` + html.EscapeString(lang) + `">`)
+				out.WriteString(`<pre><code class="language-`)
+				out.WriteString(html.EscapeString(lang))
+				out.WriteString(`">`)
 			} else {
 				out.WriteString("<pre><code>")
 			}

@@ -440,12 +440,11 @@ func formatMediaInfo(info string) string {
 			continue
 		}
 
-		// Check if line is a section header (no colon, usually all caps or title case)
 		if !strings.Contains(line, ":") && len(line) > 0 {
-			// Section headers in bold
-			formatted.WriteString("<b>" + line + "</b>\n")
+			formatted.WriteString("<b>")
+			formatted.WriteString(line)
+			formatted.WriteString("</b>\n")
 		} else if strings.Contains(line, ":") {
-			// Split key-value pairs
 			parts := strings.SplitN(line, ":", 2)
 			if len(parts) == 2 {
 				key := strings.TrimSpace(parts[0])
@@ -453,15 +452,23 @@ func formatMediaInfo(info string) string {
 
 				// Format key in bold, value in regular text
 				if value != "" {
-					formatted.WriteString("<b>" + key + ":</b> <code>" + value + "</code>\n")
+					formatted.WriteString("<b>")
+					formatted.WriteString(key)
+					formatted.WriteString(":</b> <code>")
+					formatted.WriteString(value)
+					formatted.WriteString("</code>\n")
 				} else {
-					formatted.WriteString("<b>" + key + ":</b>\n")
+					formatted.WriteString("<b>")
+					formatted.WriteString(key)
+					formatted.WriteString(":</b>\n")
 				}
 			} else {
-				formatted.WriteString(line + "\n")
+				formatted.WriteString(line)
+				formatted.WriteString("\n")
 			}
 		} else {
-			formatted.WriteString(line + "\n")
+			formatted.WriteString(line)
+			formatted.WriteString("\n")
 		}
 	}
 
@@ -573,7 +580,9 @@ func LsHandler(m *tg.NewMessage) error {
 	}
 
 	var resp strings.Builder
-	resp.WriteString("📂 <b>" + absPath + "</b>\n")
+	resp.WriteString("📂 <b>")
+	resp.WriteString(absPath)
+	resp.WriteString("</b>\n")
 	resp.WriteString("━━━━━━━━━━━━━━━━━━━━\n\n")
 
 	var sizeTotal int64
@@ -593,7 +602,12 @@ func LsHandler(m *tg.NewMessage) error {
 		size := calcFileOrDirSize(filepath.Join(dir, name))
 		sizeTotal += size
 		dirCount++
-		resp.WriteString(fileTypeEmoji["dir"] + " <code>" + name + "/</code>  <i>" + sizeToHuman(size) + "</i>\n")
+		resp.WriteString(fileTypeEmoji["dir"])
+		resp.WriteString(" <code>")
+		resp.WriteString(name)
+		resp.WriteString("/</code>  <i>")
+		resp.WriteString(sizeToHuman(size))
+		resp.WriteString("</i>\n")
 	}
 
 	for _, entry := range files {
@@ -636,7 +650,12 @@ func LsHandler(m *tg.NewMessage) error {
 		}
 		sizeTotal += size
 		fileCount++
-		resp.WriteString(emoji + " <code>" + name + "</code>  <i>" + sizeToHuman(size) + "</i>\n")
+		resp.WriteString(emoji)
+		resp.WriteString(" <code>")
+		resp.WriteString(name)
+		resp.WriteString("</code>  <i>")
+		resp.WriteString(sizeToHuman(size))
+		resp.WriteString("</i>\n")
 	}
 
 	resp.WriteString("\n━━━━━━━━━━━━━━━━━━━━\n")

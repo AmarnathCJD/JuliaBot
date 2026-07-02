@@ -233,18 +233,27 @@ func WeatherHandler(m *tg.NewMessage) error {
 	locationStr := strings.Join(locParts, ", ")
 
 	var sb strings.Builder
-	sb.WriteString(emoji + " <b>Weather</b>\n\n")
-	sb.WriteString("<b>Location:</b> " + html.EscapeString(locationStr) + "\n")
-	sb.WriteString("<b>Condition:</b> " + html.EscapeString(desc) + "\n")
+	sb.WriteString(emoji)
+	sb.WriteString(" <b>Weather</b>\n\n")
+	sb.WriteString("<b>Location:</b> ")
+	sb.WriteString(html.EscapeString(locationStr))
+	sb.WriteString("\n")
+	sb.WriteString("<b>Condition:</b> ")
+	sb.WriteString(html.EscapeString(desc))
+	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("<b>Temperature:</b> <code>%.1f°C</code>\n", forecast.Current.Temperature2m))
 	sb.WriteString(fmt.Sprintf("<b>Humidity:</b> <code>%d%%</code>\n", forecast.Current.RelativeHumidity))
 	sb.WriteString(fmt.Sprintf("<b>Wind:</b> <code>%.1f km/h</code>\n", forecast.Current.WindSpeed10m))
 	sb.WriteString(fmt.Sprintf("<b>Coords:</b> <code>%.4f, %.4f</code>\n", geo.Latitude, geo.Longitude))
 	if forecast.Timezone != "" {
-		sb.WriteString("<b>Timezone:</b> <code>" + html.EscapeString(forecast.Timezone) + "</code>\n")
+		sb.WriteString("<b>Timezone:</b> <code>")
+		sb.WriteString(html.EscapeString(forecast.Timezone))
+		sb.WriteString("</code>\n")
 	}
 	if forecast.Current.Time != "" {
-		sb.WriteString("<b>Updated:</b> <code>" + html.EscapeString(forecast.Current.Time) + "</code>\n")
+		sb.WriteString("<b>Updated:</b> <code>")
+		sb.WriteString(html.EscapeString(forecast.Current.Time))
+		sb.WriteString("</code>\n")
 	}
 
 	out := sb.String()

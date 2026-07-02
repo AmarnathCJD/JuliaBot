@@ -305,14 +305,26 @@ func FileInfoHandle(m *tg.NewMessage) error {
 	var output strings.Builder
 	output.WriteString("<b>File Information</b>\n")
 	output.WriteString("────────────────────\n")
-	output.WriteString("<b>FileName</b>: <code>" + fi.FileName + "</code>\n")
-	output.WriteString("<b>Type</b>: <code>" + fi.Type + "</code>\n")
-	output.WriteString("<b>Size</b>: <code>" + HumanBytes(uint64(fi.Size)) + "</code>\n")
-	output.WriteString("<b>FileID</b>: <code>" + fi.FileID + "</code>\n")
+	output.WriteString("<b>FileName</b>: <code>")
+	output.WriteString(fi.FileName)
+	output.WriteString("</code>\n")
+	output.WriteString("<b>Type</b>: <code>")
+	output.WriteString(fi.Type)
+	output.WriteString("</code>\n")
+	output.WriteString("<b>Size</b>: <code>")
+	output.WriteString(HumanBytes(uint64(fi.Size)))
+	output.WriteString("</code>\n")
+	output.WriteString("<b>FileID</b>: <code>")
+	output.WriteString(fi.FileID)
+	output.WriteString("</code>\n")
 	if len(fi.Attributes) > 0 {
 		output.WriteString("<b>Attributes</b>:\n")
 		for k, v := range fi.Attributes {
-			output.WriteString("   • <b>" + k + "</b>: <code>" + v + "</code>\n")
+			output.WriteString("   • <b>")
+			output.WriteString(k)
+			output.WriteString("</b>: <code>")
+			output.WriteString(v)
+			output.WriteString("</code>\n")
 		}
 	}
 

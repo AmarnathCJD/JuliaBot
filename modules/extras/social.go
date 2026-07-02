@@ -685,11 +685,15 @@ func TweetHandler(m *tg.NewMessage) error {
 		if data.AuthorURL != "" {
 			b.WriteString(fmt.Sprintf("<b>Author:</b> <a href=\"%s\">%s</a>\n", html.EscapeString(data.AuthorURL), html.EscapeString(data.AuthorName)))
 		} else {
-			b.WriteString("<b>Author:</b> " + html.EscapeString(data.AuthorName) + "\n")
+			b.WriteString("<b>Author:</b> ")
+			b.WriteString(html.EscapeString(data.AuthorName))
+			b.WriteString("\n")
 		}
 	}
 	if text != "" {
-		b.WriteString("\n" + html.EscapeString(text) + "\n")
+		b.WriteString("\n")
+		b.WriteString(html.EscapeString(text))
+		b.WriteString("\n")
 	}
 	b.WriteString(fmt.Sprintf("\n<a href=\"%s\">View on X</a>", html.EscapeString(data.URL)))
 
