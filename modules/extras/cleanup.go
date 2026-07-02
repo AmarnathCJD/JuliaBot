@@ -10,17 +10,18 @@ import (
 	"sync"
 	"time"
 
+	modules "main/modules"
+
 	tg "github.com/amarnathcjd/gogram/telegram"
 	bolt "go.etcd.io/bbolt"
-	modules "main/modules"
 )
 
 const cleanupBucket = "cleanup_cfg"
 
 type cleanupCfg struct {
-	Enabled bool  `json:"enabled"`
-	Delay   int   `json:"delay"`
-	Pinned  bool  `json:"pinned"`
+	Enabled bool `json:"enabled"`
+	Delay   int  `json:"delay"`
+	Pinned  bool `json:"pinned"`
 }
 
 var (
@@ -112,9 +113,9 @@ func formatCleanupCfg(cfg *cleanupCfg) string {
 	}
 	var sb strings.Builder
 	sb.WriteString("<b>Service Message Cleanup</b>\n\n")
-	sb.WriteString(fmt.Sprintf(" - <b>Status:</b> <code>%s</code>\n", state))
-	sb.WriteString(fmt.Sprintf(" - <b>Delay:</b> <code>%d seconds</code>\n", cfg.Delay))
-	sb.WriteString(fmt.Sprintf(" - <b>Pinned messages:</b> <code>%s</code>\n", pinned))
+	fmt.Fprintf(&sb, " - <b>Status:</b> <code>%s</code>\n", state)
+	fmt.Fprintf(&sb, " - <b>Delay:</b> <code>%d seconds</code>\n", cfg.Delay)
+	fmt.Fprintf(&sb, " - <b>Pinned messages:</b> <code>%s</code>\n", pinned)
 	sb.WriteString("\n<b>Usage:</b>\n")
 	sb.WriteString(" - <code>/cleanup on</code> - Enable auto-delete\n")
 	sb.WriteString(" - <code>/cleanup off</code> - Disable auto-delete\n")
@@ -263,7 +264,7 @@ func CleanupWatcher(m *tg.NewMessage) error {
 func registerCleanupHandlers() {
 	c := modules.Client
 	c.On("cmd:cleanup", CleanupHandler)
-	c.On(tg.OnNewMessage, CleanupWatcher)
+	c.On(tg.OnAction, CleanupWatcher)
 }
 
 func init() {
