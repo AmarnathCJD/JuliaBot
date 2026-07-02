@@ -28,6 +28,8 @@ type userPerf struct {
 	CharSum     int64            `json:"char_sum"`
 	Chats       map[int64]int64  `json:"chats"`
 	Commands    map[string]int64 `json:"commands"`
+	HourBuckets [24]int64        `json:"hour_buckets"`
+	DailyMsgs   map[string]int64 `json:"daily_msgs"`
 	FirstSeen   int64            `json:"first_seen"`
 	LastSeen    int64            `json:"last_seen"`
 }
@@ -48,8 +50,9 @@ func userPerfKey(userID int64) []byte {
 
 func userPerfNew() *userPerf {
 	return &userPerf{
-		Chats:    map[int64]int64{},
-		Commands: map[string]int64{},
+		Chats:     map[int64]int64{},
+		Commands:  map[string]int64{},
+		DailyMsgs: map[string]int64{},
 	}
 }
 
@@ -75,6 +78,9 @@ func userPerfLoadDisk(userID int64) *userPerf {
 		if out.Commands == nil {
 			out.Commands = map[string]int64{}
 		}
+		if out.DailyMsgs == nil {
+			out.DailyMsgs = map[string]int64{}
+		}
 		return nil
 	})
 	return out
@@ -97,6 +103,7 @@ func UserPerfGet(userID int64) *userPerf {
 	cp := *e
 	cp.Chats = mapCopyInt64(e.Chats)
 	cp.Commands = mapCopyStrInt64(e.Commands)
+	cp.DailyMsgs = mapCopyStrInt64(e.DailyMsgs)
 	return &cp
 }
 
@@ -126,6 +133,7 @@ func userPerfFlushAll() {
 			cp := *e
 			cp.Chats = mapCopyInt64(e.Chats)
 			cp.Commands = mapCopyStrInt64(e.Commands)
+			cp.DailyMsgs = mapCopyStrInt64(e.DailyMsgs)
 			pending[uid] = &cp
 		}
 	}
@@ -249,6 +257,20 @@ func UserPerfTracker(m *tg.NewMessage) error {
 	if cmdName != "" {
 		if len(e.Commands) < 128 || e.Commands[cmdName] > 0 {
 			e.Commands[cmdName]++
+		}
+	}
+	e.HourBuckets[hour]++
+	if e.DailyMsgs == nil {
+		e.DailyMsgs = map[string]int64{}
+	}
+	today := now.Format("2006-01-02")
+	e.DailyMsgs[today]++
+	if len(e.DailyMsgs) > 40 {
+		cutoff := now.AddDate(0, 0, -30).Format("2006-01-02")
+		for k := range e.DailyMsgs {
+			if k < cutoff {
+				delete(e.DailyMsgs, k)
+			}
 		}
 	}
 	if e.FirstSeen == 0 {
