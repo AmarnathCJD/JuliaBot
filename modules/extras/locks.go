@@ -3,14 +3,16 @@ package extras
 import (
 	"encoding/binary"
 	"encoding/json"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 
+	modules "main/modules"
+	"main/modules/db"
+
 	tg "github.com/amarnathcjd/gogram/telegram"
 	bolt "go.etcd.io/bbolt"
-	"main/modules/db"
-	modules "main/modules"
 )
 
 const locksBucket = "locks_v2"
@@ -55,57 +57,57 @@ var supportedLockTypes = []string{
 }
 
 var lockAliases = map[string]string{
-	"links":         "link",
-	"urls":          "url",
-	"forwards":      "forward",
-	"mentions":      "mention",
-	"hashtags":      "hashtag",
-	"bots":          "bot",
-	"invites":       "invite",
-	"invitelink":    "invite",
-	"invitelinks":   "invite",
-	"replies":       "reply",
-	"polls":         "poll",
-	"loc":           "location",
+	"links":        "link",
+	"urls":         "url",
+	"forwards":     "forward",
+	"mentions":     "mention",
+	"hashtags":     "hashtag",
+	"bots":         "bot",
+	"invites":      "invite",
+	"invitelink":   "invite",
+	"invitelinks":  "invite",
+	"replies":      "reply",
+	"polls":        "poll",
+	"loc":          "location",
 	"locations":    "location",
-	"contacts":      "contact",
-	"dices":         "dice",
-	"games":         "game",
-	"buttons":       "button",
-	"emojis":        "emoji",
-	"commands":      "command",
-	"cmd":           "command",
-	"cmds":          "command",
-	"edits":         "edit",
-	"editing":       "edit",
-	"services":      "service",
-	"servicemsg":    "service",
-	"previews":      "preview",
-	"linkpreview":   "preview",
-	"webpage":       "preview",
-	"videonote":     "video_note",
-	"roundvideo":    "video_note",
-	"vn":            "video_note",
-	"album":         "mediagroup",
-	"albums":        "mediagroup",
-	"group":         "mediagroup",
-	"anon":          "anonymous",
-	"anonusers":     "anonymous",
-	"spoilers":      "spoiler",
-	"premiumemoji":  "premium_emoji",
-	"customemoji":   "custom_emoji",
-	"stickers":      "sticker",
-	"photos":        "photo",
-	"videos":        "video",
-	"gifs":          "gif",
-	"animations":    "animation",
-	"voices":        "voice",
-	"audios":        "audio",
-	"documents":     "document",
-	"files":         "file",
-	"texts":         "text",
-	"messages":      "text",
-	"msg":           "text",
+	"contacts":     "contact",
+	"dices":        "dice",
+	"games":        "game",
+	"buttons":      "button",
+	"emojis":       "emoji",
+	"commands":     "command",
+	"cmd":          "command",
+	"cmds":         "command",
+	"edits":        "edit",
+	"editing":      "edit",
+	"services":     "service",
+	"servicemsg":   "service",
+	"previews":     "preview",
+	"linkpreview":  "preview",
+	"webpage":      "preview",
+	"videonote":    "video_note",
+	"roundvideo":   "video_note",
+	"vn":           "video_note",
+	"album":        "mediagroup",
+	"albums":       "mediagroup",
+	"group":        "mediagroup",
+	"anon":         "anonymous",
+	"anonusers":    "anonymous",
+	"spoilers":     "spoiler",
+	"premiumemoji": "premium_emoji",
+	"customemoji":  "custom_emoji",
+	"stickers":     "sticker",
+	"photos":       "photo",
+	"videos":       "video",
+	"gifs":         "gif",
+	"animations":   "animation",
+	"voices":       "voice",
+	"audios":       "audio",
+	"documents":    "document",
+	"files":        "file",
+	"texts":        "text",
+	"messages":     "text",
+	"msg":          "text",
 }
 
 var (
@@ -122,12 +124,7 @@ func normalizeLockType(t string) string {
 }
 
 func isValidLockType(t string) bool {
-	for _, s := range supportedLockTypes {
-		if s == t {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(supportedLockTypes, t)
 }
 
 func locksKey(chatID int64) []byte {
@@ -213,7 +210,6 @@ func saveLocks(chatID int64, m map[string]bool) error {
 	locksCacheMu.Unlock()
 	return nil
 }
-
 
 func messageHasURL(m *tg.NewMessage) bool {
 	if m.Message != nil {

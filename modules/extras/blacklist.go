@@ -2,14 +2,45 @@ package extras
 
 import (
 	"fmt"
+	"html"
 	"main/modules/db"
+	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
-	tg "github.com/amarnathcjd/gogram/telegram"
 	modules "main/modules"
+
+	tg "github.com/amarnathcjd/gogram/telegram"
 )
+
+func isBlacklistRegexPattern(s string) bool {
+	s = strings.TrimSpace(s)
+	return len(s) >= 2 && strings.HasPrefix(s, "/") && strings.HasSuffix(s, "/")
+}
+
+var (
+	blacklistRegexMu    sync.RWMutex
+	blacklistRegexCache = map[string]*regexp.Regexp{}
+)
+
+func blacklistCompilePattern(p string) *regexp.Regexp {
+	blacklistRegexMu.RLock()
+	if re, ok := blacklistRegexCache[p]; ok {
+		blacklistRegexMu.RUnlock()
+		return re
+	}
+	blacklistRegexMu.RUnlock()
+	re, err := modules.ValidateUserRegex(p)
+	if err != nil {
+		return nil
+	}
+	blacklistRegexMu.Lock()
+	blacklistRegexCache[p] = re
+	blacklistRegexMu.Unlock()
+	return re
+}
 
 func AddBlacklistHandler(m *tg.NewMessage) error {
 	if m.IsPrivate() {
@@ -55,19 +86,29 @@ func AddBlacklistHandler(m *tg.NewMessage) error {
 		}
 	}
 
-	word := strings.TrimSpace(strings.ToLower(m.Args()))
-	if word == "" {
-		m.Reply("Usage: /addbl <word/phrase> or reply to media with /addbl")
+	raw := strings.TrimSpace(m.Args())
+	if raw == "" {
+		m.Reply("Usage: /addbl &lt;word/phrase&gt;, /addbl /regex/, or reply to media with /addbl")
 		return nil
 	}
 
-	if len(word) < 2 {
-		m.Reply("Blacklisted word must be at least 2 characters")
-		return nil
+	word := raw
+	isRegex := isBlacklistRegexPattern(raw)
+	if isRegex {
+		if _, err := modules.ValidateUserRegex(raw); err != nil {
+			m.Reply("Rejected regex: " + html.EscapeString(err.Error()))
+			return nil
+		}
+	} else {
+		word = strings.ToLower(word)
+		if len(word) < 2 {
+			m.Reply("Blacklisted word must be at least 2 characters")
+			return nil
+		}
 	}
 
 	if db.IsBlacklisted(m.ChatID(), word) {
-		m.Reply(fmt.Sprintf("<code>%s</code> is already in the blacklist", word))
+		m.Reply(fmt.Sprintf("<code>%s</code> is already in the blacklist", html.EscapeString(word)))
 		return nil
 	}
 
@@ -303,11 +344,22 @@ func BlacklistWatcher(m *tg.NewMessage) error {
 		}
 	}
 
-	// Check text if no media match
 	if matchedWord == "" && m.Text() != "" {
-		msgLower := strings.ToLower(m.Text())
+		msgText := m.Text()
+		msgLower := strings.ToLower(msgText)
 		for _, entry := range entries {
-			if entry.FileID == "" && strings.Contains(msgLower, entry.Word) {
+			if entry.FileID != "" {
+				continue
+			}
+			if isBlacklistRegexPattern(entry.Word) {
+				re := blacklistCompilePattern(entry.Word)
+				if re != nil && re.MatchString(msgText) {
+					matchedWord = entry.Word
+					break
+				}
+				continue
+			}
+			if strings.Contains(msgLower, entry.Word) {
 				matchedWord = entry.Word
 				break
 			}

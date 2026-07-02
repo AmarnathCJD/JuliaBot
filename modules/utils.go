@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -152,7 +153,6 @@ func HumanBytes(bytes uint64) string {
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
-
 
 func IsUserAdmin(bot *telegram.Client, userID int64, chatID int64, right string) bool {
 	member, err := bot.GetChatMember(chatID, userID)
@@ -398,8 +398,6 @@ func (u *UserDateEstimator) FormatTime(unixTime int64) (string, string) {
 	return formattedDate, fmt.Sprintf("%d years ago", years)
 }
 
-
-
 func GetPeerDisplayName(client *telegram.Client, peer telegram.InputPeer) string {
 	switch p := peer.(type) {
 	case *telegram.InputPeerUser:
@@ -423,4 +421,67 @@ func GetPeerDisplayName(client *telegram.Client, peer telegram.InputPeer) string
 	default:
 		return "User"
 	}
+}
+
+func ValidateUserRegex(pattern string) (*regexp.Regexp, error) {
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" {
+		return nil, errors.New("empty pattern")
+	}
+	if len(pattern) > 256 {
+		return nil, errors.New("pattern too long (max 256 chars)")
+	}
+	stripped := regexUnwrapDelims(pattern)
+	if regexIsCatchAll(stripped) {
+		return nil, errors.New("pattern is too broad; it would match nearly everything")
+	}
+	re, err := regexp.Compile("(?i)" + stripped)
+	if err != nil {
+		return nil, fmt.Errorf("invalid regex: %v", err)
+	}
+	return re, nil
+}
+
+func regexUnwrapDelims(p string) string {
+	if len(p) >= 2 && p[0] == '/' && p[len(p)-1] == '/' {
+		return p[1 : len(p)-1]
+	}
+	return p
+}
+
+var regexCatchAllSet = map[string]struct{}{
+	".": {}, ".*": {}, ".+": {}, ".?": {},
+	"^": {}, "$": {}, "^$": {}, "^.*$": {}, "^.+$": {},
+	".*.*": {}, ".+.+": {}, ".*?": {}, ".+?": {},
+	"\\S": {}, "\\S*": {}, "\\S+": {},
+	"\\w": {}, "\\w*": {}, "\\w+": {},
+	"[^]": {}, "[^]*": {}, "[^]+": {},
+	"[\\s\\S]": {}, "[\\s\\S]*": {}, "[\\s\\S]+": {},
+	"(.*)": {}, "(.+)": {}, "(.)": {},
+}
+
+func regexIsCatchAll(p string) bool {
+	p = strings.TrimSpace(p)
+	if _, hit := regexCatchAllSet[p]; hit {
+		return true
+	}
+	stripped := p
+	for len(stripped) >= 2 && stripped[0] == '(' && stripped[len(stripped)-1] == ')' {
+		inner := stripped[1 : len(stripped)-1]
+		if strings.Count(inner, "(") == strings.Count(inner, ")") {
+			stripped = inner
+		} else {
+			break
+		}
+	}
+	if _, hit := regexCatchAllSet[stripped]; hit {
+		return true
+	}
+	if len(stripped) <= 4 {
+		bare := strings.ReplaceAll(strings.ReplaceAll(stripped, "^", ""), "$", "")
+		if _, hit := regexCatchAllSet[bare]; hit {
+			return true
+		}
+	}
+	return false
 }
