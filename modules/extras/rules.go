@@ -240,35 +240,39 @@ func ClearRulesHandler(m *tg.NewMessage) error {
 }
 
 func RulesButtonCallback(c *tg.CallbackQuery) error {
-	if c.DataString() == "rules_show" {
-		rules, err := db.GetRulesWithMedia(c.ChatID)
-		if err != nil || rules == nil || rules.Content == "" {
-			c.Answer("No rules set for this chat", &tg.CallbackOptions{Alert: true})
-			return nil
-		}
-
-		if len(rules.Content) < 200 {
-			c.Answer(rules.Content, &tg.CallbackOptions{Alert: true})
-		} else {
-			c.Answer("Showing rules...")
-			c.Respond("Rules:\n\n" + rules.Content)
-		}
+	data := c.DataString()
+	if data != "rules_show" && !strings.HasPrefix(data, "rules_") {
+		return nil
+	}
+	rules, err := db.GetRulesWithMedia(c.ChatID)
+	if err != nil || rules == nil || rules.Content == "" {
+		c.Answer("No rules set for this chat", &tg.CallbackOptions{Alert: true})
+		return nil
 	}
 
-	if strings.HasPrefix(c.DataString(), "rules_") && c.DataString() != "rules_show" {
-		rules, err := db.GetRulesWithMedia(c.ChatID)
-		if err != nil || rules == nil || rules.Content == "" {
-			c.Answer("No rules set for this chat", &tg.CallbackOptions{Alert: true})
-			return nil
-		}
-
-		c.Answer("Showing rules...")
-		if len(rules.Content) < 200 {
-			c.Answer(rules.Content, &tg.CallbackOptions{Alert: true})
-		} else {
-			c.Respond("Rules:\n\n" + rules.Content)
-		}
+	if len(rules.Content) < 200 {
+		c.Answer(rules.Content, &tg.CallbackOptions{Alert: true})
+		return nil
 	}
+
+	msg := "<b>Rules:</b>\n\n" + rules.Content
+	if _, err := c.Client.SendMessage(c.SenderID, msg, &tg.SendOptions{ParseMode: "HTML"}); err == nil {
+		c.Answer("Rules sent to your DM.")
+		return nil
+	}
+
+	me := c.Client.Me()
+	if me != nil && me.Username != "" {
+		b := tg.Button
+		kb := tg.NewKeyboard().AddRow(
+			b.URL("Open bot to see rules", "https://t.me/"+me.Username+"?start=rules"),
+		).Build()
+		c.Edit("Please open the bot in DM to see the rules.", &tg.SendOptions{ReplyMarkup: kb})
+		c.Answer("Open the bot in DM to view rules.", &tg.CallbackOptions{Alert: true})
+		return nil
+	}
+
+	c.Answer("Open the bot in DM first, then click again.", &tg.CallbackOptions{Alert: true})
 	return nil
 }
 
