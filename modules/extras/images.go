@@ -708,6 +708,25 @@ var pcardAuras = []string{
 	"\U0001f31a", "\U0001f320", "\U0001f308", "\U0001f4ab", "\U0001f52e", "\U0001f343",
 }
 
+var pcardAuraColors = []color.RGBA{
+	{0xFF, 0xD7, 0x54, 0xFF},
+	{0x8B, 0x5C, 0xF6, 0xFF},
+	{0xF9, 0x5D, 0x3B, 0xFF},
+	{0x38, 0xBD, 0xF8, 0xFF},
+	{0xFA, 0xCC, 0x15, 0xFF},
+	{0x4A, 0xDE, 0x80, 0xFF},
+	{0xFB, 0xBF, 0x24, 0xFF},
+	{0xEC, 0x4C, 0x8B, 0xFF},
+	{0xFF, 0x66, 0x99, 0xFF},
+	{0xA5, 0x8B, 0xFF, 0xFF},
+	{0x60, 0xA5, 0xFA, 0xFF},
+	{0x86, 0xEF, 0xAC, 0xFF},
+}
+
+func pcardAuraColorFor(userID int64) color.RGBA {
+	return pcardAuraColors[pcardPick(userID, "auracolor", len(pcardAuraColors))]
+}
+
 var pcardStatNames = []string{"POWER", "AURA", "VIBE", "LUCK", "CHAOS", "GRACE", "MAGIC"}
 
 func pcardHash(userID int64, salt string) uint64 {
@@ -822,7 +841,7 @@ func pcardFontPath(name string) string {
 }
 
 func pcardLoadFont(dc *gg.Context, size float64) bool {
-	for _, name := range []string{"Inter_28pt-Bold.ttf", "Swiss 721 Black Extended BT.ttf"} {
+	for _, name := range []string{"NotoSans-Bold.ttf", "Inter_28pt-Bold.ttf", "NotoSans-Regular.ttf"} {
 		p := pcardFontPath(name)
 		if p == "" {
 			continue
@@ -835,101 +854,8 @@ func pcardLoadFont(dc *gg.Context, size float64) bool {
 	return false
 }
 
-func pcardLerpColor(a, b color.RGBA, t float64) color.RGBA {
-	if t < 0 {
-		t = 0
-	}
-	if t > 1 {
-		t = 1
-	}
-	return color.RGBA{
-		R: uint8(float64(a.R)*(1-t) + float64(b.R)*t),
-		G: uint8(float64(a.G)*(1-t) + float64(b.G)*t),
-		B: uint8(float64(a.B)*(1-t) + float64(b.B)*t),
-		A: 0xff,
-	}
-}
 
-func pcardDrawBackground(dc *gg.Context, w, h int, pal pcardPalette, userID int64) {
-	for y := 0; y < h; y++ {
-		t := float64(y) / float64(h-1)
-		var c color.RGBA
-		if t < 0.5 {
-			c = pcardLerpColor(pal.BgTop, pal.BgMid, t/0.5)
-		} else {
-			c = pcardLerpColor(pal.BgMid, pal.BgBot, (t-0.5)/0.5)
-		}
-		dc.SetRGB255(int(c.R), int(c.G), int(c.B))
-		dc.DrawRectangle(0, float64(y), float64(w), 1)
-		dc.Fill()
-	}
 
-	blobSeed := pcardHash(userID, "blobs")
-	blobs := []struct {
-		cx, cy, r float64
-		alpha     int
-	}{
-		{float64(w) * (0.15 + float64(blobSeed%17)*0.01), float64(h) * (0.2 + float64((blobSeed>>4)%13)*0.015), float64(w) * 0.35, 55},
-		{float64(w) * (0.82 - float64((blobSeed>>8)%19)*0.008), float64(h) * (0.75 - float64((blobSeed>>12)%11)*0.012), float64(w) * 0.28, 65},
-		{float64(w) * 0.55, float64(h) * (0.5 + float64((blobSeed>>16)%7)*0.02), float64(w) * 0.22, 45},
-	}
-	for _, b := range blobs {
-		for r := b.r; r > b.r*0.3; r -= 6 {
-			a := int(float64(b.alpha) * (1 - (b.r-r)/b.r))
-			if a < 1 {
-				a = 1
-			}
-			dc.SetRGBA255(int(pal.Accent.R), int(pal.Accent.G), int(pal.Accent.B), a/8)
-			dc.DrawCircle(b.cx, b.cy, r)
-			dc.Fill()
-		}
-	}
-
-	dc.SetRGBA255(255, 255, 255, 8)
-	dc.SetLineWidth(1)
-	gridSize := 64.0
-	for x := 0.0; x < float64(w); x += gridSize {
-		dc.DrawLine(x, 0, x, float64(h))
-		dc.Stroke()
-	}
-	for y := 0.0; y < float64(h); y += gridSize {
-		dc.DrawLine(0, y, float64(w), y)
-		dc.Stroke()
-	}
-
-	starSeed := pcardHash(userID, "stars")
-	for i := 0; i < 80; i++ {
-		sx := float64((starSeed>>uint(i%32))%uint64(w)) + float64(i*17%w)
-		sy := float64((starSeed>>uint((i*3)%32))%uint64(h)) + float64(i*29%h)
-		sx = math.Mod(sx, float64(w))
-		sy = math.Mod(sy, float64(h))
-		rad := 0.6 + float64(i%5)*0.3
-		alpha := 25 + (i*7)%50
-		dc.SetRGBA255(255, 255, 255, alpha)
-		dc.DrawCircle(sx, sy, rad)
-		dc.Fill()
-	}
-}
-
-func pcardDrawGlassPanel(dc *gg.Context, x, y, w, h, radius float64, pal pcardPalette) {
-	dc.SetRGBA255(int(pal.Surface.R), int(pal.Surface.G), int(pal.Surface.B), 200)
-	dc.DrawRoundedRectangle(x, y, w, h, radius)
-	dc.Fill()
-
-	dc.SetRGBA(1, 1, 1, 0.05)
-	dc.DrawRoundedRectangle(x, y, w, h*0.5, radius)
-	dc.Fill()
-
-	dc.SetRGBA255(int(pal.Accent.R), int(pal.Accent.G), int(pal.Accent.B), 120)
-	dc.SetLineWidth(2)
-	dc.DrawRoundedRectangle(x, y, w, h, radius)
-	dc.Stroke()
-
-	dc.SetRGBA(1, 1, 1, 0.08)
-	dc.SetLineWidth(1)
-	dc.DrawRoundedRectangle(x+2, y+2, w-4, h-4, radius-2)
-	dc.Stroke()
-}
 
 func pcardDrawAvatarRing(dc *gg.Context, cx, cy, r float64, pal pcardPalette, userID int64, avatarPath string) {
 	for i := 0; i < 6; i++ {
@@ -961,19 +887,22 @@ func pcardDrawAvatarRing(dc *gg.Context, cx, cy, r float64, pal pcardPalette, us
 				b := img.Bounds()
 				srcW := float64(b.Dx())
 				srcH := float64(b.Dy())
-				size := r * 2
-				scale := size / srcW
-				if srcH < srcW {
-					scale = size / srcH
+				side := srcW
+				if srcH < side {
+					side = srcH
 				}
-				tmp := gg.NewContext(int(size), int(size))
-				tmp.ScaleAbout(scale, scale, srcW/2, srcH/2)
-				tmp.DrawImageAnchored(img, int(size/2), int(size/2), 0.5, 0.5)
+				sx := (srcW - side) / 2
+				sy := (srcH - side) / 2
+				diameter := int(math.Ceil(r * 2))
+				scale := float64(diameter) / side
+				tmp := gg.NewContext(diameter, diameter)
+				tmp.Scale(scale, scale)
+				tmp.DrawImage(img, int(-sx), int(-sy))
 
 				dc.Push()
 				dc.DrawCircle(cx, cy, r)
 				dc.Clip()
-				dc.DrawImageAnchored(tmp.Image(), int(cx), int(cy), 0.5, 0.5)
+				dc.DrawImage(tmp.Image(), int(cx-r), int(cy-r))
 				dc.ResetClip()
 				dc.Pop()
 				return
@@ -1178,33 +1107,14 @@ func pcardRender(info pcardTarget, avatarPath string) (string, error) {
 	dc.DrawRectangle(0, 0, W, H)
 	dc.Fill()
 
-	for i := 0; i < 3; i++ {
-		r := 300.0 + float64(i*80)
-
-		x := []float64{200, 1000, 700}[i]
-		y := []float64{180, 540, 300}[i]
-
-		g := gg.NewRadialGradient(
-			x, y, 0,
-			x, y, r,
-		)
-
-		g.AddColorStop(0, color.RGBA{
-			pal.Accent.R,
-			pal.Accent.G,
-			pal.Accent.B,
-			40,
-		})
-
-		g.AddColorStop(1, color.RGBA{
-			pal.Accent.R,
-			pal.Accent.G,
-			pal.Accent.B,
-			0,
-		})
-
-		dc.SetFillStyle(g)
-		dc.DrawCircle(x, y, r)
+	starSeed := pcardHash(info.UserID, "stars")
+	for i := 0; i < 32; i++ {
+		sx := math.Mod(float64((starSeed>>uint(i%32))%uint64(W))+float64(i*17%W), float64(W))
+		sy := math.Mod(float64((starSeed>>uint((i*3)%32))%uint64(H))+float64(i*29%H), float64(H))
+		rad := 0.6 + float64(i%4)*0.3
+		alpha := 22 + (i*7)%30
+		dc.SetRGBA255(255, 255, 255, alpha)
+		dc.DrawCircle(sx, sy, rad)
 		dc.Fill()
 	}
 
@@ -1397,16 +1307,13 @@ func pcardRender(info pcardTarget, avatarPath string) (string, error) {
 		badgeY+36,
 	)
 
-	aura := pcardAuraFor(info.UserID)
-
-	pcardLoadFont(dc, 30)
-	dc.SetRGB(1, 1, 1)
-
-	dc.DrawString(
-		aura,
-		contentX+280,
-		badgeY+36,
-	)
+	auraColor := pcardAuraColorFor(info.UserID)
+	dc.SetRGBA255(int(auraColor.R), int(auraColor.G), int(auraColor.B), 255)
+	dc.DrawCircle(contentX+265, badgeY+27, 10)
+	dc.Fill()
+	dc.SetRGBA255(int(auraColor.R), int(auraColor.G), int(auraColor.B), 90)
+	dc.DrawCircle(contentX+265, badgeY+27, 16)
+	dc.Fill()
 
 	statsX := contentX
 	statsY := cardY + 350
@@ -1448,14 +1355,11 @@ func pcardRender(info pcardTarget, avatarPath string) (string, error) {
 		)
 	}
 
-	pcardLoadFont(dc, 24)
-	dc.SetRGBA(1, 1, 1, 0.3)
-
-	dc.DrawString(
-		"JULIABOT",
-		cardX+cardW-180,
-		cardY+45,
-	)
+	pcardLoadFont(dc, 22)
+	dc.SetRGBA(1, 1, 1, 0.35)
+	wm := "JULIABOT"
+	wmW, _ := dc.MeasureString(wm)
+	dc.DrawString(wm, cardX+cardW-wmW-40, cardY+55)
 
 	outPath := filepath.Join(
 		os.TempDir(),
