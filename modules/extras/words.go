@@ -15,7 +15,6 @@ import (
 	"unicode"
 )
 
-// === from word_define_offline.go ===
 type datamuseSyllableEntry struct {
 	Word         string `json:"word"`
 	NumSyllables int    `json:"numSyllables"`
@@ -156,7 +155,6 @@ func registerWordDefineOfflineHandlers() {
 	c := modules.Client
 	c.On("cmd:syllables", SyllablesHandler)
 }
-// === from word_random.go ===
 func RandomWordHandler(m *tg.NewMessage) error {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Get("https://random-word-api.herokuapp.com/word")
@@ -184,7 +182,6 @@ func registerRandomWordHandlers() {
 	c := modules.Client
 	c.On("cmd:randomword", RandomWordHandler)
 }
-// === from word_tools.go ===
 type datamuseWord struct {
 	Word  string `json:"word"`
 	Score int    `json:"score"`
@@ -299,7 +296,6 @@ func registerWordToolsHandlers() {
 func initFromSrc_word_tools_2_1() {
 	modules.QueueHandlerRegistration(registerWordToolsHandlers)
 }
-// === from word_unscrambler.go ===
 var wordLadderDict = []string{
 	"cat", "cot", "dot", "dog", "log", "bog", "bag", "bat", "bit", "big",
 	"bug", "but", "hut", "hat", "hit", "hot", "lot", "lit", "fit", "fat",
@@ -491,7 +487,6 @@ func registerWordLadderHandlers() {
 func initFromSrc_word_unscrambler_3_1() {
 	modules.QueueHandlerRegistration(registerWordLadderHandlers)
 }
-// === from wordcount.go ===
 var wordFreqStopwords = map[string]bool{
 	"a": true, "an": true, "the": true, "and": true, "or": true, "but": true,
 	"if": true, "of": true, "at": true, "by": true, "for": true, "with": true,

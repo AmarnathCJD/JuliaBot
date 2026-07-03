@@ -14,7 +14,6 @@ import (
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
-// === from markdown_convert.go ===
 var (
 	mdCodeBlockRe = regexp.MustCompile("(?s)```([a-zA-Z0-9_+\\-]*)\\n?(.*?)```")
 	mdInlineRe    = regexp.MustCompile("`([^`\\n]+)`")
@@ -265,7 +264,6 @@ func registerMarkdownConvertHandlers() {
 	c.On("cmd:markdown", MarkdownConvertHandler)
 }
 
-// === from json_pretty.go ===
 func extractJSONPayload(m *tg.NewMessage) string {
 	args := strings.TrimSpace(m.Args())
 	if args == "" && m.IsReply() {

@@ -18,7 +18,6 @@ import (
 	"time"
 )
 
-// === from github.go ===
 type ghUser struct {
 	Login       string `json:"login"`
 	ID          int64  `json:"id"`
@@ -675,7 +674,6 @@ func registerGithubHandlers() {
 }
 
 func initFromSrc_github_0_1() { modules.QueueHandlerRegistration(registerGithubHandlers) }
-// === from github_contribs.go ===
 type ghContribDay struct {
 	Date              string `json:"date"`
 	ContributionCount int    `json:"contributionCount"`
@@ -859,7 +857,6 @@ func registerGhContribHandlers() {
 }
 
 func initFromSrc_github_contribs_1_1() { modules.QueueHandlerRegistration(registerGhContribHandlers) }
-// === from github_emoji.go ===
 var (
 	ghEmojiMu      sync.RWMutex
 	ghEmojiCache   map[string]string
@@ -1002,7 +999,6 @@ func registerGitHubEmojiHandlers() {
 	c := modules.Client
 	c.On("cmd:ghemoji", GitHubEmojiHandler)
 }
-// === from github_issues.go ===
 type ghIssueLabel struct {
 	Name string `json:"name"`
 }
@@ -1332,7 +1328,6 @@ func registerGithubIssuesHandlers() {
 }
 
 func initFromSrc_github_issues_3_1() { modules.QueueHandlerRegistration(registerGithubIssuesHandlers) }
-// === from github_releases.go ===
 var ghrelHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 type ghrelAuthor struct {

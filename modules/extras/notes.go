@@ -17,7 +17,6 @@ import (
 	"time"
 )
 
-// === from notes.go ===
 // Variable replacements supported in notes
 var variableReplacements = map[string]func(*tg.NewMessage) string{
 	"{mention}": func(m *tg.NewMessage) string {
@@ -634,7 +633,6 @@ Example: <code>/save welcome Hello! [Visit](url) | [Help](url)</code>
 
 <b>Permission:</b> Admins with Change Info permission can manage notes.`)
 }
-// === from reminders.go ===
 type reminderEntry struct {
 	ID         uint64 `json:"id"`
 	UserID     int64  `json:"user_id"`
@@ -943,7 +941,6 @@ func registerRemindersHandlers() {
 func initFromSrc_reminders_1_1() {
 	modules.QueueHandlerRegistration(registerRemindersHandlers)
 }
-// === from timer.go ===
 type timerData struct {
 	chatID   int64
 	userID   int64

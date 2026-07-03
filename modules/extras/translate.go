@@ -19,7 +19,6 @@ import (
 	"unicode"
 )
 
-// === from translate2.go ===
 var popularLangCodes = []struct {
 	Code string
 	Name string
@@ -178,7 +177,6 @@ func registerTranslate2Handlers() {
 func initFromSrc_translate2_0_1() {
 	modules.QueueHandlerRegistration(registerTranslate2Handlers)
 }
-// === from translate_emoji.go ===
 var jargonToSimple = map[string]string{
 	"utilize":        "use",
 	"utilization":    "use",
@@ -996,7 +994,6 @@ func registerTranslateEmojiHandlers() {
 func initFromSrc_translate_emoji_1_1() {
 	modules.QueueHandlerRegistration(registerTranslateEmojiHandlers)
 }
-// === from translate_special.go ===
 var owoFaces = []string{
 	"OwO", "UwU", "owo", "uwu", ">w<", "^w^", ":3", "x3", ">_<", "nya~",
 }
@@ -1155,7 +1152,6 @@ func registerTranslateSpecialHandlers() {
 func initFromSrc_translate_special_2_1() {
 	modules.QueueHandlerRegistration(registerTranslateSpecialHandlers)
 }
-// === from translator.go ===
 func TranslateHandler(m *tg.NewMessage) error {
 	if !m.IsReply() {
 		m.Reply("Reply to a message to translate it")
@@ -1253,7 +1249,6 @@ func initFromSrc_translator_3_1() {
 Commands:
 - /tr <lang> [-r]: Translate reply. -r replaces original.`)
 }
-// === from autotranslate.go ===
 type autotrConfig struct {
 	Enabled bool   `json:"e"`
 	Lang    string `json:"l"`

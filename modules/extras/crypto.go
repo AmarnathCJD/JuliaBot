@@ -19,7 +19,6 @@ import (
 	"time"
 )
 
-// === from crypto.go ===
 const cryptoCacheTTL = 60 * time.Second
 
 var cryptoSymbolMap = map[string]string{
@@ -378,7 +377,6 @@ func registerCryptoHandlers() {
 func initFromSrc_crypto_0_1() {
 	modules.QueueHandlerRegistration(registerCryptoHandlers)
 }
-// === from crypto_chart.go ===
 type cryptoChartMarket struct {
 	Prices [][]float64 `json:"prices"`
 }
@@ -649,7 +647,6 @@ func registerCryptoChartHandlers() {
 }
 
 func initFromSrc_crypto_chart_1_1() { modules.QueueHandlerRegistration(registerCryptoChartHandlers) }
-// === from crypto_news.go ===
 var cryptoNewsHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 type cryptoNewsItem struct {

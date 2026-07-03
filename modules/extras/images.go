@@ -26,7 +26,6 @@ import (
 	"golang.org/x/image/font/basicfont"
 )
 
-// === from image_crop.go ===
 func circleCropApplyMask(src image.Image) image.Image {
 	bounds := src.Bounds()
 	w := bounds.Dx()
@@ -163,7 +162,6 @@ func registerImageCropHandlers() {
 
 func initFromSrc_image_crop_0_1() { modules.QueueHandlerRegistration(registerImageCropHandlers) }
 
-// === from colors.go ===
 var namedColors = map[string]string{
 	"aliceblue":            "#F0F8FF",
 	"antiquewhite":         "#FAEBD7",
@@ -592,7 +590,6 @@ func initFromSrc_colors_1_1() {
 	modules.QueueHandlerRegistration(registerColorsHandlers)
 }
 
-// === from wallpaper.go ===
 func WallpaperHandler(m *tg.NewMessage) error {
 	query := strings.TrimSpace(m.Args())
 	if query == "" {
@@ -662,7 +659,6 @@ func registerWallpaperHandlers() {
 	c.On("cmd:wallpaper", WallpaperHandler)
 }
 
-// === from profile_cards.go ===
 type pcardPalette struct {
 	BgTop   color.RGBA
 	BgMid   color.RGBA
@@ -1108,7 +1104,7 @@ func pcardIsEmojiRune(r rune) bool {
 }
 
 
-func pcardDrawAvatarRing(dc *gg.Context, cx, cy, r float64, pal pcardPalette, userID int64, avatarPath string) {
+func pcardDrawAvatarRing(dc *gg.Context, cx, cy, r float64, pal pcardPalette, avatarPath string) {
 	dc.SetRGBA255(int(pal.Accent.R), int(pal.Accent.G), int(pal.Accent.B), 30)
 	dc.DrawCircle(cx, cy, r+14)
 	dc.Fill()
@@ -1680,7 +1676,7 @@ func pcardRender(info pcardTarget, avatarPath string) (string, error) {
 	avR := 96.0
 
 	if avatarPath != "" {
-		pcardDrawAvatarRing(dc, avCX, avCY, avR, pal, info.UserID, avatarPath)
+		pcardDrawAvatarRing(dc, avCX, avCY, avR, pal, avatarPath)
 	} else {
 		dc.SetRGBA255(int(pal.Accent.R), int(pal.Accent.G), int(pal.Accent.B), 30)
 		dc.DrawCircle(avCX, avCY, avR+14)
@@ -1957,7 +1953,6 @@ func initFromSrc_profile_cards_3_1() {
 	modules.QueueHandlerRegistration(registerProfileCardsHandlers)
 }
 
-// === from screenshot.go ===
 func fetchScreenshot(target string) (string, error) {
 	endpoint := "https://image.thum.io/get/width/1280/" + target
 	client := &http.Client{Timeout: 60 * time.Second}

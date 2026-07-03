@@ -19,7 +19,6 @@ import (
 	"time"
 )
 
-// === from qr.go ===
 func QRHandler(m *tg.NewMessage) error {
 	text := strings.TrimSpace(m.Args())
 	if text == "" && m.IsReply() {
@@ -86,7 +85,6 @@ func registerQRHandlers() {
 	c := modules.Client
 	c.On("cmd:qr", QRHandler)
 }
-// === from qr_image.go ===
 func qrColorNormalizeHex(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	s = strings.TrimPrefix(s, "#")
@@ -233,7 +231,6 @@ func registerQRColorHandlers() {
 	c := modules.Client
 	c.On("cmd:qrcolor", QRColorHandler)
 }
-// === from qr_pretty.go ===
 func fetchQRPrettyPNG(text string) ([]byte, error) {
 	endpoint := "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + url.QueryEscape(text)
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -397,7 +394,6 @@ func registerQRArtHandlers() {
 	c := modules.Client
 	c.On("cmd:qrart", QRArtHandler)
 }
-// === from qrcode_decode.go ===
 type qrServerSymbol struct {
 	Seq   int     `json:"seq"`
 	Data  string  `json:"data"`

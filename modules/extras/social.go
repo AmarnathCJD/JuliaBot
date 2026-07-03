@@ -19,8 +19,6 @@ import (
 	"time"
 )
 
-// === from instagram.go ===
-// === from insta.go ===
 var charsX = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/"
 
 type SnapResponse struct {
@@ -418,7 +416,6 @@ func registerInstaHandlers() {
 func initFromSrc_insta_0_1() {
 	modules.QueueHandlerRegistration(registerInstaHandlers)
 }
-// === from instagram_oembed.go ===
 var igOgMetaPattern = regexp.MustCompile(`<meta\s+property="og:([a-z_]+)"\s+content="([^"]*)"`)
 var igURLPattern = regexp.MustCompile(`https?://(?:www\.)?instagram\.com/[^\s]+`)
 
@@ -566,7 +563,6 @@ func initFromSrc_instagram_0_1() {
 	initFromSrc_insta_0_1()
 	initFromSrc_instagram_oembed_1_1()
 }
-// === from twitter_thread.go ===
 var tweetHTTPClient = &http.Client{
 	Timeout: 30 * time.Second,
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -706,7 +702,6 @@ func registerTweetHandlers() {
 	c := modules.Client
 	c.On("cmd:tweet", TweetHandler)
 }
-// === from spotify_meta.go ===
 type itunesTrack struct {
 	ArtistName       string  `json:"artistName"`
 	CollectionName   string  `json:"collectionName"`

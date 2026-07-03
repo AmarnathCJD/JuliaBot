@@ -18,7 +18,6 @@ import (
 	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
-// === from dictionary.go ===
 type dictionaryDefinition struct {
 	Definition string `json:"definition"`
 	Example    string `json:"example"`
@@ -130,7 +129,6 @@ func registerDictionaryHandlers() {
 	c.On("cmd:define", DefineHandler)
 }
 
-// === from kanji_lookup.go ===
 type kanjiLookupResponse struct {
 	Kanji        string   `json:"kanji"`
 	Grade        int      `json:"grade"`
@@ -224,7 +222,6 @@ func registerKanjiLookupHandlers() {
 	c.On("cmd:kanji", KanjiLookupHandler)
 }
 
-// === from urban.go ===
 type urbanDefinition struct {
 	Word       string `json:"word"`
 	Definition string `json:"definition"`
@@ -433,7 +430,6 @@ func registerUrbanHandlers() {
 	c.On("callback:urban:", UrbanCallback)
 }
 
-// === from definewiki.go ===
 type wikiThumbnail struct {
 	Source string `json:"source"`
 	Width  int    `json:"width"`
@@ -664,7 +660,6 @@ func registerWikiHandlers() {
 	c.On("cmd:wiki", WikiHandler)
 }
 
-// === from numfact.go ===
 var numFactClient = &http.Client{Timeout: 30 * time.Second}
 
 func fetchNumFact(endpoint string) (string, error) {
@@ -784,7 +779,6 @@ func initFromSrc_numfact_4_1() {
 	modules.QueueHandlerRegistration(registerNumFactHandlers)
 }
 
-// === from random_fact_api.go ===
 var randomFactAPIClient = &http.Client{Timeout: 30 * time.Second}
 
 type uselessFactResp struct {

@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-// === from cat_dog.go ===
 type catApiResponse struct {
 	URL string `json:"url"`
 }
@@ -78,7 +77,6 @@ func registerCatDogHandlers() {
 	c.On("cmd:cat", CatHandler)
 	c.On("cmd:dog", DogHandler)
 }
-// === from duck_image.go ===
 type duckApiResponse struct {
 	Message string `json:"message"`
 	URL     string `json:"url"`
@@ -116,7 +114,6 @@ func registerDuckHandlers() {
 	c := modules.Client
 	c.On("cmd:duck", DuckHandler)
 }
-// === from fox_image.go ===
 type foxApiResponse struct {
 	Image string `json:"image"`
 	Link  string `json:"link"`

@@ -16,7 +16,6 @@ import (
 	"time"
 )
 
-// === from rules.go ===
 func parseButtons(content string) (string, [][]tg.KeyboardButton) {
 	btnRegex := regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
 	matches := btnRegex.FindAllStringSubmatch(content, -1)
@@ -303,7 +302,6 @@ Set and display group rules with optional media.
 
 <b>Note:</b> Only admins with Change Info permission can modify rules.`)
 }
-// === from temprules.go ===
 const tmpRulesBucket = "tmprules"
 
 type tmpRule struct {

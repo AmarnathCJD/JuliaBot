@@ -20,8 +20,34 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
-// === from stickers.go ===
 const MaxStickersPerPack = 120
+
+func stickerFriendlyError(m *tg.NewMessage, err error) string {
+	msg := err.Error()
+	lower := strings.ToLower(msg)
+	if strings.Contains(msg, "PEER_ID_INVALID") || strings.Contains(lower, "peer_id_invalid") {
+		hint := ""
+		if me := m.Client.Me(); me != nil && me.Username != "" {
+			hint = fmt.Sprintf(" Open <a href=\"https://t.me/%s\">@%s</a> and press <b>Start</b>, then try again.", me.Username, me.Username)
+		} else {
+			hint = " Open my DM and press <b>Start</b>, then try again."
+		}
+		return "I can't create sticker packs for you because you haven't started me in DM (or you've blocked me)." + hint
+	}
+	if strings.Contains(msg, "STICKERPACK_STICKERS_TOO_MUCH") {
+		return "This sticker pack is full. Try again — I'll spill into a new pack."
+	}
+	if strings.Contains(msg, "SHORTNAME_OCCUPY_FAILED") || strings.Contains(msg, "PACK_SHORT_NAME_OCCUPIED") {
+		return "That pack name is already taken. Retry to get a new one."
+	}
+	if strings.Contains(msg, "STICKER_PNG_DIMENSIONS") || strings.Contains(msg, "STICKER_INVALID") {
+		return "Sticker file is invalid — must be a 512×512 PNG/WEBP or a valid animated/video sticker."
+	}
+	if strings.Contains(msg, "FLOOD") {
+		return "Telegram is rate-limiting sticker operations. Wait a bit and try again."
+	}
+	return "Failed to create sticker pack: " + html.EscapeString(msg)
+}
 
 func GifToSticker(m *tg.NewMessage) error {
 	if !m.IsReply() {
@@ -258,7 +284,7 @@ func KangSticker(m *tg.NewMessage) error {
 		}
 
 		if createErr != nil {
-			m.Reply(fmt.Sprintf("Failed to create sticker pack: %v", createErr))
+			m.Reply(stickerFriendlyError(m, createErr))
 			return nil
 		}
 
@@ -355,7 +381,7 @@ func KangSticker(m *tg.NewMessage) error {
 	})
 
 	if addErr != nil {
-		m.Reply(fmt.Sprintf("Failed to add sticker: %v", addErr))
+		m.Reply(stickerFriendlyError(m, addErr))
 		return nil
 	}
 
@@ -529,7 +555,6 @@ func initFromSrc_stickers_0_1() {
 	modules.QueueHandlerRegistration(registerStickersHandlers)
 }
 
-// === from sticker_pack_info.go ===
 func StickerInfoHandler(m *tg.NewMessage) error {
 	if !m.IsReply() {
 		m.Reply("<b>Usage:</b> reply to a sticker with <code>/stickerinfo</code>")
@@ -641,7 +666,6 @@ func initFromSrc_sticker_pack_info_1_1() {
 	modules.QueueHandlerRegistration(registerStickerPackInfoHandlers)
 }
 
-// === from sticker_to_image.go ===
 func stickerExtractDoc(reply *tg.NewMessage) (*tg.DocumentObj, string) {
 	if reply.Media() == nil {
 		return nil, ""
@@ -846,7 +870,6 @@ func initFromSrc_sticker_to_image_2_1() {
 	modules.QueueHandlerRegistration(registerStickerToImageHandlers)
 }
 
-// === from webp_to_jpg.go ===
 func webpToJpgExtractDoc(reply *tg.NewMessage) (*tg.DocumentObj, string, string) {
 	if reply.Media() == nil {
 		return nil, "", ""

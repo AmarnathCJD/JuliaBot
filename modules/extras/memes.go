@@ -17,7 +17,6 @@ import (
 	"golang.org/x/image/font/basicfont"
 )
 
-// === from meme.go ===
 func memeFontPath(name string) string {
 	candidates := []string{
 		"./assets/" + name,
@@ -396,7 +395,6 @@ func initFromSrc_meme_0_1() {
 	modules.QueueHandlerRegistration(registerMemeHandlers)
 }
 
-// === from meme_generator.go ===
 var dramaMemeRng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func dramaMemeGradientBg(dc *gg.Context, w, h int) {

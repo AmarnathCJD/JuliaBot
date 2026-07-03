@@ -13,7 +13,6 @@ import (
 	"time"
 )
 
-// === from weather.go ===
 type weatherGeocodeResult struct {
 	Name      string  `json:"name"`
 	Latitude  float64 `json:"latitude"`
@@ -273,7 +272,6 @@ func registerWeatherHandlers() {
 func initFromSrc_weather_0_1() {
 	modules.QueueHandlerRegistration(registerWeatherHandlers)
 }
-// === from temperature.go ===
 func tempParseInput(m *tg.NewMessage) (float64, bool) {
 	text := strings.TrimSpace(m.Args())
 	if text == "" && m.IsReply() {
