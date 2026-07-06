@@ -3,8 +3,10 @@ package extras
 import (
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -15,7 +17,12 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-const locksBucket = "locks_v2"
+const locksBucket = "locks_v3"
+
+type lockValue struct {
+	On  bool    `json:"on"`
+	IDs []int64 `json:"ids,omitempty"`
+}
 
 var supportedLockTypes = []string{
 	"text",
@@ -26,26 +33,23 @@ var supportedLockTypes = []string{
 	"sticker",
 	"voice",
 	"audio",
-	"document",
 	"file",
 	"link",
 	"url",
 	"forward",
 	"mention",
 	"hashtag",
-	"bot",
 	"invite",
 	"reply",
 	"poll",
 	"location",
 	"contact",
-	"dice",
 	"game",
 	"all",
-	"button",
 	"emoji",
 	"command",
 	"edit",
+	"inline",
 	"service",
 	"preview",
 	"video_note",
@@ -62,7 +66,6 @@ var lockAliases = map[string]string{
 	"forwards":     "forward",
 	"mentions":     "mention",
 	"hashtags":     "hashtag",
-	"bots":         "bot",
 	"invites":      "invite",
 	"invitelink":   "invite",
 	"invitelinks":  "invite",
@@ -71,15 +74,15 @@ var lockAliases = map[string]string{
 	"loc":          "location",
 	"locations":    "location",
 	"contacts":     "contact",
-	"dices":        "dice",
 	"games":        "game",
-	"buttons":      "button",
 	"emojis":       "emoji",
 	"commands":     "command",
 	"cmd":          "command",
 	"cmds":         "command",
 	"edits":        "edit",
 	"editing":      "edit",
+	"inlines":      "inline",
+	"viabot":       "inline",
 	"services":     "service",
 	"servicemsg":   "service",
 	"previews":     "preview",
@@ -103,7 +106,8 @@ var lockAliases = map[string]string{
 	"animations":   "animation",
 	"voices":       "voice",
 	"audios":       "audio",
-	"documents":    "document",
+	"documents":    "file",
+	"document":     "file",
 	"files":        "file",
 	"texts":        "text",
 	"messages":     "text",
@@ -111,7 +115,7 @@ var lockAliases = map[string]string{
 }
 
 var (
-	locksCache   = make(map[int64]map[string]bool)
+	locksCache   = make(map[int64]map[string]lockValue)
 	locksCacheMu sync.RWMutex
 )
 
@@ -133,19 +137,19 @@ func locksKey(chatID int64) []byte {
 	return b
 }
 
-func loadLocks(chatID int64) map[string]bool {
+func loadLocks(chatID int64) map[string]lockValue {
 	locksCacheMu.RLock()
 	if v, ok := locksCache[chatID]; ok {
-		out := make(map[string]bool, len(v))
-		for k, b := range v {
-			out[k] = b
+		out := make(map[string]lockValue, len(v))
+		for k, lv := range v {
+			out[k] = lv
 		}
 		locksCacheMu.RUnlock()
 		return out
 	}
 	locksCacheMu.RUnlock()
 
-	out := make(map[string]bool)
+	out := make(map[string]lockValue)
 	d, err := db.GetDB()
 	if err != nil {
 		return out
@@ -164,24 +168,24 @@ func loadLocks(chatID int64) map[string]bool {
 	})
 
 	locksCacheMu.Lock()
-	cp := make(map[string]bool, len(out))
-	for k, b := range out {
-		cp[k] = b
+	cp := make(map[string]lockValue, len(out))
+	for k, lv := range out {
+		cp[k] = lv
 	}
 	locksCache[chatID] = cp
 	locksCacheMu.Unlock()
 	return out
 }
 
-func saveLocks(chatID int64, m map[string]bool) error {
+func saveLocks(chatID int64, m map[string]lockValue) error {
 	d, err := db.GetDB()
 	if err != nil {
 		return err
 	}
-	clean := make(map[string]bool, len(m))
+	clean := make(map[string]lockValue, len(m))
 	for k, v := range m {
-		if v {
-			clean[k] = true
+		if v.On {
+			clean[k] = v
 		}
 	}
 	err = d.Update(func(tx *bolt.Tx) error {
@@ -303,17 +307,6 @@ func messageHasSpoiler(m *tg.NewMessage) bool {
 	return false
 }
 
-func messageHasButtons(m *tg.NewMessage) bool {
-	if m.Message == nil {
-		return false
-	}
-	switch m.Message.ReplyMarkup.(type) {
-	case *tg.ReplyInlineMarkup:
-		return true
-	}
-	return false
-}
-
 func messageIsVideoNote(m *tg.NewMessage) bool {
 	doc := m.Document()
 	if doc == nil {
@@ -336,18 +329,6 @@ func messageIsMediaGroup(m *tg.NewMessage) bool {
 func messageHasPreview(m *tg.NewMessage) bool {
 	if _, ok := m.Media().(*tg.MessageMediaWebPage); ok {
 		return true
-	}
-	return false
-}
-
-func senderIsBot(m *tg.NewMessage) bool {
-	if m.Sender != nil && m.Sender.Bot {
-		return true
-	}
-	if m.Message != nil {
-		if m.Message.ViaBotID != 0 {
-			return true
-		}
 	}
 	return false
 }
@@ -408,7 +389,7 @@ func messageMatchesLock(m *tg.NewMessage, lockType string) bool {
 			}
 		}
 		return false
-	case "document", "file":
+	case "file":
 		doc := m.Document()
 		if doc == nil {
 			return false
@@ -431,8 +412,6 @@ func messageMatchesLock(m *tg.NewMessage, lockType string) bool {
 		return messageHasMention(m)
 	case "hashtag":
 		return messageHasHashtag(m)
-	case "bot":
-		return senderIsBot(m)
 	case "invite":
 		return messageHasInviteLink(m)
 	case "reply":
@@ -443,15 +422,10 @@ func messageMatchesLock(m *tg.NewMessage, lockType string) bool {
 		return m.Geo() != nil || m.Venue() != nil
 	case "contact":
 		return m.Contact() != nil
-	case "dice":
-		if _, ok := m.Media().(*tg.MessageMediaDice); ok {
-			return true
-		}
-		return false
 	case "game":
 		return m.Game() != nil
-	case "button":
-		return messageHasButtons(m)
+	case "inline":
+		return m.Message != nil && m.Message.ViaBotID != 0
 	case "emoji", "custom_emoji", "premium_emoji":
 		return messageHasCustomEmoji(m)
 	case "command":
@@ -493,7 +467,7 @@ func formatCurrentLocks(chatID int64) string {
 	locks := loadLocks(chatID)
 	active := make([]string, 0, len(locks))
 	for k, v := range locks {
-		if v {
+		if v.On {
 			active = append(active, k)
 		}
 	}
@@ -506,9 +480,52 @@ func formatCurrentLocks(chatID int64) string {
 	for _, t := range active {
 		sb.WriteString(" - <code>")
 		sb.WriteString(t)
-		sb.WriteString("</code>\n")
+		sb.WriteString("</code>")
+		if ids := locks[t].IDs; len(ids) > 0 {
+			sb.WriteString(" = <code>")
+			parts := make([]string, len(ids))
+			for i, id := range ids {
+				parts[i] = strconv.FormatInt(id, 10)
+			}
+			sb.WriteString(strings.Join(parts, ", "))
+			sb.WriteString("</code>")
+		}
+		sb.WriteString("\n")
 	}
 	return sb.String()
+}
+
+func resolveInlineTarget(c *tg.Client, s string) (int64, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, fmt.Errorf("empty target")
+	}
+	if id, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return id, nil
+	}
+	result, err := c.ResolveUsername(strings.TrimPrefix(s, "@"))
+	if err != nil {
+		return 0, err
+	}
+	if u, ok := result.(*tg.UserObj); ok {
+		return u.ID, nil
+	}
+	return 0, fmt.Errorf("%s is not a user/bot", s)
+}
+
+func parseLockArg(a string) (key string, targets []string) {
+	if idx := strings.Index(a, "="); idx >= 0 {
+		key = a[:idx]
+		vs := a[idx+1:]
+		for _, t := range strings.Split(vs, ",") {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				targets = append(targets, t)
+			}
+		}
+		return key, targets
+	}
+	return a, nil
 }
 
 func LockHandler(m *tg.NewMessage) error {
@@ -529,17 +546,36 @@ func LockHandler(m *tg.NewMessage) error {
 
 	locks := loadLocks(m.ChatID())
 	if locks == nil {
-		locks = make(map[string]bool)
+		locks = make(map[string]lockValue)
 	}
 
-	var locked, unknown []string
+	var locked, unknown, badTargets []string
 	for _, a := range args {
-		t := normalizeLockType(a)
+		rawKey, targets := parseLockArg(a)
+		t := normalizeLockType(rawKey)
 		if !isValidLockType(t) {
-			unknown = append(unknown, a)
+			unknown = append(unknown, rawKey)
 			continue
 		}
-		locks[t] = true
+		lv := locks[t]
+		lv.On = true
+		if len(targets) > 0 {
+			if t != "inline" {
+				badTargets = append(badTargets, rawKey)
+				continue
+			}
+			ids := make([]int64, 0, len(targets))
+			for _, target := range targets {
+				id, err := resolveInlineTarget(m.Client, target)
+				if err != nil {
+					badTargets = append(badTargets, target)
+					continue
+				}
+				ids = append(ids, id)
+			}
+			lv.IDs = ids
+		}
+		locks[t] = lv
 		locked = append(locked, t)
 	}
 
@@ -561,6 +597,14 @@ func LockHandler(m *tg.NewMessage) error {
 		sb.WriteString("<b>Unknown:</b> <code>")
 		sb.WriteString(strings.Join(unknown, ", "))
 		sb.WriteString("</code>\nSee <code>/locktypes</code>.")
+	}
+	if len(badTargets) > 0 {
+		if sb.Len() > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString("<b>Unresolved targets:</b> <code>")
+		sb.WriteString(strings.Join(badTargets, ", "))
+		sb.WriteString("</code>")
 	}
 	if sb.Len() == 0 {
 		sb.WriteString("Nothing changed.")
@@ -595,25 +639,57 @@ func UnlockHandler(m *tg.NewMessage) error {
 
 	locks := loadLocks(m.ChatID())
 	if locks == nil {
-		locks = make(map[string]bool)
+		locks = make(map[string]lockValue)
 	}
 
-	if len(args) == 1 && normalizeLockType(args[0]) == "all" {
-		_ = saveLocks(m.ChatID(), map[string]bool{})
-		m.Reply("<b>All locks cleared.</b>")
-		actor := ""
-		if m.Sender != nil {
-			actor = strings.TrimSpace(m.Sender.FirstName + " " + m.Sender.LastName)
+	if len(args) == 1 {
+		if k, tgts := parseLockArg(args[0]); normalizeLockType(k) == "all" && len(tgts) == 0 {
+			_ = saveLocks(m.ChatID(), map[string]lockValue{})
+			m.Reply("<b>All locks cleared.</b>")
+			actor := ""
+			if m.Sender != nil {
+				actor = strings.TrimSpace(m.Sender.FirstName + " " + m.Sender.LastName)
+			}
+			LogModerationAction(m.ChatID(), "unlock", actor, "", "all")
+			return nil
 		}
-		LogModerationAction(m.ChatID(), "unlock", actor, "", "all")
-		return nil
 	}
 
-	var unlocked, unknown []string
+	var unlocked, unknown, badTargets []string
 	for _, a := range args {
-		t := normalizeLockType(a)
+		rawKey, targets := parseLockArg(a)
+		t := normalizeLockType(rawKey)
 		if !isValidLockType(t) {
-			unknown = append(unknown, a)
+			unknown = append(unknown, rawKey)
+			continue
+		}
+		if len(targets) > 0 && t == "inline" {
+			lv := locks[t]
+			if !lv.On || len(lv.IDs) == 0 {
+				continue
+			}
+			removeIDs := make(map[int64]bool, len(targets))
+			for _, target := range targets {
+				id, err := resolveInlineTarget(m.Client, target)
+				if err != nil {
+					badTargets = append(badTargets, target)
+					continue
+				}
+				removeIDs[id] = true
+			}
+			kept := make([]int64, 0, len(lv.IDs))
+			for _, id := range lv.IDs {
+				if !removeIDs[id] {
+					kept = append(kept, id)
+				}
+			}
+			if len(kept) == 0 {
+				delete(locks, t)
+			} else {
+				lv.IDs = kept
+				locks[t] = lv
+			}
+			unlocked = append(unlocked, rawKey)
 			continue
 		}
 		delete(locks, t)
@@ -638,6 +714,14 @@ func UnlockHandler(m *tg.NewMessage) error {
 		sb.WriteString("<b>Unknown:</b> <code>")
 		sb.WriteString(strings.Join(unknown, ", "))
 		sb.WriteString("</code>\nSee <code>/locktypes</code>.")
+	}
+	if len(badTargets) > 0 {
+		if sb.Len() > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString("<b>Unresolved targets:</b> <code>")
+		sb.WriteString(strings.Join(badTargets, ", "))
+		sb.WriteString("</code>")
 	}
 	if sb.Len() == 0 {
 		sb.WriteString("Nothing changed.")
@@ -676,18 +760,32 @@ func LocksWatcher(m *tg.NewMessage) error {
 	if len(locks) == 0 {
 		return nil
 	}
+
+	if inl := locks["inline"]; inl.On && m.Message != nil && m.Message.ViaBotID != 0 {
+		if len(inl.IDs) == 0 {
+			m.Delete()
+			return nil
+		}
+		for _, id := range inl.IDs {
+			if id == m.Message.ViaBotID {
+				m.Delete()
+				return nil
+			}
+		}
+	}
+
 	if modules.IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "") {
 		return nil
 	}
 
-	if locks["all"] {
+	if locks["all"].On {
 		m.Delete()
 		return nil
 	}
 
 	matched := ""
-	for t, on := range locks {
-		if !on || t == "all" || t == "edit" {
+	for t, lv := range locks {
+		if !lv.On || t == "all" || t == "inline" || t == "edit" {
 			continue
 		}
 		if messageMatchesLock(m, t) {
@@ -707,7 +805,7 @@ func LocksEditWatcher(m *tg.NewMessage) error {
 		return nil
 	}
 	locks := loadLocks(m.ChatID())
-	if !locks["edit"] && !locks["all"] {
+	if !locks["edit"].On && !locks["all"].On {
 		return nil
 	}
 	if modules.IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "") {
@@ -733,7 +831,7 @@ func init() {
 
 	modules.Mods.AddModule("Locks", `<b>Locks</b>
 
-Per-chat content locks. When a type is locked, new messages of that type are deleted (admins exempt).
+Per-chat content locks. When a type is locked, new messages of that type are deleted (admins exempt, except <code>inline</code>).
 
 <b>Commands:</b>
  - /lock &lt;type&gt; [type2 ...] - Lock one or more types
@@ -743,5 +841,11 @@ Per-chat content locks. When a type is locked, new messages of that type are del
  - /lockstatus - Same as /locks
  - /locktypes - List every supported lock type
 
-<b>Permission:</b> Admins with Delete Messages can manage locks.`)
+<b>Inline (blocks messages sent via inline bots, admins included):</b>
+ - /lock inline - Block all inline usage
+ - /lock inline=@bot1,@bot2 - Block only these specific bots (accepts @username or numeric ID)
+ - /unlock inline=@bot - Remove one bot from the target list
+ - /unlock inline - Clear the inline lock entirely
+
+<b>Permission:</b> Admins with Change Info can manage locks.`)
 }
