@@ -895,6 +895,151 @@ func initFromSrc_random_fact_api_5_1() {
 	modules.QueueHandlerRegistration(registerRandomFactAPIHandlers)
 }
 
+type ipLookupResult struct {
+	Status      string  `json:"status"`
+	Message     string  `json:"message"`
+	Query       string  `json:"query"`
+	Country     string  `json:"country"`
+	CountryCode string  `json:"countryCode"`
+	Region      string  `json:"region"`
+	RegionName  string  `json:"regionName"`
+	City        string  `json:"city"`
+	Zip         string  `json:"zip"`
+	Lat         float64 `json:"lat"`
+	Lon         float64 `json:"lon"`
+	Timezone    string  `json:"timezone"`
+	ISP         string  `json:"isp"`
+	Org         string  `json:"org"`
+	AS          string  `json:"as"`
+	Mobile      bool    `json:"mobile"`
+	Proxy       bool    `json:"proxy"`
+	Hosting     bool    `json:"hosting"`
+	Reverse     string  `json:"reverse"`
+}
+
+func IPLookupHandler(m *tg.NewMessage) error {
+	target := strings.TrimSpace(m.Args())
+	if target == "" {
+		if m.IsReply() {
+			r, err := m.GetReplyMessage()
+			if err == nil && r != nil {
+				target = strings.TrimSpace(r.Text())
+			}
+		}
+	}
+	if target == "" {
+		m.Reply("Usage: <code>/ip &lt;ip or domain&gt;</code>")
+		return nil
+	}
+	if strings.Contains(target, "://") {
+		if u, err := url.Parse(target); err == nil && u.Host != "" {
+			target = u.Host
+		}
+	}
+	target = strings.TrimPrefix(target, "www.")
+	if i := strings.Index(target, "/"); i > 0 {
+		target = target[:i]
+	}
+	if i := strings.Index(target, ":"); i > 0 {
+		if _, err := strconv.Atoi(target[i+1:]); err == nil {
+			target = target[:i]
+		}
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	api := fmt.Sprintf("http://ip-api.com/json/%s?fields=status,message,query,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,mobile,proxy,hosting,reverse",
+		url.PathEscape(target))
+	resp, err := client.Get(api)
+	if err != nil {
+		m.Reply("Lookup failed: " + html.EscapeString(err.Error()))
+		return nil
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		m.Reply("Failed to read response.")
+		return nil
+	}
+	var r ipLookupResult
+	if err := json.Unmarshal(body, &r); err != nil {
+		m.Reply("Failed to parse response.")
+		return nil
+	}
+	if r.Status != "success" {
+		msg := r.Message
+		if msg == "" {
+			msg = "invalid query"
+		}
+		m.Reply(fmt.Sprintf("Lookup failed for <code>%s</code>: %s",
+			html.EscapeString(target), html.EscapeString(msg)))
+		return nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString("<b>IP Lookup</b>\n")
+	sb.WriteString(fmt.Sprintf("<b>Query:</b> <code>%s</code>\n", html.EscapeString(r.Query)))
+	if r.Reverse != "" && r.Reverse != r.Query {
+		sb.WriteString(fmt.Sprintf("<b>Reverse:</b> <code>%s</code>\n", html.EscapeString(r.Reverse)))
+	}
+	if r.Country != "" {
+		loc := r.Country
+		if r.CountryCode != "" {
+			loc += fmt.Sprintf(" (%s)", r.CountryCode)
+		}
+		sb.WriteString(fmt.Sprintf("<b>Country:</b> %s\n", html.EscapeString(loc)))
+	}
+	regionCity := strings.TrimSpace(strings.Join([]string{r.City, r.RegionName}, ", "))
+	regionCity = strings.Trim(regionCity, " ,")
+	if regionCity != "" {
+		sb.WriteString(fmt.Sprintf("<b>Region:</b> %s\n", html.EscapeString(regionCity)))
+	}
+	if r.Zip != "" {
+		sb.WriteString(fmt.Sprintf("<b>Zip:</b> %s\n", html.EscapeString(r.Zip)))
+	}
+	if r.Timezone != "" {
+		sb.WriteString(fmt.Sprintf("<b>Timezone:</b> %s\n", html.EscapeString(r.Timezone)))
+	}
+	if r.Lat != 0 || r.Lon != 0 {
+		sb.WriteString(fmt.Sprintf("<b>Coords:</b> <a href=\"https://maps.google.com/?q=%f,%f\">%.4f, %.4f</a>\n",
+			r.Lat, r.Lon, r.Lat, r.Lon))
+	}
+	if r.ISP != "" {
+		sb.WriteString(fmt.Sprintf("<b>ISP:</b> %s\n", html.EscapeString(r.ISP)))
+	}
+	if r.Org != "" && r.Org != r.ISP {
+		sb.WriteString(fmt.Sprintf("<b>Org:</b> %s\n", html.EscapeString(r.Org)))
+	}
+	if r.AS != "" {
+		sb.WriteString(fmt.Sprintf("<b>AS:</b> <code>%s</code>\n", html.EscapeString(r.AS)))
+	}
+	var flags []string
+	if r.Mobile {
+		flags = append(flags, "mobile")
+	}
+	if r.Proxy {
+		flags = append(flags, "proxy/vpn")
+	}
+	if r.Hosting {
+		flags = append(flags, "hosting/dc")
+	}
+	if len(flags) > 0 {
+		sb.WriteString(fmt.Sprintf("<b>Flags:</b> %s\n", strings.Join(flags, ", ")))
+	}
+
+	m.Reply(sb.String(), &tg.SendOptions{LinkPreview: false})
+	return nil
+}
+
+func registerIPLookupHandlers() {
+	c := modules.Client
+	c.On("cmd:ip", IPLookupHandler)
+	c.On("cmd:iplookup", IPLookupHandler)
+}
+
+func initFromSrc_iplookup_6_1() {
+	modules.QueueHandlerRegistration(registerIPLookupHandlers)
+}
+
 func init() {
 	initFromSrc_dictionary_0_1()
 	initFromSrc_kanji_lookup_1_1()
@@ -902,4 +1047,16 @@ func init() {
 	initFromSrc_definewiki_3_1()
 	initFromSrc_numfact_4_1()
 	initFromSrc_random_fact_api_5_1()
+	initFromSrc_iplookup_6_1()
+
+	modules.Mods.AddModule("IP Lookup", `<b>IP Lookup</b>
+
+Look up geolocation, ISP, ASN, and proxy/hosting flags for any IP address or domain.
+
+<b>Commands:</b>
+ - /ip &lt;ip or domain&gt; - Lookup details
+ - /iplookup &lt;ip or domain&gt; - Same as /ip
+ - Reply to a message with just <code>/ip</code> to look up whatever text it contains.
+
+<i>Data by ip-api.com — free tier, 45 requests/min.</i>`)
 }

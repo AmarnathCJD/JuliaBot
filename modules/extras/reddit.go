@@ -25,7 +25,7 @@ import (
 )
 
 var redditUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-	"(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+	"(KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
 
 type redditComment struct {
 	ID         string `json:"id"`
@@ -55,14 +55,14 @@ type redditPost struct {
 func redditNewClient() (tls_client.HttpClient, error) {
 	return tls_client.NewHttpClient(tls_client.NewNoopLogger(),
 		tls_client.WithTimeoutSeconds(30),
-		tls_client.WithClientProfile(profiles.Chrome_124),
+		tls_client.WithClientProfile(profiles.Chrome_146),
 		tls_client.WithCookieJar(tls_client.NewCookieJar()),
 	)
 }
 
 func redditChromeHeaders() http.Header {
 	h := http.Header{
-		"sec-ch-ua":                 {`"Chromium";v="124", "Google Chrome";v="124", "Not_A Brand";v="99"`},
+		"sec-ch-ua":                 {`"Chromium";v="146", "Google Chrome";v="146", "Not_A Brand";v="99"`},
 		"sec-ch-ua-mobile":          {"?0"},
 		"sec-ch-ua-platform":        {`"Windows"`},
 		"Upgrade-Insecure-Requests": {"1"},
@@ -171,6 +171,19 @@ func redditFetchHTML(u string) (string, error) {
 }
 
 func redditFetch(u string) (*redditPost, error) {
+	if post, err := redditFetchHTMLPath(u); err == nil {
+		return post, nil
+	} else {
+		htmlErr := err
+		if post, jerr := redditFetchJSONPath(u); jerr == nil {
+			return post, nil
+		} else {
+			return nil, fmt.Errorf("html: %v; json: %v", htmlErr, jerr)
+		}
+	}
+}
+
+func redditFetchHTMLPath(u string) (*redditPost, error) {
 	htmlStr, err := redditFetchHTML(u)
 	if err != nil {
 		return nil, err
@@ -180,6 +193,364 @@ func redditFetch(u string) (*redditPost, error) {
 	src, _ := toOldRedditURL(u)
 	post.Source = src
 	return post, nil
+}
+
+// toRedditJSONURL rewrites any reddit URL to www.reddit.com/<path>.json.
+// The .json endpoint returns the same data as the HTML but is far less
+// prone to Fastly WAF blocks (as of late 2026) since Reddit still needs it
+// for their own web/mobile clients.
+func toRedditJSONURL(raw string) (string, error) {
+	if !strings.Contains(raw, "://") {
+		trimmed := strings.TrimLeft(raw, "/")
+		for _, host := range []string{"www.reddit.com/", "old.reddit.com/",
+			"m.reddit.com/", "np.reddit.com/", "reddit.com/"} {
+			if strings.HasPrefix(trimmed, host) {
+				trimmed = strings.TrimPrefix(trimmed, host)
+				break
+			}
+		}
+		raw = "https://www.reddit.com/" + trimmed
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", err
+	}
+	if strings.Contains(strings.ToLower(u.Host), "reddit.com") {
+		u.Host = "www.reddit.com"
+		u.Scheme = "https"
+	}
+	p := u.Path
+	p = strings.TrimSuffix(p, "/")
+	p = strings.TrimSuffix(p, ".json")
+	p += ".json"
+	u.Path = p
+	q := u.Query()
+	q.Set("raw_json", "1")
+	q.Set("limit", "100")
+	u.RawQuery = q.Encode()
+	u.Fragment = ""
+	return u.String(), nil
+}
+
+// redditJSONThing is the generic {"kind": ..., "data": ...} envelope.
+type redditJSONThing struct {
+	Kind string          `json:"kind"`
+	Data json.RawMessage `json:"data"`
+}
+
+type redditJSONListing struct {
+	Children []redditJSONThing `json:"children"`
+}
+
+type redditJSONPostData struct {
+	Title              string          `json:"title"`
+	Author             string          `json:"author"`
+	Subreddit          string          `json:"subreddit"`
+	Score              int             `json:"score"`
+	NumComments        int             `json:"num_comments"`
+	Selftext           string          `json:"selftext"`
+	URL                string          `json:"url"`
+	Permalink          string          `json:"permalink"`
+	CreatedUTC         float64         `json:"created_utc"`
+	IsGallery          bool            `json:"is_gallery"`
+	GalleryData        json.RawMessage `json:"gallery_data"`
+	MediaMetadata      json.RawMessage `json:"media_metadata"`
+	Media              json.RawMessage `json:"media"`
+	Preview            json.RawMessage `json:"preview"`
+	CrosspostParentLst json.RawMessage `json:"crosspost_parent_list"`
+}
+
+type redditJSONCommentData struct {
+	ID         string  `json:"id"`
+	Author     string  `json:"author"`
+	Body       string  `json:"body"`
+	Score      int     `json:"score"`
+	CreatedUTC float64 `json:"created_utc"`
+	Permalink  string  `json:"permalink"`
+}
+
+func redditFetchJSONPath(u string) (*redditPost, error) {
+	target, err := toRedditJSONURL(u)
+	if err != nil {
+		return nil, err
+	}
+	body, err := redditFetchJSONBytes(target)
+	if err != nil {
+		return nil, err
+	}
+
+	var listings []redditJSONThing
+	if err := json.Unmarshal(body, &listings); err != nil {
+		var one redditJSONThing
+		if err2 := json.Unmarshal(body, &one); err2 == nil {
+			listings = []redditJSONThing{one}
+		} else {
+			return nil, fmt.Errorf("json parse: %w (body head: %q)", err, redditClip(string(body), 200))
+		}
+	}
+	if len(listings) == 0 {
+		return nil, errors.New("empty json response")
+	}
+
+	var postThing *redditJSONThing
+	for i := range listings {
+		var l redditJSONListing
+		if err := json.Unmarshal(listings[i].Data, &l); err != nil {
+			continue
+		}
+		for j := range l.Children {
+			if l.Children[j].Kind == "t3" {
+				postThing = &l.Children[j]
+				break
+			}
+		}
+		if postThing != nil {
+			break
+		}
+	}
+	if postThing == nil {
+		return nil, errors.New("no post (t3) in json response")
+	}
+
+	var pd redditJSONPostData
+	if err := json.Unmarshal(postThing.Data, &pd); err != nil {
+		return nil, fmt.Errorf("post data: %w", err)
+	}
+
+	// Crosspost: unwrap into a synthetic parent post but keep the OP's
+	// permalink so users land on the actual post they linked to.
+	if len(pd.CrosspostParentLst) > 0 && string(pd.CrosspostParentLst) != "null" {
+		var xposts []redditJSONPostData
+		if err := json.Unmarshal(pd.CrosspostParentLst, &xposts); err == nil && len(xposts) > 0 {
+			parent := xposts[0]
+			if parent.URL != "" {
+				pd.URL = parent.URL
+			}
+			if len(parent.MediaMetadata) > 0 {
+				pd.MediaMetadata = parent.MediaMetadata
+			}
+			if len(parent.GalleryData) > 0 {
+				pd.GalleryData = parent.GalleryData
+			}
+			if len(parent.Media) > 0 {
+				pd.Media = parent.Media
+			}
+			if len(parent.Preview) > 0 {
+				pd.Preview = parent.Preview
+			}
+			pd.IsGallery = pd.IsGallery || parent.IsGallery
+		}
+	}
+
+	post := &redditPost{
+		Title:       pd.Title,
+		Subreddit:   pd.Subreddit,
+		Author:      pd.Author,
+		Score:       pd.Score,
+		NumComments: pd.NumComments,
+		Selftext:    pd.Selftext,
+		URL:         html.UnescapeString(pd.URL),
+	}
+	if pd.CreatedUTC > 0 {
+		post.CreatedISO = time.Unix(int64(pd.CreatedUTC), 0).UTC().Format(time.RFC3339)
+	}
+	if pd.Permalink != "" {
+		post.Permalink = "https://www.reddit.com" + pd.Permalink
+	}
+	post.Source = target
+	post.MediaURLs = redditMediaFromJSON(&pd)
+
+	if len(listings) > 1 {
+		var l redditJSONListing
+		if err := json.Unmarshal(listings[1].Data, &l); err == nil {
+			for _, c := range l.Children {
+				if c.Kind != "t1" {
+					continue
+				}
+				var cd redditJSONCommentData
+				if err := json.Unmarshal(c.Data, &cd); err != nil {
+					continue
+				}
+				com := redditComment{
+					ID:     "t1_" + cd.ID,
+					Author: cd.Author,
+					Score:  cd.Score,
+					Body:   cd.Body,
+				}
+				if cd.CreatedUTC > 0 {
+					com.CreatedISO = time.Unix(int64(cd.CreatedUTC), 0).UTC().Format(time.RFC3339)
+				}
+				if cd.Permalink != "" {
+					com.Permalink = "https://www.reddit.com" + cd.Permalink
+				}
+				post.Comments = append(post.Comments, com)
+				if len(post.Comments) >= 100 {
+					break
+				}
+			}
+		}
+	}
+
+	return post, nil
+}
+
+func redditFetchJSONBytes(target string) ([]byte, error) {
+	client, err := redditNewClient()
+	if err != nil {
+		return nil, err
+	}
+	req, err := redditNewReq(target)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Del("Upgrade-Insecure-Requests")
+	req.Header.Del("Sec-Fetch-User")
+	req.Header.Set("Referer", "https://www.reddit.com/")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("HTTP %d for %s (body head: %q)", resp.StatusCode, target, redditClip(string(body), 200))
+	}
+	if strings.Contains(redditClip(string(body), 2000), "<title>Blocked</title>") {
+		return nil, fmt.Errorf("reddit served 'Blocked' page for %s", target)
+	}
+	return body, nil
+}
+
+type redditJSONMediaMeta struct {
+	Status string `json:"status"`
+	E      string `json:"e"`
+	M      string `json:"m"`
+	S      struct {
+		U   string `json:"u"`
+		GIF string `json:"gif"`
+		MP4 string `json:"mp4"`
+	} `json:"s"`
+}
+
+type redditJSONGalleryItem struct {
+	MediaID string `json:"media_id"`
+	ID      int64  `json:"id"`
+}
+
+func redditMediaFromJSON(pd *redditJSONPostData) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(u string) {
+		if u == "" {
+			return
+		}
+		u = html.UnescapeString(u)
+		if !seen[u] {
+			seen[u] = true
+			out = append(out, u)
+		}
+	}
+
+	if pd.URL != "" {
+		if redditIReddItRE.MatchString(pd.URL) || redditImgurRE.MatchString(pd.URL) {
+			add(pd.URL)
+		}
+		if m := redditVReddItRE.FindStringSubmatch(pd.URL); m != nil {
+			add(fmt.Sprintf("https://v.redd.it/%s/DASHPlaylist.mpd", m[1]))
+		}
+		if redditRedgifsRE.MatchString(pd.URL) {
+			add(pd.URL)
+		}
+	}
+
+	if pd.IsGallery && len(pd.GalleryData) > 0 && len(pd.MediaMetadata) > 0 {
+		var gd struct {
+			Items []redditJSONGalleryItem `json:"items"`
+		}
+		if err := json.Unmarshal(pd.GalleryData, &gd); err == nil {
+			mm := map[string]redditJSONMediaMeta{}
+			if err := json.Unmarshal(pd.MediaMetadata, &mm); err == nil {
+				for _, it := range gd.Items {
+					meta := mm[it.MediaID]
+					switch meta.E {
+					case "AnimatedImage":
+						if meta.S.MP4 != "" {
+							add(meta.S.MP4)
+						} else if meta.S.GIF != "" {
+							add(meta.S.GIF)
+						} else if meta.S.U != "" {
+							add(meta.S.U)
+						}
+					default:
+						if meta.S.U != "" {
+							add(meta.S.U)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if len(pd.Media) > 0 && string(pd.Media) != "null" {
+		var media struct {
+			RedditVideo struct {
+				DashURL      string `json:"dash_url"`
+				FallbackURL  string `json:"fallback_url"`
+				ScrubberURL  string `json:"scrubber_media_url"`
+				HLSURL       string `json:"hls_url"`
+			} `json:"reddit_video"`
+		}
+		if err := json.Unmarshal(pd.Media, &media); err == nil {
+			if media.RedditVideo.DashURL != "" {
+				add(media.RedditVideo.DashURL)
+			} else if media.RedditVideo.FallbackURL != "" {
+				add(strings.Split(media.RedditVideo.FallbackURL, "?")[0])
+			}
+		}
+	}
+
+	if len(pd.Preview) > 0 {
+		var pv struct {
+			Images []struct {
+				Source struct {
+					URL string `json:"url"`
+				} `json:"source"`
+				Variants struct {
+					MP4 struct {
+						Source struct {
+							URL string `json:"url"`
+						} `json:"source"`
+					} `json:"mp4"`
+					GIF struct {
+						Source struct {
+							URL string `json:"url"`
+						} `json:"source"`
+					} `json:"gif"`
+				} `json:"variants"`
+			} `json:"images"`
+		}
+		if err := json.Unmarshal(pd.Preview, &pv); err == nil {
+			for _, img := range pv.Images {
+				if img.Variants.MP4.Source.URL != "" {
+					add(img.Variants.MP4.Source.URL)
+				} else if img.Variants.GIF.Source.URL != "" {
+					add(img.Variants.GIF.Source.URL)
+				} else if img.Source.URL != "" && len(out) == 0 {
+					add(img.Source.URL)
+				}
+			}
+		}
+	}
+
+	return out
 }
 
 var (
