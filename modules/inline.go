@@ -276,12 +276,12 @@ b.Article(
 		WebPage: &telegram.InputBotInlineMessageMediaWebPage{
 			URL:      "https://telegram.org/",
 			Optional: true,
-			Message:  "",
+			Message:  "hi",
 		},
 	},
 )
 
- i.Answer(b.Results())
+ fmt.Println(i.Answer(b.Results()))
 	return nil
 }
 
