@@ -65,7 +65,7 @@ func main() {
 	modules.InitClient(client)
 	modules.SetupFilters(ownerId, LoadModules)
 	modules.RegisterHandlers()
-
+    go http.ListenAndServe("localhost:6060", nil)
 	client.Idle()
 	db.CloseDB()
 	client.Logger.Info("Bot stopped")
