@@ -275,7 +275,7 @@ b.Article(
 	&telegram.ArticleOptions{
 		WebPage: &telegram.InputBotInlineMessageMediaWebPage{
 			URL:      "https://telegram.org/",
-			Optional: true,
+			//Optional: true,
 			//Message:  "",
 		},
 	},
