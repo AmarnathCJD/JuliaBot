@@ -281,7 +281,8 @@ b.Article(
 	},
 )
 
-return i.Answer(b.Results())
+ i.Answer(b.Results())
+	return nil
 }
 
 func registerInlineHandlers() {
