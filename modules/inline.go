@@ -265,8 +265,29 @@ func fetchPinterestImages(query string, lim int, offset int) ([]string, error) {
 	return imageUrls, nil
 }
 
+func EmptyPreviewInline(i *telegram.InlineQuery) error {
+	b := i.Builder()
+
+b.Article(
+	"Preview",
+	"Empty webpage preview",
+	"",
+	&telegram.ArticleOptions{
+		WebPage: &telegram.InputBotInlineMessageMediaWebPage{
+			URL:      "https://telegram.org/",
+			//Optional: true,
+			//Message:  "",
+		},
+	},
+)
+
+ fmt.Println(i.Answer(b.Results()))
+	return nil
+}
+
 func registerInlineHandlers() {
 	c := Client
+	c.On("inline:prev", EmptyPreviewInline)
 	c.On("inline:pin", PinterestInlineHandle)
 }
 
