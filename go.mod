@@ -3,7 +3,7 @@ module main
 go 1.25.0
 
 require (
-	github.com/amarnathcjd/gogram v1.7.7-0.20260630153011-8200f64a029e
+	github.com/amarnathcjd/gogram v1.7.7
 	github.com/bogdanfinn/fhttp v0.6.8
 	github.com/bogdanfinn/tls-client v1.15.1
 	github.com/fogleman/gg v1.3.0
