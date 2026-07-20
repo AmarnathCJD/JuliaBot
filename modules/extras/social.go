@@ -411,6 +411,18 @@ func fetchTikTokMedia(urx string) (*SnapResponse, error) {
 	return &SnapResponse{Error: "failed to extract media URLs"}, nil
 }
 
+type snapMediaItem struct {
+	path      string
+	mimeType  string
+	isVideo   bool
+	duration  int
+	width     int
+	height    int
+	audioSeen bool
+}
+
+func (s *snapMediaItem) hasAudio() bool { return s.audioSeen }
+
 func downloadURL(target string) ([]byte, error) {
 	req, err := http.NewRequest("GET", target, nil)
 	if err != nil {
@@ -430,82 +442,193 @@ func downloadURL(target string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-func downloadAll(urls []string, cap int) [][]byte {
+func detectMimeAndExt(data []byte) (mime, ext string) {
+	mime = http.DetectContentType(data)
+	switch mime {
+	case "image/jpeg":
+		return mime, "jpg"
+	case "image/png":
+		return mime, "png"
+	case "image/gif":
+		return mime, "gif"
+	case "image/webp":
+		return mime, "webp"
+	case "video/mp4":
+		return mime, "mp4"
+	case "video/webm":
+		return mime, "webm"
+	case "video/quicktime":
+		return mime, "mov"
+	case "audio/mpeg":
+		return mime, "mp3"
+	case "audio/mp4":
+		return mime, "m4a"
+	}
+	// Heuristics for MP4 containers (ftyp box) that DetectContentType misses.
+	if len(data) >= 12 && string(data[4:8]) == "ftyp" {
+		return "video/mp4", "mp4"
+	}
+	return mime, "bin"
+}
+
+func probeVideo(path string) (durationSec, width, height int, hasAudio bool) {
+	cmd := exec.Command("ffprobe", "-v", "error",
+		"-select_streams", "v:0",
+		"-show_entries", "stream=width,height:format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=0",
+		path)
+	out, err := cmd.Output()
+	if err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			switch {
+			case strings.HasPrefix(line, "width="):
+				width, _ = strconv.Atoi(strings.TrimPrefix(line, "width="))
+			case strings.HasPrefix(line, "height="):
+				height, _ = strconv.Atoi(strings.TrimPrefix(line, "height="))
+			case strings.HasPrefix(line, "duration="):
+				f, _ := strconv.ParseFloat(strings.TrimPrefix(line, "duration="), 64)
+				durationSec = int(f + 0.5)
+			}
+		}
+	}
+	aCmd := exec.Command("ffprobe", "-v", "error",
+		"-select_streams", "a",
+		"-show_entries", "stream=codec_type",
+		"-of", "csv=p=0",
+		path)
+	aOut, err := aCmd.Output()
+	if err == nil {
+		hasAudio = strings.Contains(string(aOut), "audio")
+	}
+	return
+}
+
+func writeMediaToFile(data []byte, prefix string) (*snapMediaItem, error) {
+	mime, ext := detectMimeAndExt(data)
+	tmp, err := os.CreateTemp("", prefix+"_*."+ext)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return nil, err
+	}
+	tmp.Close()
+
+	item := &snapMediaItem{path: tmp.Name(), mimeType: mime}
+	if strings.HasPrefix(mime, "video/") {
+		item.isVideo = true
+		item.duration, item.width, item.height, item.audioSeen = probeVideo(tmp.Name())
+	}
+	return item, nil
+}
+
+func downloadAllAsFiles(urls []string, cap int, prefix string) []*snapMediaItem {
 	if cap > 0 && len(urls) > cap {
 		urls = urls[:cap]
 	}
-	out := make([][]byte, 0, len(urls))
+	out := make([]*snapMediaItem, 0, len(urls))
 	for _, u := range urls {
 		data, err := downloadURL(u)
 		if err != nil || len(data) == 0 {
 			continue
 		}
-		out = append(out, data)
+		item, err := writeMediaToFile(data, prefix)
+		if err != nil {
+			continue
+		}
+		out = append(out, item)
 	}
 	return out
 }
 
-func sendAsAlbums(m *tg.NewMessage, items [][]byte) {
+func removeItems(items []*snapMediaItem) {
+	for _, it := range items {
+		if it != nil && it.path != "" {
+			os.Remove(it.path)
+		}
+	}
+}
+
+func mediaOptsFor(item *snapMediaItem) *tg.MediaOptions {
+	fileName := filepath.Base(item.path)
+	opts := &tg.MediaOptions{
+		FileName: fileName,
+		MimeType: item.mimeType,
+	}
+	if item.isVideo {
+		opts.Attributes = []tg.DocumentAttribute{
+			&tg.DocumentAttributeVideo{
+				Duration:          float64(item.duration),
+				W:                 int32(item.width),
+				H:                 int32(item.height),
+				SupportsStreaming: true,
+			},
+			&tg.DocumentAttributeFilename{FileName: fileName},
+		}
+	} else {
+		opts.Attributes = []tg.DocumentAttribute{
+			&tg.DocumentAttributeFilename{FileName: fileName},
+		}
+	}
+	return opts
+}
+
+func sendAsAlbums(m *tg.NewMessage, items []*snapMediaItem) {
 	const batch = 10
 	for i := 0; i < len(items); i += batch {
 		end := min(i+batch, len(items))
 		chunk := items[i:end]
 		if len(chunk) == 1 {
-			m.ReplyMedia(chunk[0], &tg.MediaOptions{})
+			m.ReplyMedia(chunk[0].path, mediaOptsFor(chunk[0]))
 			continue
 		}
-		if _, err := m.ReplyAlbum(chunk); err != nil {
-			for _, b := range chunk {
-				m.ReplyMedia(b, &tg.MediaOptions{})
+		paths := make([]string, len(chunk))
+		hasVideo := false
+		for i, it := range chunk {
+			paths[i] = it.path
+			if it.isVideo {
+				hasVideo = true
+			}
+		}
+		albumOpts := &tg.MediaOptions{}
+		if hasVideo {
+			albumOpts.Attributes = []tg.DocumentAttribute{
+				&tg.DocumentAttributeVideo{SupportsStreaming: true},
+			}
+		}
+		if _, err := m.ReplyAlbum(paths, albumOpts); err != nil {
+			for _, it := range chunk {
+				m.ReplyMedia(it.path, mediaOptsFor(it))
 			}
 		}
 	}
 }
 
-func hasAudioTrack(videoBytes []byte) bool {
-	tmp, err := os.CreateTemp("", "probe_*.mp4")
-	if err != nil {
-		return true
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(videoBytes); err != nil {
-		tmp.Close()
-		return true
-	}
-	tmp.Close()
-
-	cmd := exec.Command("ffprobe", "-v", "error",
-		"-select_streams", "a",
-		"-show_entries", "stream=codec_type",
-		"-of", "csv=p=0",
-		tmp.Name())
-	out, err := cmd.Output()
-	if err != nil {
-		return true
-	}
-	return strings.Contains(string(out), "audio")
-}
-
-func muxVideoAudio(videoBytes, audioBytes []byte) ([]byte, error) {
-	tmpDir, err := os.MkdirTemp("", "tikmux_*")
+func muxVideoFileWithAudio(videoPath string, audioBytes []byte) (*snapMediaItem, error) {
+	aTmp, err := os.CreateTemp("", "aud_*.mp3")
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.Remove(aTmp.Name())
+	if _, err := aTmp.Write(audioBytes); err != nil {
+		aTmp.Close()
+		return nil, err
+	}
+	aTmp.Close()
 
-	vPath := filepath.Join(tmpDir, "video.mp4")
-	aPath := filepath.Join(tmpDir, "audio.mp3")
-	outPath := filepath.Join(tmpDir, "out.mp4")
-	if err := os.WriteFile(vPath, videoBytes, 0o644); err != nil {
+	outTmp, err := os.CreateTemp("", "muxed_*.mp4")
+	if err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(aPath, audioBytes, 0o644); err != nil {
-		return nil, err
-	}
+	outTmp.Close()
+	outPath := outTmp.Name()
 
 	cmd := exec.Command("ffmpeg", "-y",
-		"-i", vPath,
-		"-i", aPath,
+		"-i", videoPath,
+		"-i", aTmp.Name(),
 		"-map", "0:v:0", "-map", "1:a:0",
 		"-c:v", "copy",
 		"-c:a", "aac", "-b:a", "128k",
@@ -514,9 +637,12 @@ func muxVideoAudio(videoBytes, audioBytes []byte) ([]byte, error) {
 		outPath,
 	)
 	if err := cmd.Run(); err != nil {
+		os.Remove(outPath)
 		return nil, err
 	}
-	return os.ReadFile(outPath)
+	item := &snapMediaItem{path: outPath, mimeType: "video/mp4", isVideo: true}
+	item.duration, item.width, item.height, item.audioSeen = probeVideo(outPath)
+	return item, nil
 }
 
 func InstaHandler(m *tg.NewMessage) error {
@@ -544,12 +670,14 @@ func InstaHandler(m *tg.NewMessage) error {
 	isTikTok := isTikTokURL(m.Args())
 
 	if len(resp.Videos) > 0 {
-		vids := downloadAll(resp.Videos, 20)
+		vids := downloadAllAsFiles(resp.Videos, 20, "vid")
+		defer removeItems(vids)
 
 		// TikTok: if the video has no audio track and provider gave a separate audio stream, mux them.
-		if isTikTok && len(vids) == 1 && len(resp.Audio) > 0 && !hasAudioTrack(vids[0]) {
+		if isTikTok && len(vids) == 1 && len(resp.Audio) > 0 && !vids[0].hasAudio() {
 			if audioData, aerr := downloadURL(resp.Audio[0]); aerr == nil {
-				if muxed, err := muxVideoAudio(vids[0], audioData); err == nil {
+				if muxed, err := muxVideoFileWithAudio(vids[0].path, audioData); err == nil {
+					os.Remove(vids[0].path)
 					vids[0] = muxed
 				}
 			}
@@ -559,7 +687,8 @@ func InstaHandler(m *tg.NewMessage) error {
 	}
 
 	if len(resp.Images) > 0 {
-		imgs := downloadAll(resp.Images, 20)
+		imgs := downloadAllAsFiles(resp.Images, 20, "img")
+		defer removeItems(imgs)
 		sendAsAlbums(m, imgs)
 	}
 
