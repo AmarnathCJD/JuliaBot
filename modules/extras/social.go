@@ -128,7 +128,19 @@ func FetchInstagramMedia(url string) (*SnapResponse, error) {
 	if isTikTokURL(url) {
 		return fetchTikTokMedia(url)
 	}
-	return fetchInstagramMedia(url)
+
+	resp, err := fetchInstagramMedia(url)
+	if err == nil && resp != nil && resp.Error == "" && (len(resp.Images) > 0 || len(resp.Videos) > 0) {
+		return resp, nil
+	}
+	fallback, fErr := fetchInstagramMediaFastdl(url)
+	if fErr == nil && fallback != nil && fallback.Error == "" && (len(fallback.Images) > 0 || len(fallback.Videos) > 0) {
+		return fallback, nil
+	}
+	if fallback != nil && fallback.Error != "" {
+		return fallback, nil
+	}
+	return resp, err
 }
 
 func fetchInstagramMedia(url string) (*SnapResponse, error) {
@@ -171,6 +183,10 @@ func fetchInstagramMedia(url string) (*SnapResponse, error) {
 		return &SnapResponse{Error: "failed to decode media info"}, nil
 	}
 
+	if strings.Contains(result, "error_api_get_instagram") || strings.Contains(result, "Unable to connect to Instagram") {
+		return &SnapResponse{Error: "could not fetch post (may be private, deleted, or age-restricted)"}, nil
+	}
+
 	pattern := regexp.MustCompile(`class=\\"icon\s+icon-dl(image|video)\\"[^>]*>.*?<a[^>]+href=\\"([^"]+)\\"`)
 	matches := pattern.FindAllStringSubmatch(result, -1)
 
@@ -197,6 +213,93 @@ func fetchInstagramMedia(url string) (*SnapResponse, error) {
 		Images: images,
 		Videos: videos,
 	}, nil
+}
+
+type fastdlResp struct {
+	Status string `json:"status"`
+	Mess   string `json:"mess"`
+	Data   string `json:"data"`
+}
+
+func fetchInstagramMediaFastdl(target string) (*SnapResponse, error) {
+	form := url.Values{}
+	form.Set("q", strings.TrimSpace(target))
+	form.Set("t", "media")
+	form.Set("lang", "en")
+	form.Set("v", "v2")
+	form.Set("html", "")
+
+	req, err := http.NewRequest("POST", "https://fastdl.to/api/ajaxSearch", strings.NewReader(form.Encode()))
+	if err != nil {
+		return &SnapResponse{Error: "failed to fetch media"}, nil
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+	req.Header.Set("Origin", "https://fastdl.to")
+	req.Header.Set("Referer", "https://fastdl.to/en")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return &SnapResponse{Error: "failed to fetch media"}, nil
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	var parsed fastdlResp
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return &SnapResponse{Error: "invalid response from provider"}, nil
+	}
+	if parsed.Status != "ok" {
+		return &SnapResponse{Error: "provider request failed"}, nil
+	}
+	if parsed.Mess != "" {
+		clean := sanitizeProviderMessage(stripHTMLTags(parsed.Mess))
+		return &SnapResponse{Error: clean}, nil
+	}
+
+	itemRe := regexp.MustCompile(`(?s)<li>\s*<div class="download-items">(.*?)</li>`)
+	iconRe := regexp.MustCompile(`icon icon-dl(image|video)`)
+	hrefRe := regexp.MustCompile(`href="(https://dl\.snapcdn\.app/[^"]+)"`)
+
+	var images, videos []string
+	for _, item := range itemRe.FindAllStringSubmatch(parsed.Data, -1) {
+		block := item[1]
+		iconMatch := iconRe.FindStringSubmatch(block)
+		hrefMatch := hrefRe.FindStringSubmatch(block)
+		if iconMatch == nil || hrefMatch == nil {
+			continue
+		}
+		mediaURL := html.UnescapeString(hrefMatch[1])
+		switch iconMatch[1] {
+		case "image":
+			images = append(images, mediaURL)
+		case "video":
+			videos = append(videos, mediaURL)
+		}
+	}
+
+	if len(images) == 0 && len(videos) == 0 {
+		return &SnapResponse{Error: "fastdl: no media found"}, nil
+	}
+	return &SnapResponse{Images: images, Videos: videos}, nil
+}
+
+func stripHTMLTags(s string) string {
+	return regexp.MustCompile(`<[^>]+>`).ReplaceAllString(s, "")
+}
+
+var providerBrandRe = regexp.MustCompile(`(?i)\b(fastdl|snapsave|saveinsta|ssstik|snapcdn)(\.(app|to|io|com|net))?\b`)
+
+func sanitizeProviderMessage(s string) string {
+	cleaned := providerBrandRe.ReplaceAllString(s, "")
+	cleaned = regexp.MustCompile(`\s+`).ReplaceAllString(cleaned, " ")
+	cleaned = strings.TrimSpace(cleaned)
+	if cleaned == "" {
+		return "media unavailable"
+	}
+	return cleaned
 }
 
 func fetchTikTokMedia(urx string) (*SnapResponse, error) {

@@ -9,12 +9,16 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
-	tg "github.com/amarnathcjd/gogram/telegram"
 	modules "main/modules"
+
+	tg "github.com/amarnathcjd/gogram/telegram"
 )
+
+const pasteMaxDocBytes int64 = 5 << 20
 
 type pasteService struct {
 	id     string
@@ -172,6 +176,13 @@ func PasteHandler(m *tg.NewMessage) error {
 		if err == nil && r != nil {
 			if t := r.Text(); strings.TrimSpace(t) != "" {
 				content = t
+			} else if doc := r.Document(); doc != nil {
+				text, extractErr := pasteExtractDocumentText(m, doc)
+				if extractErr != nil {
+					m.Reply("cannot paste this file: " + html.EscapeString(extractErr.Error()))
+					return nil
+				}
+				content = text
 			}
 		}
 	}
@@ -226,6 +237,73 @@ func truncErr(err error) string {
 		s = s[:120] + "..."
 	}
 	return s
+}
+
+var pasteTextExts = map[string]bool{
+	".txt": true, ".log": true, ".md": true, ".rst": true, ".csv": true, ".tsv": true,
+	".json": true, ".xml": true, ".yaml": true, ".yml": true, ".toml": true, ".ini": true, ".conf": true, ".cfg": true, ".env": true,
+	".go": true, ".py": true, ".js": true, ".mjs": true, ".cjs": true, ".ts": true, ".tsx": true, ".jsx": true,
+	".rs": true, ".rb": true, ".php": true, ".java": true, ".kt": true, ".kts": true, ".scala": true, ".swift": true,
+	".c": true, ".h": true, ".cpp": true, ".hpp": true, ".cc": true, ".cs": true, ".m": true, ".mm": true,
+	".sh": true, ".bash": true, ".zsh": true, ".fish": true, ".ps1": true, ".bat": true, ".cmd": true,
+	".html": true, ".htm": true, ".css": true, ".scss": true, ".sass": true, ".less": true, ".vue": true, ".svelte": true,
+	".sql": true, ".graphql": true, ".proto": true, ".lua": true, ".pl": true, ".r": true, ".dart": true, ".ex": true, ".exs": true,
+	".dockerfile": true, ".makefile": true, ".gradle": true, ".patch": true, ".diff": true,
+}
+
+func pasteDocFilename(doc *tg.DocumentObj) string {
+	for _, attr := range doc.Attributes {
+		if fn, ok := attr.(*tg.DocumentAttributeFilename); ok {
+			return fn.FileName
+		}
+	}
+	return ""
+}
+
+func pasteDocLooksTextual(doc *tg.DocumentObj, filename string) bool {
+	mime := strings.ToLower(doc.MimeType)
+	switch {
+	case strings.HasPrefix(mime, "text/"):
+		return true
+	case mime == "application/json", mime == "application/xml", mime == "application/x-yaml",
+		mime == "application/x-sh", mime == "application/javascript", mime == "application/x-httpd-php",
+		mime == "application/toml":
+		return true
+	}
+	if filename != "" {
+		ext := strings.ToLower(filepath.Ext(filename))
+		if pasteTextExts[ext] {
+			return true
+		}
+		base := strings.ToLower(filepath.Base(filename))
+		if base == "dockerfile" || base == "makefile" || base == "cmakelists.txt" {
+			return true
+		}
+	}
+	return false
+}
+
+func pasteExtractDocumentText(m *tg.NewMessage, doc *tg.DocumentObj) (string, error) {
+	filename := pasteDocFilename(doc)
+	if !pasteDocLooksTextual(doc, filename) {
+		return "", fmt.Errorf("only text files are supported")
+	}
+	if doc.Size > pasteMaxDocBytes {
+		return "", fmt.Errorf("file too large (max %d KB)", pasteMaxDocBytes/1024)
+	}
+
+	var buf bytes.Buffer
+	if _, err := m.Client.DownloadMedia(doc, &tg.DownloadOptions{Buffer: &buf}); err != nil {
+		return "", fmt.Errorf("failed to download file")
+	}
+	data := buf.Bytes()
+	if int64(len(data)) > pasteMaxDocBytes {
+		return "", fmt.Errorf("file too large (max %d KB)", pasteMaxDocBytes/1024)
+	}
+	if bytes.IndexByte(data, 0) >= 0 {
+		return "", fmt.Errorf("file appears to be binary")
+	}
+	return string(data), nil
 }
 
 func init() {
