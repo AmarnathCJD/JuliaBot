@@ -12,6 +12,9 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -24,6 +27,7 @@ var charsX = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/"
 type SnapResponse struct {
 	Images      []string   `json:"images,omitempty"`
 	Videos      []string   `json:"videos,omitempty"`
+	Audio       []string   `json:"audio,omitempty"`
 	Username    string     `json:"username,omitempty"`
 	Description string     `json:"description,omitempty"`
 	Statistics  Statistics `json:"statistics,omitempty"`
@@ -380,27 +384,139 @@ func fetchTikTokMedia(urx string) (*SnapResponse, error) {
 		return &SnapResponse{Error: "no media found"}, nil
 	}
 
-	var images, videos []string
+	var images, videos, audio []string
 	for _, match := range matches {
 		if len(match) >= 2 {
 			mediaURL := match[1]
 
-			if strings.Contains(mediaURL, "tikcdn.io/ssstik/s/") {
+			switch {
+			case strings.Contains(mediaURL, "tikcdn.io/ssstik/s/"):
 				images = append(images, mediaURL)
-			} else if strings.Contains(mediaURL, "tikcdn.io/ssstik/") {
+			case strings.Contains(mediaURL, "tikcdn.io/ssstik/m/"):
+				audio = append(audio, mediaURL)
+			case strings.Contains(mediaURL, "tikcdn.io/ssstik/"):
 				videos = append(videos, mediaURL)
 			}
 		}
 	}
 
-	if len(images) > 0 || len(videos) > 0 {
+	if len(images) > 0 || len(videos) > 0 || len(audio) > 0 {
 		return &SnapResponse{
 			Images: images,
 			Videos: videos,
+			Audio:  audio,
 		}, nil
 	}
 
 	return &SnapResponse{Error: "failed to extract media URLs"}, nil
+}
+
+func downloadURL(target string) ([]byte, error) {
+	req, err := http.NewRequest("GET", target, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)")
+	req.Header.Set("referer", "https://fastdl.to/")
+	client := &http.Client{Timeout: 90 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("http %d", resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+func downloadAll(urls []string, cap int) [][]byte {
+	if cap > 0 && len(urls) > cap {
+		urls = urls[:cap]
+	}
+	out := make([][]byte, 0, len(urls))
+	for _, u := range urls {
+		data, err := downloadURL(u)
+		if err != nil || len(data) == 0 {
+			continue
+		}
+		out = append(out, data)
+	}
+	return out
+}
+
+func sendAsAlbums(m *tg.NewMessage, items [][]byte) {
+	const batch = 10
+	for i := 0; i < len(items); i += batch {
+		end := min(i+batch, len(items))
+		chunk := items[i:end]
+		if len(chunk) == 1 {
+			m.ReplyMedia(chunk[0], &tg.MediaOptions{})
+			continue
+		}
+		if _, err := m.ReplyAlbum(chunk); err != nil {
+			for _, b := range chunk {
+				m.ReplyMedia(b, &tg.MediaOptions{})
+			}
+		}
+	}
+}
+
+func hasAudioTrack(videoBytes []byte) bool {
+	tmp, err := os.CreateTemp("", "probe_*.mp4")
+	if err != nil {
+		return true
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(videoBytes); err != nil {
+		tmp.Close()
+		return true
+	}
+	tmp.Close()
+
+	cmd := exec.Command("ffprobe", "-v", "error",
+		"-select_streams", "a",
+		"-show_entries", "stream=codec_type",
+		"-of", "csv=p=0",
+		tmp.Name())
+	out, err := cmd.Output()
+	if err != nil {
+		return true
+	}
+	return strings.Contains(string(out), "audio")
+}
+
+func muxVideoAudio(videoBytes, audioBytes []byte) ([]byte, error) {
+	tmpDir, err := os.MkdirTemp("", "tikmux_*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	vPath := filepath.Join(tmpDir, "video.mp4")
+	aPath := filepath.Join(tmpDir, "audio.mp3")
+	outPath := filepath.Join(tmpDir, "out.mp4")
+	if err := os.WriteFile(vPath, videoBytes, 0o644); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(aPath, audioBytes, 0o644); err != nil {
+		return nil, err
+	}
+
+	cmd := exec.Command("ffmpeg", "-y",
+		"-i", vPath,
+		"-i", aPath,
+		"-map", "0:v:0", "-map", "1:a:0",
+		"-c:v", "copy",
+		"-c:a", "aac", "-b:a", "128k",
+		"-shortest",
+		"-movflags", "+faststart",
+		outPath,
+	)
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+	return os.ReadFile(outPath)
 }
 
 func InstaHandler(m *tg.NewMessage) error {
@@ -417,96 +533,37 @@ func InstaHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	if len(resp.Images) == 0 && len(resp.Videos) == 0 {
+	if len(resp.Images) == 0 && len(resp.Videos) == 0 && len(resp.Audio) == 0 {
 		msg.Edit("No media found")
 		return nil
 	}
 
 	defer msg.Delete()
-	msg.Edit(fmt.Sprintf("Found %d image(s) and %d video(s). Downloading...", len(resp.Images), len(resp.Videos)))
+	msg.Edit(fmt.Sprintf("Found %d image(s), %d video(s). Downloading...", len(resp.Images), len(resp.Videos)))
+
+	isTikTok := isTikTokURL(m.Args())
 
 	if len(resp.Videos) > 0 {
-		for _, vid := range resp.Videos[:minVal(len(resp.Videos), 10)] {
-			req, _ := http.NewRequest("GET", vid, nil)
-			req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)")
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				continue
-			}
+		vids := downloadAll(resp.Videos, 20)
 
-			fileBytes, err := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if err != nil {
-				continue
+		// TikTok: if the video has no audio track and provider gave a separate audio stream, mux them.
+		if isTikTok && len(vids) == 1 && len(resp.Audio) > 0 && !hasAudioTrack(vids[0]) {
+			if audioData, aerr := downloadURL(resp.Audio[0]); aerr == nil {
+				if muxed, err := muxVideoAudio(vids[0], audioData); err == nil {
+					vids[0] = muxed
+				}
 			}
-
-			mimeType := http.DetectContentType(fileBytes)
-			ext := ""
-			switch mimeType {
-			case "video/mp4":
-				ext = "mp4"
-			case "video/webm":
-				ext = "webm"
-			case "audio/mpeg":
-				ext = "mp3"
-			default:
-				fmt.Println("Unknown MIME type:", mimeType)
-				ext = "mp4"
-			}
-
-			filename := fmt.Sprintf("insta_video_%d.%s", time.Now().UnixNano(), ext)
-			m.ReplyMedia(fileBytes, &tg.MediaOptions{
-				FileName: filename,
-				MimeType: mimeType,
-			})
 		}
+
+		sendAsAlbums(m, vids)
 	}
 
 	if len(resp.Images) > 0 {
-		for _, img := range resp.Images[:minVal(len(resp.Images), 10)] {
-			req, _ := http.NewRequest("GET", img, nil)
-			req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)")
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				continue
-			}
-
-			fileBytes, err := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if err != nil {
-				continue
-			}
-
-			mimeType := http.DetectContentType(fileBytes)
-			ext := ""
-			switch mimeType {
-			case "image/jpeg":
-				ext = "jpg"
-			case "image/png":
-				ext = "png"
-			case "image/gif":
-				ext = "gif"
-			default:
-				fmt.Println("Unknown MIME type:", mimeType)
-				ext = "jpg"
-			}
-
-			filename := fmt.Sprintf("insta_image_%d.%s", time.Now().UnixNano(), ext)
-			m.ReplyMedia(fileBytes, &tg.MediaOptions{
-				FileName: filename,
-				MimeType: mimeType,
-			})
-		}
+		imgs := downloadAll(resp.Images, 20)
+		sendAsAlbums(m, imgs)
 	}
 
 	return nil
-}
-
-func minVal(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func registerInstaHandlers() {
