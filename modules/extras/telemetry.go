@@ -13,8 +13,9 @@ import (
 	"sync"
 	"time"
 
-	tg "github.com/amarnathcjd/gogram/telegram"
 	modules "main/modules"
+
+	tg "github.com/amarnathcjd/gogram/telegram"
 )
 
 var telemetryStart = time.Now()
@@ -260,8 +261,8 @@ func telemetryRegisterHandlers() {
 	c := modules.Client
 	c.On("cmd:beacon", telemetryBeaconHandler)
 	c.On("cmd:oracle", telemetryOracleHandler)
-	c.On("message:.*", telemetryReplyWatcher)
-	c.On("message:.*", owlReplyWatcher)
+	c.On(tg.OnMessage, telemetryReplyWatcher)
+	c.On(tg.OnMessage, owlReplyWatcher)
 
 	modules.Mods.AddModule("Owl", owlHelpText)
 }
