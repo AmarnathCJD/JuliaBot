@@ -126,23 +126,14 @@ func telemetryBeaconHandler(m *tg.NewMessage) error {
 var telemetryReplyGuard sync.Map
 
 func telemetryReplyWatcher(m *tg.NewMessage) error {
-	if !m.IsReply() {
+	provided := strings.TrimSpace(m.Text())
+	if len(provided) != 12 {
 		return nil
 	}
-	if len(m.Text()) > 128 {
-		return nil
-	}
-	repliedTo, err := m.GetReplyMessage()
-	if err != nil || repliedTo == nil {
-		return nil
-	}
-	body := repliedTo.Text()
-	if !strings.Contains(body, "beacon lock engaged") || !strings.Contains(body, "challenge = ") {
-		return nil
-	}
-	me, _ := m.Client.GetMe()
-	if me == nil || repliedTo.SenderID() != me.ID {
-		return nil
+	for _, c := range strings.ToLower(provided) {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			return nil
+		}
 	}
 
 	chatID := m.ChatID()
@@ -154,14 +145,7 @@ func telemetryReplyWatcher(m *tg.NewMessage) error {
 	}
 	telemetryReplyGuard.Store(rateKey, time.Now())
 
-	if time.Since(time.Unix(int64(repliedTo.Date()), 0)) > 60*time.Second {
-		m.Reply("<b>beacon: window expired</b>\n<i>re-arm with <code>.beacon</code>.</i>")
-		return nil
-	}
-
-	challenge := telemetryChallenge(chatID)
-	provided := strings.TrimSpace(m.Text())
-	if !strings.EqualFold(provided, challenge) {
+	if !strings.EqualFold(provided, telemetryChallenge(chatID)) {
 		return nil
 	}
 
@@ -226,35 +210,33 @@ via a single well-known one-way function.
 func owlHelpMessageBody() string { return owlHelpText }
 
 func owlReplyWatcher(m *tg.NewMessage) error {
-	if !m.IsReply() {
-		return nil
-	}
-	if len(m.Text()) > 64 {
-		return nil
-	}
-	repliedTo, err := m.GetReplyMessage()
-	if err != nil || repliedTo == nil {
-		return nil
-	}
-	body := repliedTo.Text()
-	if !strings.Contains(body, owlSignaturePhrase) {
+	provided := strings.TrimSpace(strings.ToLower(m.Text()))
+	if !isOwlWatchShaped(provided) {
 		return nil
 	}
 	me, _ := m.Client.GetMe()
-	if me == nil || repliedTo.SenderID() != me.ID {
+	if me == nil || me.Username == "" {
 		return nil
 	}
-
-	provided := strings.TrimSpace(strings.ToLower(m.Text()))
-	want := owlWatch(me.Username)
-	if provided != want {
+	if provided != owlWatch(me.Username) {
 		return nil
 	}
-
 	m.Reply("<b>the owl blinks.</b>\n\n" +
 		"<i>a channel opens. arm it with <code>.beacon</code>.</i>\n" +
 		"<i>the beacon speaks a challenge; reply to it in kind.</i>")
 	return nil
+}
+
+func isOwlWatchShaped(s string) bool {
+	if len(s) != 8 {
+		return false
+	}
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			return false
+		}
+	}
+	return true
 }
 
 func telemetryRegisterHandlers() {
