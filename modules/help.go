@@ -88,9 +88,7 @@ Select a module below to view its commands and usage.
 
 	m.Reply(helpText,
 		&telegram.SendOptions{
-			ReplyMarkup: telegram.NewKeyboard().NewColumn(3, buttons...).AddRow(
-				b.URL("Source Code", "https://github.com/amarnathcjd/gogram"),
-			).Build(),
+			ReplyMarkup: telegram.NewKeyboard().NewColumn(3, buttons...).Build(),
 		})
 
 	return nil
@@ -134,9 +132,7 @@ Select a module below to view its commands and usage.
 <b>Available Modules:</b> ` + fmt.Sprintf("%d", len(Mods.Mod))
 
 	c.Edit(helpText, &telegram.SendOptions{
-		ReplyMarkup: telegram.NewKeyboard().NewColumn(3, buttons...).AddRow(
-			b.URL("Source Code", "https://github.com/amarnathcjd/gogram"),
-		).Build(),
+		ReplyMarkup: telegram.NewKeyboard().NewColumn(3, buttons...).Build(),
 	})
 
 	return nil
