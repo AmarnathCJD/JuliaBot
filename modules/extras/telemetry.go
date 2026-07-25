@@ -170,16 +170,48 @@ var owlEmojiAlphabet = []string{
 	"🥰", // F  U+1F970
 }
 
+// Permutation derived from the bot's watch (username-locked).
+// perm[N] = position of the k-th smallest watch nibble.
+// Players who spot the "see the watch" hint and try argsort recover this.
+func owlPermFromWatch(watch string) []int {
+	type nibIdx struct {
+		nib int
+		idx int
+	}
+	pairs := make([]nibIdx, 8)
+	for i := 0; i < 8; i++ {
+		v, err := strconv.ParseInt(string(watch[i]), 16, 32)
+		if err != nil {
+			return []int{0, 1, 2, 3, 4, 5, 6, 7}
+		}
+		pairs[i] = nibIdx{int(v), i}
+	}
+	// stable sort by (nib, idx)
+	for i := 1; i < len(pairs); i++ {
+		for j := i; j > 0; j-- {
+			a, b := pairs[j-1], pairs[j]
+			if a.nib > b.nib || (a.nib == b.nib && a.idx > b.idx) {
+				pairs[j-1], pairs[j] = b, a
+			} else {
+				break
+			}
+		}
+	}
+	out := make([]int, 8)
+	for i, p := range pairs {
+		out[i] = p.idx
+	}
+	return out
+}
+
 // Half-B nibble for numeric input N in "0".."7".
-// Returns nibble (0..15) determined by owlKeyHalfB and a shuffle so
-// hex order isn't the same as message order.
-func owlNibbleForNumber(n int) int {
+// The nibble→message-position mapping is a permutation derived from the
+// bot's watch string (username-locked). See owlPermFromWatch.
+func owlNibbleForNumber(n int, watch string) int {
 	if n < 0 || n > 7 {
 		return -1
 	}
-	// half-B has 8 nibbles (indexed 0..7). Serve them in a small permutation
-	// so players can't blindly assume "message 0 = first nibble".
-	perm := []int{3, 0, 5, 2, 7, 4, 1, 6}
+	perm := owlPermFromWatch(watch)
 	nib := perm[n]
 	byteIdx := nib / 2
 	if nib%2 == 0 {
@@ -243,7 +275,12 @@ func owlNumberReactor(m *tg.NewMessage) error {
 	if err != nil || n < 0 || n > 7 {
 		return nil
 	}
-	nib := owlNibbleForNumber(n)
+	me, _ := m.Client.GetMe()
+	if me == nil || me.Username == "" {
+		return nil
+	}
+	watch := owlWatch(me.Username)
+	nib := owlNibbleForNumber(n, watch)
 	if nib < 0 {
 		return nil
 	}
@@ -441,7 +478,7 @@ func renderOwlPNG(halfA [4]byte) ([]byte, error) {
 	if err := png.Encode(&buf, img); err != nil {
 		return nil, err
 	}
-	return injectTextChunk(buf.Bytes(), "hint", "numbers 0..7 speak to me · sort what answers by the number beneath"), nil
+	return injectTextChunk(buf.Bytes(), "hint", "numbers 0..7 speak to me · sort what answers by the number beneath · the order i sing in is not the order they are read — see the watch"), nil
 }
 
 func drawRing(img *image.RGBA, cx, cy, r, thickness int, c color.RGBA) {
