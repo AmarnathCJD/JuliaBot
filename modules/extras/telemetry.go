@@ -148,12 +148,12 @@ func isOwlWatchShaped(s string) bool {
 }
 
 // Bot reacts with one of these 16, index = hex nibble value.
-// Ordered to look like natural "owl phase" emoji — but the ORDER is the code.
+// All 16 are on Telegram's bot-reactable set so servers actually apply them.
 var owlEmojiAlphabet = []string{
-	"🌑", "🌒", "🌓", "🌔", // 0-3
-	"🌕", "🌖", "🌗", "🌘", // 4-7
-	"🦉", "🌙", "⭐", "🌌", // 8-B
-	"🪶", "🕯", "🔥", "🕸", // C-F
+	"👍", "👎", "❤", "🔥", // 0-3
+	"🎉", "😢", "🤔", "🤯", // 4-7
+	"👀", "🙏", "🌚", "⚡", // 8-B
+	"🕊", "😱", "💯", "🏆", // C-F
 }
 
 // Half-B nibble for numeric input N in "0".."7".
@@ -212,6 +212,8 @@ func sendOwlImage(m *tg.NewMessage) {
 	tmp.Close()
 	defer os.Remove(tmp.Name())
 	m.ReplyMedia(tmp.Name(), &tg.MediaOptions{
+		Caption: "<i>two eyes, eight breaths, one moonlit alphabet.</i>",
+		ParseMode: "html",
 		FileName: "owl.png",
 		MimeType: "image/png",
 	})
