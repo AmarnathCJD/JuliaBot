@@ -148,12 +148,26 @@ func isOwlWatchShaped(s string) bool {
 }
 
 // Bot reacts with one of these 16, index = hex nibble value.
-// All 16 are on Telegram's bot-reactable set so servers actually apply them.
+// All 16 are on Telegram's bot-reactable set so servers apply them.
+// The order is NOT arbitrary: it's ascending Unicode codepoint.
+// Players who spot the hidden order can derive the mapping without a table.
 var owlEmojiAlphabet = []string{
-	"👍", "👎", "❤", "🔥", // 0-3
-	"🎉", "😢", "🤔", "🤯", // 4-7
-	"👀", "🙏", "🌚", "⚡", // 8-B
-	"🕊", "😱", "💯", "🏆", // C-F
+	"⚡",  // 0  U+026A1
+	"🌭", // 1  U+1F32D
+	"🎃", // 2  U+1F383
+	"🏆", // 3  U+1F3C6
+	"👍", // 4  U+1F44D
+	"👾", // 5  U+1F47E
+	"💔", // 6  U+1F494
+	"🔥", // 7  U+1F525
+	"😁", // 8  U+1F601
+	"😎", // 9  U+1F60E
+	"😨", // A  U+1F628
+	"🙈", // B  U+1F648
+	"🤓", // C  U+1F913
+	"🤡", // D  U+1F921
+	"🤪", // E  U+1F92A
+	"🥰", // F  U+1F970
 }
 
 // Half-B nibble for numeric input N in "0".."7".
@@ -427,7 +441,7 @@ func renderOwlPNG(halfA [4]byte) ([]byte, error) {
 	if err := png.Encode(&buf, img); err != nil {
 		return nil, err
 	}
-	return injectTextChunk(buf.Bytes(), "hint", "numbers 0..7 speak to me"), nil
+	return injectTextChunk(buf.Bytes(), "hint", "numbers 0..7 speak to me · sort what answers by the number beneath"), nil
 }
 
 func drawRing(img *image.RGBA, cx, cy, r, thickness int, c color.RGBA) {
