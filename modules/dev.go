@@ -472,6 +472,135 @@ func devHTMLEscape(s string) string {
 	return r.Replace(s)
 }
 
+func mediaInfoStripDigits(v string) string {
+	var out strings.Builder
+	for _, r := range v {
+		if r >= '0' && r <= '9' {
+			out.WriteRune(r)
+		}
+	}
+	return out.String()
+}
+
+func mediaInfoFmtValue(v string) string {
+	esc := devHTMLEscape(v)
+	if len(v) > 40 {
+		return "<i>" + esc + "</i>"
+	}
+	return esc
+}
+
+func mediaInfoLine(b *strings.Builder, label, value string) {
+	if value == "" {
+		return
+	}
+	b.WriteString("• <b>")
+	b.WriteString(label)
+	b.WriteString(":</b> ")
+	b.WriteString(mediaInfoFmtValue(value))
+	b.WriteString("\n")
+}
+
+func sectionField(sec mediaInfoSection, keys ...string) string {
+	for _, r := range sec.Rows {
+		for _, k := range keys {
+			if strings.EqualFold(r[0], k) {
+				return r[1]
+			}
+		}
+	}
+	return ""
+}
+
+func mediaInfoSummary(info string) string {
+	sections := parseMediaInfoSections(info)
+	var general, video mediaInfoSection
+	var audios []mediaInfoSection
+	var subs []mediaInfoSection
+	for _, s := range sections {
+		name := strings.ToLower(s.Name)
+		switch {
+		case strings.HasPrefix(name, "general"):
+			general = s
+		case strings.HasPrefix(name, "video"):
+			if video.Name == "" {
+				video = s
+			}
+		case strings.HasPrefix(name, "audio"):
+			audios = append(audios, s)
+		case strings.HasPrefix(name, "text"):
+			subs = append(subs, s)
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString("<b>Media Info</b>\n")
+
+	if v := sectionField(general, "Complete name"); v != "" {
+		b.WriteString("<b>File:</b> <code>")
+		b.WriteString(devHTMLEscape(v))
+		b.WriteString("</code>\n")
+	}
+	mediaInfoLine(&b, "Container", sectionField(general, "Format"))
+	mediaInfoLine(&b, "Size", sectionField(general, "File size"))
+	mediaInfoLine(&b, "Duration", sectionField(general, "Duration"))
+	mediaInfoLine(&b, "Bitrate", sectionField(general, "Overall bit rate"))
+
+	if video.Name != "" {
+		b.WriteString("\n<b>Video</b>\n")
+		codec := sectionField(video, "Format")
+		if p := sectionField(video, "Format profile"); p != "" {
+			codec = strings.TrimSpace(codec + " " + p)
+		}
+		w := mediaInfoStripDigits(sectionField(video, "Width"))
+		h := mediaInfoStripDigits(sectionField(video, "Height"))
+		res := ""
+		if w != "" && h != "" {
+			res = w + "x" + h
+		}
+		mediaInfoLine(&b, "Codec", codec)
+		if res != "" {
+			b.WriteString("• <b>Resolution:</b> <code>")
+			b.WriteString(devHTMLEscape(res))
+			b.WriteString("</code>\n")
+		}
+		mediaInfoLine(&b, "FPS", sectionField(video, "Frame rate"))
+		mediaInfoLine(&b, "Bitrate", sectionField(video, "Bit rate"))
+		mediaInfoLine(&b, "Bit depth", sectionField(video, "Bit depth"))
+	}
+
+	for i, a := range audios {
+		if len(audios) == 1 {
+			b.WriteString("\n<b>Audio</b>\n")
+		} else {
+			fmt.Fprintf(&b, "\n<b>Audio #%d</b>\n", i+1)
+		}
+		mediaInfoLine(&b, "Codec", sectionField(a, "Format"))
+		mediaInfoLine(&b, "Language", sectionField(a, "Language"))
+		mediaInfoLine(&b, "Channels", sectionField(a, "Channel(s)"))
+		mediaInfoLine(&b, "Sample rate", sectionField(a, "Sampling rate"))
+		mediaInfoLine(&b, "Bitrate", sectionField(a, "Bit rate"))
+	}
+
+	if len(subs) > 0 {
+		b.WriteString("\n<b>Subtitles</b>\n")
+		for i, s := range subs {
+			label := sectionField(s, "Language")
+			if label == "" {
+				label = sectionField(s, "Format")
+			}
+			if label == "" {
+				label = fmt.Sprintf("Track %d", i+1)
+			}
+			b.WriteString("• ")
+			b.WriteString(mediaInfoFmtValue(label))
+			b.WriteString("\n")
+		}
+	}
+
+	return b.String()
+}
+
 func formatMediaInfo(info string) string {
 	sections := parseMediaInfoSections(info)
 	var b strings.Builder
@@ -632,12 +761,13 @@ func MediaInfoHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	body := "<b>Media Info</b> — <a href=\"" + url + "\">view full report</a>"
+	summary := mediaInfoSummary(mediaInfoOutput)
+	body := summary + "\n<a href=\"" + url + "\">View full report</a>"
 	if headline != "" {
 		body = "<b>Note:</b> <i>" + devHTMLEscape(headline) + "</i>\n\n" + body
 	}
 	msg.Edit(body, &tg.SendOptions{
-		ReplyMarkup: tg.NewKeyboard().AddRow(tg.Button.URL("View", url)).Build(),
+		ReplyMarkup: tg.NewKeyboard().AddRow(tg.Button.URL("View full report", url)).Build(),
 	})
 	return nil
 }
