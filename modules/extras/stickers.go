@@ -99,13 +99,28 @@ func GifToSticker(m *tg.NewMessage) error {
 		m.Reply("<b>Error:</b> Unable to download the source: " + html.EscapeString(err.Error()))
 		return nil
 	}
-	defer os.Remove(fi)
+
+	if st, err := os.Stat(fi); err != nil || st.Size() == 0 {
+		os.Remove(fi)
+		expected := int64(0)
+		if r.File != nil {
+			expected = r.File.Size
+		}
+		m.Reply(fmt.Sprintf("<b>Error:</b> Downloaded file is empty or unreadable (expected %d bytes).", expected))
+		return nil
+	} else if r.File != nil && r.File.Size > 0 && st.Size() < r.File.Size {
+		os.Remove(fi)
+		m.Reply(fmt.Sprintf("<b>Error:</b> Download truncated (%d/%d bytes). Retry.", st.Size(), r.File.Size))
+		return nil
+	}
+
 	defer os.Remove(outPath)
 
 	if err := encodeVideoSticker(fi, outPath); err != nil {
-		m.Reply("<b>Error:</b> ffmpeg failed: " + html.EscapeString(err.Error()))
+		m.Reply(fmt.Sprintf("<b>Error:</b> ffmpeg failed: %s\n<i>Source kept at %s for inspection.</i>", html.EscapeString(err.Error()), html.EscapeString(fi)))
 		return nil
 	}
+	os.Remove(fi)
 
 	if _, err := m.ReplyMedia(outPath, &tg.MediaOptions{
 		MimeType: "video/webm",
