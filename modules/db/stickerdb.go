@@ -163,6 +163,49 @@ func DecrementPackCount(userID int64, pack *PackInfo) error {
 	return SavePack(userID, pack)
 }
 
+func DeletePack(userID int64, shortName string) (bool, error) {
+	db, err := GetDB()
+	if err != nil {
+		return false, err
+	}
+	if err := ensureStickerBuckets(db); err != nil {
+		return false, err
+	}
+	removed := false
+	err = db.Update(func(tx *bolt.Tx) error {
+		usersBucket := tx.Bucket([]byte("sticker_users"))
+		if usersBucket == nil {
+			return nil
+		}
+		userBucket := usersBucket.Bucket([]byte(strconv.FormatInt(userID, 10)))
+		if userBucket == nil {
+			return nil
+		}
+		for _, packType := range []string{"normal", "webm", "tgs"} {
+			tb := userBucket.Bucket([]byte(packType))
+			if tb == nil {
+				continue
+			}
+			c := tb.Cursor()
+			for k, v := c.First(); k != nil; k, v = c.Next() {
+				var p PackInfo
+				if err := json.Unmarshal(v, &p); err != nil {
+					continue
+				}
+				if p.ShortName == shortName {
+					if err := tb.Delete(k); err != nil {
+						return err
+					}
+					removed = true
+					return nil
+				}
+			}
+		}
+		return nil
+	})
+	return removed, err
+}
+
 func GetPackByShortName(userID int64, shortName string) (*PackInfo, error) {
 	db, err := GetDB()
 	if err != nil {

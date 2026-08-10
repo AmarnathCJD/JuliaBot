@@ -1,6 +1,7 @@
 package extras
 
 import (
+	"encoding/binary"
 	"fmt"
 	"html"
 	"image"
@@ -8,11 +9,13 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"image/png"
+	"math"
 	modules "main/modules"
 	"main/modules/db"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,163 +27,380 @@ const MaxStickersPerPack = 120
 
 func stickerFriendlyError(m *tg.NewMessage, err error) string {
 	msg := err.Error()
-	lower := strings.ToLower(msg)
-	if strings.Contains(msg, "PEER_ID_INVALID") || strings.Contains(lower, "peer_id_invalid") {
-		hint := ""
+	upper := strings.ToUpper(msg)
+	switch {
+	case strings.Contains(upper, "PEER_ID_INVALID"):
 		if me := m.Client.Me(); me != nil && me.Username != "" {
-			hint = fmt.Sprintf(" Open <a href=\"https://t.me/%s\">@%s</a> and press <b>Start</b>, then try again.", me.Username, me.Username)
-		} else {
-			hint = " Open my DM and press <b>Start</b>, then try again."
+			return fmt.Sprintf("I can't create sticker packs for you because you haven't started me in DM (or you've blocked me). Open <a href=\"https://t.me/%s\">@%s</a> and press <b>Start</b>, then try again.", me.Username, me.Username)
 		}
-		return "I can't create sticker packs for you because you haven't started me in DM (or you've blocked me)." + hint
-	}
-	if strings.Contains(msg, "STICKERPACK_STICKERS_TOO_MUCH") {
+		return "I can't create sticker packs for you because you haven't started me in DM. Open my DM and press <b>Start</b>, then try again."
+	case strings.Contains(upper, "STICKERPACK_STICKERS_TOO_MUCH"):
 		return "This sticker pack is full. Try again — I'll spill into a new pack."
-	}
-	if strings.Contains(msg, "SHORTNAME_OCCUPY_FAILED") || strings.Contains(msg, "PACK_SHORT_NAME_OCCUPIED") {
+	case strings.Contains(upper, "SHORTNAME_OCCUPY_FAILED"), strings.Contains(upper, "PACK_SHORT_NAME_OCCUPIED"):
 		return "That pack name is already taken. Retry to get a new one."
-	}
-	if strings.Contains(msg, "STICKER_PNG_DIMENSIONS") || strings.Contains(msg, "STICKER_INVALID") {
+	case strings.Contains(upper, "STICKER_TGS_NODOC"), strings.Contains(upper, "STICKER_VIDEO_NODOC"):
+		return "The uploaded sticker document is empty or missing. Reply to the original sticker/file directly and try again."
+	case strings.Contains(upper, "STICKER_TGS_NOTFOUND"), strings.Contains(upper, "STICKER_VIDEO_NOTFOUND"):
+		return "Telegram couldn't find the uploaded sticker document. Try again — the upload may have expired."
+	case strings.Contains(upper, "STICKER_MIME_INVALID"):
+		return "Wrong file type for this pack kind. Video sticker packs accept only .webm/VP9, animated only .tgs, static only .webp/.png."
+	case strings.Contains(upper, "STICKER_EMOJI_INVALID"), strings.Contains(upper, "STICKER_EMOJI_EMPTY"):
+		return "Emoji is invalid or empty. Provide a real emoji after the command, like <code>/kang 😀</code>."
+	case strings.Contains(upper, "STICKER_PNG_DIMENSIONS"), strings.Contains(upper, "STICKER_PNG_NOPNG"):
+		return "Static sticker must be 512×512 PNG or WEBP with transparency."
+	case strings.Contains(upper, "STICKER_INVALID"), strings.Contains(upper, "STICKER_DOCUMENT_INVALID"):
 		return "Sticker file is invalid — must be a 512×512 PNG/WEBP or a valid animated/video sticker."
-	}
-	if strings.Contains(msg, "FLOOD") {
+	case strings.Contains(upper, "FLOOD"):
 		return "Telegram is rate-limiting sticker operations. Wait a bit and try again."
 	}
-	return "Failed to create sticker pack: " + html.EscapeString(msg)
+	return "Sticker operation failed: " + html.EscapeString(msg)
 }
 
 func GifToSticker(m *tg.NewMessage) error {
 	if !m.IsReply() {
-		m.Reply("<b>Error:</b> Please reply to a GIF message to convert it to a sticker.")
+		m.Reply("<b>Error:</b> Please reply to a GIF or short MP4 to convert it to a video sticker.")
 		return nil
 	}
-
 	r, err := m.GetReplyMessage()
 	if err != nil {
 		m.Reply("<b>Error:</b> Unable to fetch the replied message.")
 		return nil
 	}
-
 	if !r.IsMedia() {
-		m.Reply("<b>Error:</b> The replied message is not a GIF.")
+		m.Reply("<b>Error:</b> The replied message has no media.")
 		return nil
 	}
 
 	fn := ""
 	if r.File != nil {
-		fn = r.File.Name
+		fn = strings.ToLower(r.File.Name)
 	}
-
-	if fn != "" {
-		lfn := strings.ToLower(fn)
-		if !(strings.HasSuffix(lfn, ".mp4") || strings.HasSuffix(lfn, ".gif")) {
-			m.Reply("Invalid media: only .mp4 or .gif files are supported.")
-			return nil
-		}
-	}
-
-	fi, err := r.Download(&tg.DownloadOptions{
-		FileName: "gif.gif",
-	})
-	if err != nil {
-		m.Reply("<b>Error:</b> Unable to download the GIF.")
+	if fn != "" && !(strings.HasSuffix(fn, ".mp4") || strings.HasSuffix(fn, ".gif") || strings.HasSuffix(fn, ".webm") || strings.HasSuffix(fn, ".mov")) {
+		m.Reply("<b>Error:</b> Only .mp4, .gif, .webm, or .mov files are supported.")
 		return nil
 	}
 
-	out := "sticker.webm"
-	defer os.Remove("gif.gif")
-	defer os.Remove(out)
+	emoji := strings.TrimSpace(m.Args())
+	if emoji == "" {
+		emoji = "😍"
+	}
 
-	cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "format=yuv420p", "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "30", "-an", "-y", out)
-	_ = cmd.Run()
-	m.ReplyMedia("sticker.webm", &tg.MediaOptions{
+	ts := time.Now().UnixNano()
+	inPath := filepath.Join(os.TempDir(), fmt.Sprintf("gif2sticker_%d_in", ts))
+	outPath := filepath.Join(os.TempDir(), fmt.Sprintf("gif2sticker_%d.webm", ts))
+	fi, err := r.Download(&tg.DownloadOptions{FileName: inPath})
+	if err != nil {
+		m.Reply("<b>Error:</b> Unable to download the source: " + html.EscapeString(err.Error()))
+		return nil
+	}
+	defer os.Remove(fi)
+	defer os.Remove(outPath)
+
+	if err := encodeVideoSticker(fi, outPath); err != nil {
+		m.Reply("<b>Error:</b> ffmpeg failed: " + html.EscapeString(err.Error()))
+		return nil
+	}
+
+	if _, err := m.ReplyMedia(outPath, &tg.MediaOptions{
+		MimeType: "video/webm",
 		Attributes: []tg.DocumentAttribute{
 			&tg.DocumentAttributeSticker{
-				Alt:        "😍",
+				Alt:        emoji,
 				Stickerset: &tg.InputStickerSetEmpty{},
 			},
-			&tg.DocumentAttributeFilename{
-				FileName: "sticker.webm",
-			},
+			&tg.DocumentAttributeFilename{FileName: "sticker.webm"},
 		},
-	})
-
+	}); err != nil {
+		m.Reply("<b>Error:</b> upload failed: " + html.EscapeString(err.Error()))
+	}
 	return nil
+}
+
+func encodeVideoSticker(src, dst string) error {
+	dur := 0.0
+	probe := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", src)
+	if out, err := probe.Output(); err == nil {
+		dur, _ = strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+	}
+
+	vf := "scale='if(gt(iw,ih),512,-2)':'if(gt(iw,ih),-2,512)':flags=lanczos,format=yuva420p,fps=30"
+	args := []string{"-y", "-loglevel", "error", "-i", src, "-vf", vf,
+		"-c:v", "libvpx-vp9",
+		"-pix_fmt", "yuva420p",
+		"-b:v", "0",
+		"-crf", "34",
+		"-deadline", "good",
+		"-cpu-used", "4",
+		"-row-mt", "1",
+		"-threads", "4",
+		"-auto-alt-ref", "0",
+		"-an", "-sn",
+		dst,
+	}
+	cmd := exec.Command("ffmpeg", args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%v: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	if dur > 3.0 {
+		if err := spoofWebmDuration(dst, 2999.0); err != nil {
+			os.Remove(dst)
+			return fmt.Errorf("spoof duration: %w", err)
+		}
+	}
+	return nil
+}
+
+func spoofWebmDuration(path string, targetMs float64) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	// Element IDs as they appear in the file (VINT-encoded, with marker bits):
+	// Segment=0x18538067 (4 bytes), Info=0x1549A966 (4 bytes), Duration=0x4489 (2 bytes).
+	segStart, segLen, ok := ebmlFindChild(data, 0, len(data), []byte{0x18, 0x53, 0x80, 0x67})
+	if !ok {
+		return fmt.Errorf("Segment element not found")
+	}
+	infoStart, infoLen, ok := ebmlFindChild(data, segStart, segStart+segLen, []byte{0x15, 0x49, 0xA9, 0x66})
+	if !ok {
+		return fmt.Errorf("Info element not found")
+	}
+	durStart, durLen, ok := ebmlFindChild(data, infoStart, infoStart+infoLen, []byte{0x44, 0x89})
+	if !ok {
+		return fmt.Errorf("Duration element not found")
+	}
+	switch durLen {
+	case 4:
+		bits := math.Float32bits(float32(targetMs))
+		binary.BigEndian.PutUint32(data[durStart:durStart+4], bits)
+	case 8:
+		bits := math.Float64bits(targetMs)
+		binary.BigEndian.PutUint64(data[durStart:durStart+8], bits)
+	default:
+		return fmt.Errorf("unexpected Duration payload length %d", durLen)
+	}
+	return os.WriteFile(path, data, 0o644)
+}
+
+func ebmlFindChild(data []byte, start, end int, wantID []byte) (payloadStart, payloadLen int, ok bool) {
+	s := start
+	for s < end {
+		if s+len(wantID) > end {
+			return 0, 0, false
+		}
+		idLen := ebmlVIntLen(data[s])
+		if idLen == 0 || s+idLen > end {
+			return 0, 0, false
+		}
+		id := data[s : s+idLen]
+		s += idLen
+		sizeLen := ebmlVIntLen(data[s])
+		if sizeLen == 0 || s+sizeLen > end {
+			return 0, 0, false
+		}
+		size := ebmlVIntValue(data[s : s+sizeLen])
+		s += sizeLen
+		if len(id) == len(wantID) && bytesEqual(id, wantID) {
+			return s, int(size), true
+		}
+		s += int(size)
+	}
+	return 0, 0, false
+}
+
+func ebmlVIntLen(first byte) int {
+	if first == 0 {
+		return 0
+	}
+	for i := 0; i < 8; i++ {
+		if first&(0x80>>i) != 0 {
+			return i + 1
+		}
+	}
+	return 0
+}
+
+func ebmlVIntValue(b []byte) uint64 {
+	if len(b) == 0 {
+		return 0
+	}
+	mask := byte(0x80 >> (len(b) - 1))
+	v := uint64(b[0] &^ mask)
+	for i := 1; i < len(b); i++ {
+		v = (v << 8) | uint64(b[i])
+	}
+	return v
+}
+
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+type kangSource struct {
+	Doc            *tg.DocumentObj
+	Kind           string
+	IsAlreadyValid bool
+	Emoji          string
+}
+
+func kangDetectSource(reply *tg.NewMessage) (*kangSource, error) {
+	if reply == nil || !reply.IsMedia() || reply.Media() == nil {
+		return nil, fmt.Errorf("reply is not media")
+	}
+	md, ok := reply.Media().(*tg.MessageMediaDocument)
+	if !ok {
+		return nil, fmt.Errorf("reply is not a document")
+	}
+	doc, ok := md.Document.(*tg.DocumentObj)
+	if !ok {
+		return nil, fmt.Errorf("document is not a DocumentObj")
+	}
+	src := &kangSource{Doc: doc}
+	mime := strings.ToLower(doc.MimeType)
+	for _, attr := range doc.Attributes {
+		switch a := attr.(type) {
+		case *tg.DocumentAttributeSticker:
+			if src.Emoji == "" && a.Alt != "" {
+				src.Emoji = a.Alt
+			}
+			src.IsAlreadyValid = true
+		case *tg.DocumentAttributeVideo:
+			if src.Kind == "" {
+				src.Kind = "webm"
+			}
+		case *tg.DocumentAttributeFilename:
+			if strings.HasSuffix(strings.ToLower(a.FileName), ".tgs") {
+				src.Kind = "tgs"
+			}
+		}
+	}
+	switch {
+	case strings.Contains(mime, "application/x-tgsticker"):
+		src.Kind = "tgs"
+	case strings.HasPrefix(mime, "video/"):
+		src.Kind = "webm"
+	case strings.HasPrefix(mime, "image/"):
+		if src.Kind == "" {
+			src.Kind = "normal"
+		}
+	}
+	if src.Kind == "" {
+		src.Kind = "normal"
+	}
+	return src, nil
+}
+
+func kangPrepareInputDoc(m *tg.NewMessage, src *kangSource) (tg.InputDocument, func(), error) {
+	cleanup := func() {}
+
+	if src.Kind == "normal" && src.IsAlreadyValid {
+		return &tg.InputDocumentObj{
+			ID:            src.Doc.ID,
+			AccessHash:    src.Doc.AccessHash,
+			FileReference: src.Doc.FileReference,
+		}, cleanup, nil
+	}
+
+	dl, err := m.Client.DownloadMedia(&tg.MessageMediaDocument{Document: src.Doc})
+	if err != nil {
+		return nil, cleanup, fmt.Errorf("download: %w", err)
+	}
+
+	srcW, srcH := 0, 0
+	for _, attr := range src.Doc.Attributes {
+		switch a := attr.(type) {
+		case *tg.DocumentAttributeImageSize:
+			srcW, srcH = int(a.W), int(a.H)
+		case *tg.DocumentAttributeVideo:
+			if srcW == 0 {
+				srcW, srcH = int(a.W), int(a.H)
+			}
+		}
+	}
+	alreadySized := (srcW == 512 && srcH <= 512) || (srcH == 512 && srcW <= 512)
+
+	outPath := dl
+	ts := time.Now().UnixNano()
+	switch src.Kind {
+	case "tgs":
+	case "webm":
+		if !(src.IsAlreadyValid && alreadySized) {
+			outPath = filepath.Join(os.TempDir(), fmt.Sprintf("kang_%d.webm", ts))
+			if err := encodeVideoSticker(dl, outPath); err != nil {
+				os.Remove(dl)
+				return nil, cleanup, err
+			}
+		}
+	default:
+		if !(src.IsAlreadyValid && alreadySized) {
+			outPath = filepath.Join(os.TempDir(), fmt.Sprintf("kang_%d.webp", ts))
+			cmd := exec.Command("ffmpeg",
+				"-y", "-loglevel", "error",
+				"-i", dl,
+				"-vf", "scale='if(gt(iw,ih),512,-2)':'if(gt(iw,ih),-2,512)':flags=lanczos",
+				"-c:v", "libwebp", "-pix_fmt", "yuva420p",
+				"-lossless", "0", "-compression_level", "4", "-q:v", "80",
+				"-preset", "picture", "-an", "-sn", "-threads", "4",
+				outPath,
+			)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				os.Remove(dl)
+				return nil, cleanup, fmt.Errorf("ffmpeg webp: %v: %s", err, strings.TrimSpace(string(out)))
+			}
+		}
+	}
+
+	cleanup = func() {
+		os.Remove(dl)
+		if outPath != dl {
+			os.Remove(outPath)
+		}
+	}
+
+	media, err := m.Client.GetSendableMedia(outPath, &tg.MediaMetadata{Inline: true})
+	if err != nil {
+		cleanup()
+		return nil, func() {}, fmt.Errorf("prepare media: %w", err)
+	}
+	inMedia, ok := media.(*tg.InputMediaDocument)
+	if !ok {
+		cleanup()
+		return nil, func() {}, fmt.Errorf("unexpected sendable media type")
+	}
+	return inMedia.ID, cleanup, nil
 }
 
 func KangSticker(m *tg.NewMessage) error {
 	if !m.IsReply() {
-		m.Reply("Reply to a sticker to kang it!\nUsage: <code>/kang [emoji]</code>")
+		m.Reply("Reply to a sticker or image to kang it.\n<b>Usage:</b> <code>/kang [emoji]</code>")
+		return nil
+	}
+	reply, err := m.GetReplyMessage()
+	if err != nil {
+		m.Reply("Failed to get replied message: " + html.EscapeString(err.Error()))
+		return nil
+	}
+	src, err := kangDetectSource(reply)
+	if err != nil {
+		m.Reply("<b>Error:</b> " + html.EscapeString(err.Error()))
 		return nil
 	}
 
-	reply, err := m.GetReplyMessage()
-	if err != nil {
-		m.Reply("Failed to get replied message.")
-
-	}
-
-	if !reply.IsMedia() {
-		m.Reply("Please reply to a sticker!")
-	}
-
-	var packType string
-	var emoji string = "👍"
-
-	args := m.Args()
-	if len(args) > 0 {
-		emoji = args
-	}
-
-	var stickerFile struct {
-		ID            int64
-		AccessHash    int64
-		FileReference []byte
-		Type          string
-		fi            tg.MessageMedia
-	}
-
-	if reply.Media() != nil {
-		stickerFile.fi = reply.Media()
-		if doc, ok := reply.Media().(*tg.MessageMediaDocument); ok {
-			if document, ok := doc.Document.(*tg.DocumentObj); ok {
-				for _, attr := range document.Attributes {
-					if stickerAttr, ok := attr.(*tg.DocumentAttributeSticker); ok {
-						if emoji == "👍" && stickerAttr.Alt != "" {
-							emoji = stickerAttr.Alt
-						}
-					}
-					if _, ok := attr.(*tg.DocumentAttributeVideo); ok {
-						packType = "webm"
-					}
-					if fileName, ok := attr.(*tg.DocumentAttributeFilename); ok {
-						if strings.HasSuffix(fileName.FileName, ".tgs") {
-							packType = "tgs"
-						}
-					}
-				}
-
-				if packType == "" {
-					if strings.Contains(document.MimeType, "video") {
-						packType = "webm"
-					} else if strings.Contains(document.MimeType, "application/x-tgsticker") {
-						packType = "tgs"
-					} else {
-						packType = "normal"
-					}
-				}
-
-				stickerFile.ID = document.ID
-				stickerFile.AccessHash = document.AccessHash
-				stickerFile.FileReference = document.FileReference
-			}
-		}
-		if reply.Document().MimeType == "application/x-tgsticker" {
-			packType = "tgs"
-		} else if strings.HasPrefix(reply.Document().MimeType, "video/") {
-			packType = "webm"
+	emoji := strings.TrimSpace(m.Args())
+	if emoji == "" {
+		if src.Emoji != "" {
+			emoji = src.Emoji
 		} else {
-			packType = "normal"
+			emoji = "👍"
 		}
 	}
 
@@ -189,364 +409,315 @@ func KangSticker(m *tg.NewMessage) error {
 	if username == "" {
 		username = fmt.Sprintf("user%d", userID)
 	}
+	me := m.Client.Me()
+	if me == nil || me.Username == "" {
+		m.Reply("<b>Error:</b> bot has no username; can't create sticker sets.")
+		return nil
+	}
 
-	pack, err := db.GetActivePack(userID, packType)
+	pack, _ := db.GetActivePack(userID, src.Kind)
+	needNewPack := pack == nil || pack.StickerCount >= MaxStickersPerPack
 
-	var shortName, title string
-	//var isNewPack bool
+	doc, cleanup, err := kangPrepareInputDoc(m, src)
+	defer cleanup()
+	if err != nil {
+		m.Reply("<b>Error:</b> " + html.EscapeString(err.Error()))
+		return nil
+	}
 
-	if err != nil || pack == nil || pack.StickerCount >= MaxStickersPerPack {
-		//isNewPack = true
+	if needNewPack {
 		packs, _ := db.GetUserPacks(userID)
-		packNumber := len(packs[packType]) + 1
+		packNumber := len(packs[src.Kind]) + 1
+		shortName := fmt.Sprintf("x%s_%s_%d_by_%s", username, src.Kind, packNumber, me.Username)
+		title := fmt.Sprintf("%s's %s Stickers #%d", username, asciiTitle(src.Kind), packNumber)
 
-		shortName = fmt.Sprintf("x%s_%s_%d_by_%s", username, packType, packNumber, m.Client.Me().Username)
-		title = fmt.Sprintf("%s's %s Stickers #%d", username, asciiTitle(packType), packNumber)
-
-		pack = &db.PackInfo{
+		newPack := &db.PackInfo{
 			ShortName:    shortName,
 			Title:        title,
-			Type:         packType,
-			StickerCount: 0,
+			Type:         src.Kind,
+			StickerCount: 1,
 			PackNumber:   packNumber,
 		}
-
-		var createErr error
-		switch packType {
-		case "tgs", "webm":
-			fi, err := m.Client.DownloadMedia(stickerFile.fi)
-			if err != nil {
-				m.Reply("Failed to download sticker media.")
-				return nil
-			}
-			defer os.Remove(fi)
-
-			var mediaSendable *tg.InputMediaDocument
-			if packType == "webm" {
-				ext := filepath.Ext(fi)
-				out := fi + "_resized" + ext
-				cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(512-iw)/2:(512-ih)/2:color=black@0,format=yuva420p", "-c:v", "libvpx-vp9", "-auto-alt-ref", "0", "-b:v", "0", "-crf", "30", "-an", "-y", out)
-				if err := cmd.Run(); err == nil {
-					defer os.Remove(out)
-					media, err := m.Client.GetSendableMedia(out, &tg.MediaMetadata{Inline: true})
-					if err != nil {
-						media, err = m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
-						if err != nil {
-							m.Reply("Failed to prepare sticker media.")
-							return nil
-						}
-					}
-					mediaSendable = media.(*tg.InputMediaDocument)
-				} else {
-					media, err := m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
-					if err != nil {
-						m.Reply("Failed to prepare sticker media.")
-						return nil
-					}
-					mediaSendable = media.(*tg.InputMediaDocument)
-				}
-			} else {
-				media, err := m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
-				if err != nil {
-					m.Reply("Failed to prepare sticker media.")
-					return nil
-				}
-				mediaSendable = media.(*tg.InputMediaDocument)
-			}
-
-			_, createErr = m.Client.StickersCreateStickerSet(&tg.StickersCreateStickerSetParams{
-				UserID:    &tg.InputUserObj{UserID: userID, AccessHash: m.Sender.AccessHash},
-				Title:     title,
-				ShortName: shortName,
-				Stickers: []*tg.InputStickerSetItem{
-					{
-						Document: mediaSendable.ID,
-						Emoji:    emoji,
-					},
-				},
-			})
-		default:
-			_, createErr = m.Client.StickersCreateStickerSet(&tg.StickersCreateStickerSetParams{
-				UserID:    &tg.InputUserObj{UserID: userID, AccessHash: m.Sender.AccessHash},
-				Title:     title,
-				ShortName: shortName,
-				Stickers: []*tg.InputStickerSetItem{
-					{
-						Document: &tg.InputDocumentObj{
-							ID:            stickerFile.ID,
-							AccessHash:    stickerFile.AccessHash,
-							FileReference: stickerFile.FileReference,
-						},
-						Emoji: emoji,
-					},
-				},
-			})
-		}
-
+		_, createErr := m.Client.StickersCreateStickerSet(&tg.StickersCreateStickerSetParams{
+			UserID:    &tg.InputUserObj{UserID: userID, AccessHash: m.Sender.AccessHash},
+			Title:     title,
+			ShortName: shortName,
+			Stickers: []*tg.InputStickerSetItem{
+				{Document: doc, Emoji: emoji},
+			},
+		})
 		if createErr != nil {
 			m.Reply(stickerFriendlyError(m, createErr))
 			return nil
 		}
-
-		pack.StickerCount = 1
-		db.SavePack(userID, pack)
-
+		db.SavePack(userID, newPack)
 		m.Reply(fmt.Sprintf(
-			"<b>Created new %s sticker pack!</b>\n"+
-				"Pack: <a href='https://t.me/addstickers/%s'>%s</a>\n"+
+			"<b>Created new %s sticker pack.</b>\n"+
+				"Pack: <a href=\"https://t.me/addstickers/%s\">%s</a>\n"+
 				"Stickers: 1/%d",
-			packType, shortName, title, MaxStickersPerPack,
+			src.Kind, shortName, html.EscapeString(title), MaxStickersPerPack,
 		))
 		return nil
 	}
 
-	var doc tg.InputDocument
-
-	switch packType {
-	case "tgs", "webm":
-		fi, err := m.Client.DownloadMedia(stickerFile.fi)
-		if err != nil {
-			m.Reply("Failed to download sticker media.")
-			return nil
-		}
-		defer os.Remove(fi)
-
-		if packType == "webm" {
-			ext := filepath.Ext(fi)
-			out := fi + "_resized" + ext
-			cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(512-iw)/2:(512-ih)/2:color=black@0,format=yuva420p", "-c:v", "libvpx-vp9", "-auto-alt-ref", "0", "-b:v", "0", "-crf", "30", "-an", "-y", out)
-			if err := cmd.Run(); err == nil {
-				defer os.Remove(out)
-				media, err := m.Client.GetSendableMedia(out, &tg.MediaMetadata{Inline: true})
-				if err != nil {
-					media, err = m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
-					if err != nil {
-						m.Reply("Failed to prepare sticker media.")
-						return nil
-					}
-				}
-				doc = media.(*tg.InputMediaDocument).ID
-			} else {
-				media, err := m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
-				if err != nil {
-					m.Reply("Failed to prepare sticker media.")
-					return nil
-				}
-				doc = media.(*tg.InputMediaDocument).ID
-			}
-		} else {
-			media, err := m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
-			if err != nil {
-				m.Reply("Failed to prepare sticker media.")
-				return nil
-			}
-			doc = media.(*tg.InputMediaDocument).ID
-		}
-	default:
-		fi, err := m.Client.DownloadMedia(stickerFile.fi)
-		if err != nil {
-			m.Reply("Failed to download sticker media.")
-			return nil
-		}
-		defer os.Remove(fi)
-
-		ext := filepath.Ext(fi)
-		out := fi + "_resized" + ext
-
-		cmd := exec.Command("ffmpeg", "-i", fi, "-vf", "scale=w=512:h=512:force_original_aspect_ratio=decrease", "-y", out)
-		if err := cmd.Run(); err != nil {
-			media, err := m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
-			if err != nil {
-				m.Reply("Failed to prepare sticker media.")
-				return nil
-			}
-			doc = media.(*tg.InputMediaDocument).ID
-		} else {
-			defer os.Remove(out)
-			media, err := m.Client.GetSendableMedia(out, &tg.MediaMetadata{Inline: true})
-			if err != nil {
-				media, err = m.Client.GetSendableMedia(fi, &tg.MediaMetadata{Inline: true})
-				if err != nil {
-					m.Reply("Failed to prepare sticker media.")
-					return nil
-				}
-			}
-			doc = media.(*tg.InputMediaDocument).ID
-		}
-	}
-
-	_, addErr := m.Client.StickersAddStickerToSet(&tg.InputStickerSetShortName{ShortName: pack.ShortName}, &tg.InputStickerSetItem{
-		Document: doc,
-		Emoji:    emoji,
-	})
-
+	_, addErr := m.Client.StickersAddStickerToSet(
+		&tg.InputStickerSetShortName{ShortName: pack.ShortName},
+		&tg.InputStickerSetItem{Document: doc, Emoji: emoji},
+	)
 	if addErr != nil {
 		m.Reply(stickerFriendlyError(m, addErr))
 		return nil
 	}
-
 	db.IncrementPackCount(userID, pack)
 
 	msg := fmt.Sprintf(
-		"<b>Added to pack!</b>\n"+
-			"Pack: <a href='https://t.me/addstickers/%s'>%s</a>\n"+
+		"<b>Added to pack.</b>\n"+
+			"Pack: <a href=\"https://t.me/addstickers/%s\">%s</a>\n"+
 			"Stickers: %d/%d",
-		pack.ShortName, pack.Title, pack.StickerCount, MaxStickersPerPack,
+		pack.ShortName, html.EscapeString(pack.Title), pack.StickerCount, MaxStickersPerPack,
 	)
-
 	if pack.StickerCount >= MaxStickersPerPack {
-		msg += "\n\n⚠️ <b>Pack is full!</b> Next sticker will create a new pack."
+		msg += "\n\n<b>Pack is full.</b> Next kang will create a new pack."
 	}
-
 	m.Reply(msg)
 	return nil
 }
 
 func RemoveKangedSticker(m *tg.NewMessage) error {
 	if !m.IsReply() {
-		m.Reply("Reply to a sticker in your pack to remove it!\nUsage: <code>/rmkang</code>")
+		m.Reply("Reply to a sticker in your pack to remove it.\n<b>Usage:</b> <code>/rmkang</code>")
 		return nil
 	}
-
 	reply, err := m.GetReplyMessage()
 	if err != nil {
-		m.Reply("Failed to get replied message.")
+		m.Reply("Failed to get replied message: " + html.EscapeString(err.Error()))
 		return nil
 	}
-
 	if !reply.IsMedia() {
-		m.Reply("Please reply to a sticker!")
+		m.Reply("Please reply to a sticker.")
 		return nil
 	}
 
-	var stickerFile tg.InputDocument
-	if reply.Media() != nil {
-		if doc, ok := reply.Media().(*tg.MessageMediaDocument); ok {
-			if document, ok := doc.Document.(*tg.DocumentObj); ok {
-				stickerFile = &tg.InputDocumentObj{
-					ID:            document.ID,
-					AccessHash:    document.AccessHash,
-					FileReference: document.FileReference,
+	var (
+		stickerFile tg.InputDocument
+		setInput    tg.InputStickerSet
+	)
+	if md, ok := reply.Media().(*tg.MessageMediaDocument); ok {
+		if document, ok := md.Document.(*tg.DocumentObj); ok {
+			stickerFile = &tg.InputDocumentObj{
+				ID:            document.ID,
+				AccessHash:    document.AccessHash,
+				FileReference: document.FileReference,
+			}
+			for _, attr := range document.Attributes {
+				if s, ok := attr.(*tg.DocumentAttributeSticker); ok {
+					setInput = s.Stickerset
+					break
+				}
+			}
+		}
+	}
+	if stickerFile == nil {
+		m.Reply("Unable to extract sticker file.")
+		return nil
+	}
+
+	if _, err := m.Client.StickersRemoveStickerFromSet(stickerFile); err != nil {
+		m.Reply("<b>Error:</b> " + html.EscapeString(err.Error()) + " (you can only remove stickers from packs you created)")
+		return nil
+	}
+
+	if setInput != nil {
+		if setRes, err := m.Client.MessagesGetStickerSet(setInput, 0); err == nil {
+			if resp, ok := setRes.(*tg.MessagesStickerSetObj); ok && resp.Set != nil {
+				if pack, err := db.GetPackByShortName(m.Sender.ID, resp.Set.ShortName); err == nil && pack != nil {
+					db.DecrementPackCount(m.Sender.ID, pack)
 				}
 			}
 		}
 	}
 
-	if stickerFile == nil {
-		m.Reply("Unable to extract sticker file!")
-		return nil
-	}
-
-	userID := m.Sender.ID
-
-	packs, err := db.GetUserPacks(userID)
-	if err != nil || len(packs) == 0 {
-		m.Reply("You don't have any sticker packs!")
-		return nil
-	}
-
-	var removed bool
-
-	_, err = m.Client.StickersRemoveStickerFromSet(stickerFile)
-	if err == nil {
-		removed = true
-	}
-
-	if removed {
-		m.Reply("✅ Removed sticker from your pack!")
-		return nil
-	}
-
-	m.Reply("❌ Sticker not found in your packs or you don't own this sticker.")
+	m.Reply("Removed sticker from your pack.")
 	return nil
 }
 
 func PackInfoHandle(m *tg.NewMessage) error {
 	if !m.IsReply() {
-		m.Reply("Reply to a sticker to get pack info!")
+		m.Reply("Reply to a sticker to get pack info.")
 		return nil
 	}
-
 	reply, err := m.GetReplyMessage()
 	if err != nil {
 		m.Reply("Failed to get replied message.")
 		return nil
 	}
-
 	if !reply.IsMedia() {
-		m.Reply("Please reply to a sticker!")
+		m.Reply("Please reply to a sticker.")
 		return nil
 	}
 
 	var stickerAttr *tg.DocumentAttributeSticker
-	if reply.Media() != nil {
-		if doc, ok := reply.Media().(*tg.MessageMediaDocument); ok {
-			if document, ok := doc.Document.(*tg.DocumentObj); ok {
-				for _, attr := range document.Attributes {
-					if sticker, ok := attr.(*tg.DocumentAttributeSticker); ok {
-						stickerAttr = sticker
-						break
-					}
+	if md, ok := reply.Media().(*tg.MessageMediaDocument); ok {
+		if document, ok := md.Document.(*tg.DocumentObj); ok {
+			for _, attr := range document.Attributes {
+				if s, ok := attr.(*tg.DocumentAttributeSticker); ok {
+					stickerAttr = s
+					break
 				}
 			}
 		}
 	}
-
 	if stickerAttr == nil || stickerAttr.Stickerset == nil {
-		m.Reply("This is not a valid sticker or doesn't belong to a pack!")
+		m.Reply("This is not a valid sticker or doesn't belong to a pack.")
+		return nil
+	}
+	if _, empty := stickerAttr.Stickerset.(*tg.InputStickerSetEmpty); empty {
+		m.Reply("Sticker has no associated pack.")
 		return nil
 	}
 
-	// Get the sticker set
 	result, err := m.Client.MessagesGetStickerSet(stickerAttr.Stickerset, 0)
 	if err != nil {
-		m.Reply("Failed to get sticker pack info.")
+		m.Reply("Failed to get sticker pack info: " + html.EscapeString(err.Error()))
 		return nil
 	}
-	resp := result.(*tg.MessagesStickerSetObj)
+	resp, ok := result.(*tg.MessagesStickerSetObj)
+	if !ok || resp.Set == nil {
+		m.Reply("Unexpected response from Telegram.")
+		return nil
+	}
+	set := resp.Set
 
-	var creatorID, internalID int64
-	stickerSetID := resp.Set.ID
-	sid := stickerSetID
-	creatorID = sid >> 32
-
-	if ((sid >> 24) & 0xFF) == 0 {
-		internalID = sid & 0xFFFFFFFF
+	kind := "Static"
+	for _, d := range resp.Documents {
+		obj, ok := d.(*tg.DocumentObj)
+		if !ok {
+			continue
+		}
+		mime := strings.ToLower(obj.MimeType)
+		switch {
+		case strings.Contains(mime, "application/x-tgsticker"):
+			kind = "Animated (.tgs)"
+		case strings.HasPrefix(mime, "video/"):
+			kind = "Video (.webm)"
+		case strings.HasPrefix(mime, "image/"):
+			kind = "Static (.webp)"
+		}
+		break
+	}
+	if set.Emojis {
+		kind += " · Emoji pack"
+	}
+	if set.Masks {
+		kind += " · Mask pack"
 	}
 
-	text := fmt.Sprintf("🧩 <b>Sticker Pack Info</b>\n\n👤 <b>Creator ID:</b> <code>%d</code>\n", creatorID)
+	text := fmt.Sprintf(
+		"<b>Sticker Pack Info</b>\n\n"+
+			"<b>Title:</b> %s\n"+
+			"<b>Short name:</b> <code>%s</code>\n"+
+			"<b>Stickers:</b> %d\n"+
+			"<b>Type:</b> %s\n"+
+			"<b>Set ID:</b> <code>%d</code>\n"+
+			"<b>Link:</b> <a href=\"https://t.me/addstickers/%s\">Add pack</a>",
+		html.EscapeString(set.Title),
+		html.EscapeString(set.ShortName),
+		set.Count,
+		html.EscapeString(kind),
+		set.ID,
+		html.EscapeString(set.ShortName),
+	)
+	m.Reply(text)
+	return nil
+}
 
-	if internalID != 0 {
-		text += fmt.Sprintf("🆔 <b>Increment set ID:</b> <code>%d</code>\n", internalID)
-	} else {
-		text += "🆔 <b>Increment set ID:</b> <code>Unavailable</code>\n"
+func MyPacksHandler(m *tg.NewMessage) error {
+	packs, err := db.GetUserPacks(m.SenderID())
+	if err != nil {
+		m.Reply("<b>Error:</b> " + html.EscapeString(err.Error()))
+		return nil
 	}
-
-	if creatorID > 0 {
-		user, err := m.Client.GetUser(creatorID)
-		if err == nil && user != nil {
-			userName := user.FirstName
-			if user.LastName != "" {
-				userName += " " + user.LastName
-			}
-			if user.Username != "" {
-				text += fmt.Sprintf("👤 <b>Creator Name:</b> <a href='https://t.me/%s'>%s</a>", user.Username, userName)
-			} else {
-				text += fmt.Sprintf("👤 <b>Creator Name:</b> %s", userName)
-			}
+	total := 0
+	var b strings.Builder
+	b.WriteString("<b>Your Sticker Packs</b>\n")
+	for _, kind := range []string{"normal", "webm", "tgs"} {
+		list := packs[kind]
+		if len(list) == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "\n<b>%s</b>\n", asciiTitle(kind))
+		for _, p := range list {
+			total += p.StickerCount
+			fmt.Fprintf(&b, "• <a href=\"https://t.me/addstickers/%s\">%s</a> (%d/%d)\n",
+				p.ShortName, html.EscapeString(p.Title), p.StickerCount, MaxStickersPerPack)
 		}
 	}
+	if total == 0 {
+		m.Reply("You haven't kanged any stickers yet. Reply to a sticker with <code>/kang</code>.")
+		return nil
+	}
+	m.Reply(b.String())
+	return nil
+}
 
-	m.Reply(text)
+func RenamePackHandler(m *tg.NewMessage) error {
+	fields := strings.SplitN(strings.TrimSpace(m.Args()), " ", 2)
+	if len(fields) < 2 {
+		m.Reply("<b>Usage:</b> <code>/renamepack &lt;short_name&gt; &lt;new title&gt;</code>")
+		return nil
+	}
+	shortName, newTitle := strings.TrimSpace(fields[0]), strings.TrimSpace(fields[1])
+	if shortName == "" || newTitle == "" {
+		m.Reply("<b>Usage:</b> <code>/renamepack &lt;short_name&gt; &lt;new title&gt;</code>")
+		return nil
+	}
+	pack, err := db.GetPackByShortName(m.SenderID(), shortName)
+	if err != nil || pack == nil {
+		m.Reply("Pack not found in your collection.")
+		return nil
+	}
+	if _, err := m.Client.StickersRenameStickerSet(&tg.InputStickerSetShortName{ShortName: shortName}, newTitle); err != nil {
+		m.Reply(stickerFriendlyError(m, err))
+		return nil
+	}
+	pack.Title = newTitle
+	db.SavePack(m.SenderID(), pack)
+	m.Reply(fmt.Sprintf("Renamed pack to <b>%s</b>.", html.EscapeString(newTitle)))
+	return nil
+}
+
+func DeletePackHandler(m *tg.NewMessage) error {
+	shortName := strings.TrimSpace(m.Args())
+	if shortName == "" {
+		m.Reply("<b>Usage:</b> <code>/deletepack &lt;short_name&gt;</code>")
+		return nil
+	}
+	pack, err := db.GetPackByShortName(m.SenderID(), shortName)
+	if err != nil || pack == nil {
+		m.Reply("Pack not found in your collection.")
+		return nil
+	}
+	if _, err := m.Client.StickersDeleteStickerSet(&tg.InputStickerSetShortName{ShortName: shortName}); err != nil {
+		m.Reply(stickerFriendlyError(m, err))
+		return nil
+	}
+	if _, err := db.DeletePack(m.SenderID(), shortName); err != nil {
+		m.Reply(fmt.Sprintf("Deleted on Telegram, but local record cleanup failed: %s", html.EscapeString(err.Error())))
+		return nil
+	}
+	m.Reply(fmt.Sprintf("Deleted pack <b>%s</b>.", html.EscapeString(pack.Title)))
 	return nil
 }
 
 func registerStickersHandlers() {
 	c := modules.Client
-	c.OnCommand("gif", GifToSticker)
-	c.OnCommand("kang", KangSticker)
-	c.OnCommand("rmkang", RemoveKangedSticker)
-	c.OnCommand("pack", PackInfoHandle)
+	c.On("cmd:gif", GifToSticker)
+	c.On("cmd:kang", KangSticker)
+	c.On("cmd:rmkang", RemoveKangedSticker)
+	c.On("cmd:pack", PackInfoHandle)
+	c.On("cmd:mypacks", MyPacksHandler)
+	c.On("cmd:renamepack", RenamePackHandler)
+	c.On("cmd:deletepack", DeletePackHandler)
 	c.On("command:doge", modules.DogeSticker)
 	c.On("inline:doge", modules.DogeStickerInline)
 }
