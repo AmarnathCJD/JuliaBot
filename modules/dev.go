@@ -428,51 +428,100 @@ func JsonHandle(m *tg.NewMessage) error {
 	return nil
 }
 
-func formatMediaInfo(info string) string {
-	lines := strings.Split(info, "\n")
-	var formatted strings.Builder
-	formatted.WriteString("<b>📊 Media Information</b>\n\n")
+type mediaInfoSection struct {
+	Name string
+	Rows [][2]string
+}
 
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			formatted.WriteString("\n")
+func parseMediaInfoSections(info string) []mediaInfoSection {
+	var sections []mediaInfoSection
+	var cur *mediaInfoSection
+	for _, raw := range strings.Split(info, "\n") {
+		line := strings.TrimRight(raw, " \t\r")
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			if cur != nil && len(cur.Rows) > 0 {
+				sections = append(sections, *cur)
+			}
+			cur = nil
 			continue
 		}
-
-		if !strings.Contains(line, ":") && len(line) > 0 {
-			formatted.WriteString("<b>")
-			formatted.WriteString(line)
-			formatted.WriteString("</b>\n")
-		} else if strings.Contains(line, ":") {
-			parts := strings.SplitN(line, ":", 2)
-			if len(parts) == 2 {
-				key := strings.TrimSpace(parts[0])
-				value := strings.TrimSpace(parts[1])
-
-				// Format key in bold, value in regular text
-				if value != "" {
-					formatted.WriteString("<b>")
-					formatted.WriteString(key)
-					formatted.WriteString(":</b> <code>")
-					formatted.WriteString(value)
-					formatted.WriteString("</code>\n")
-				} else {
-					formatted.WriteString("<b>")
-					formatted.WriteString(key)
-					formatted.WriteString(":</b>\n")
-				}
-			} else {
-				formatted.WriteString(line)
-				formatted.WriteString("\n")
+		if !strings.Contains(trimmed, ":") {
+			if cur != nil && len(cur.Rows) > 0 {
+				sections = append(sections, *cur)
 			}
-		} else {
-			formatted.WriteString(line)
-			formatted.WriteString("\n")
+			cur = &mediaInfoSection{Name: trimmed}
+			continue
+		}
+		parts := strings.SplitN(trimmed, ":", 2)
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if cur == nil {
+			cur = &mediaInfoSection{Name: "Info"}
+		}
+		cur.Rows = append(cur.Rows, [2]string{key, value})
+	}
+	if cur != nil && len(cur.Rows) > 0 {
+		sections = append(sections, *cur)
+	}
+	return sections
+}
+
+func devHTMLEscape(s string) string {
+	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
+	return r.Replace(s)
+}
+
+func formatMediaInfo(info string) string {
+	sections := parseMediaInfoSections(info)
+	var b strings.Builder
+	b.WriteString("<b>Media Information</b>\n")
+	for _, sec := range sections {
+		b.WriteString("\n<b>")
+		b.WriteString(devHTMLEscape(sec.Name))
+		b.WriteString("</b>\n")
+		for _, row := range sec.Rows {
+			b.WriteString("• <b>")
+			b.WriteString(devHTMLEscape(row[0]))
+			b.WriteString(":</b> <code>")
+			b.WriteString(devHTMLEscape(row[1]))
+			b.WriteString("</code>\n")
 		}
 	}
+	return b.String()
+}
 
-	return formatted.String()
+func mediaInfoToRich(info, headline string) *tg.RichBuilder {
+	rich := tg.NewRichMessage()
+	rich.Heading("Media Information")
+	if headline != "" {
+		rich.Quote(headline)
+	}
+	for _, sec := range parseMediaInfoSections(info) {
+		rows := make([][]any, 0, len(sec.Rows))
+		for _, r := range sec.Rows {
+			rows = append(rows, []any{r[0], r[1]})
+		}
+		rich.Details(sec.Name, &tg.PageBlockTable{
+			Bordered: true,
+			Striped:  true,
+			Title:    &tg.TextEmpty{},
+			Rows:     mediaInfoRichRows(rows),
+		})
+	}
+	return rich
+}
+
+func mediaInfoRichRows(rows [][]any) []*tg.PageTableRow {
+	out := make([]*tg.PageTableRow, 0, len(rows))
+	for _, r := range rows {
+		cells := make([]*tg.PageTableCell, 0, len(r))
+		for _, c := range r {
+			cells = append(cells, &tg.PageTableCell{Text: &tg.TextPlain{Text: fmt.Sprint(c)}})
+		}
+		out = append(out, &tg.PageTableRow{Cells: cells})
+	}
+	return out
 }
 
 var reMediaNameUnsafe = regexp.MustCompile(`[^A-Za-z0-9._\- ]+`)
@@ -486,6 +535,23 @@ func sanitizeMediaFilename(name string) string {
 		name = name[:120-len(ext)] + ext
 	}
 	return name
+}
+
+func humanBytes(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for x := n / unit; x >= unit; x /= unit {
+		div *= unit
+		exp++
+	}
+	suffixes := []string{"KiB", "MiB", "GiB", "TiB", "PiB"}
+	if exp >= len(suffixes) {
+		exp = len(suffixes) - 1
+	}
+	return fmt.Sprintf("%.2f %s", float64(n)/float64(div), suffixes[exp])
 }
 
 func mediaOrigFilename(r *tg.NewMessage) string {
@@ -507,7 +573,7 @@ func mediaOrigFilename(r *tg.NewMessage) string {
 
 func MediaInfoHandler(m *tg.NewMessage) error {
 	if !m.IsReply() {
-		m.Reply("Reply to a message to get media info")
+		m.Reply("Reply to a media message to get media info. Add <code>full</code> to force a full download for large files.")
 		return nil
 	}
 
@@ -516,21 +582,31 @@ func MediaInfoHandler(m *tg.NewMessage) error {
 		m.Reply("Error: " + err.Error())
 		return nil
 	}
-
 	if !r.IsMedia() {
 		m.Reply("This message is not a media")
 		return nil
 	}
 
-	msg, _ := m.Reply("<code>Gathering media info...</code>")
+	forceFull := strings.EqualFold(strings.TrimSpace(m.Args()), "full")
 
 	_ = os.MkdirAll("tmp", 0o755)
 	origName := mediaOrigFilename(r)
 	targetPath := filepath.Join("tmp", origName)
 
+	var sizeHint string
+	if r.File != nil && r.File.Size > 0 {
+		sizeHint = " (" + humanBytes(r.File.Size) + ")"
+	}
+
+	statusText := "<code>Gathering media info for " + devHTMLEscape(origName) + sizeHint + "...</code>"
+	if forceFull && r.File != nil && r.File.Size > 40*1024*1024 {
+		statusText = "<code>Downloading full file " + devHTMLEscape(origName) + sizeHint + "...</code>"
+	}
+	msg, _ := m.Reply(statusText)
+
+	truncated := false
 	var downloadedFileName string
-	if r.File != nil && r.File.Size > 40*1024*1024 {
-		// large files: fetch only the first 40MB so mediainfo can parse container headers
+	if !forceFull && r.File != nil && r.File.Size > 40*1024*1024 {
 		buf, _, err := m.Client.DownloadChunk(r.Media(), 0, 40*1024*1024, 512*1024)
 		if err != nil {
 			msg.Edit("Error: " + err.Error())
@@ -541,6 +617,7 @@ func MediaInfoHandler(m *tg.NewMessage) error {
 			return nil
 		}
 		downloadedFileName = targetPath
+		truncated = true
 	} else {
 		fi, err := m.Client.DownloadMedia(r.Media(), &tg.DownloadOptions{FileName: targetPath})
 		if err != nil {
@@ -554,34 +631,39 @@ func MediaInfoHandler(m *tg.NewMessage) error {
 	cmd := exec.Command("mediainfo", downloadedFileName)
 	var out bytes.Buffer
 	cmd.Stdout = &out
-	err = cmd.Run()
-	if err != nil {
-		m.Reply("Error: " + err.Error())
+	if err := cmd.Run(); err != nil {
+		msg.Edit("Error: " + err.Error())
 		return nil
 	}
 
 	mediaInfoOutput := strings.Trim(out.String(), "\n")
+	mediaInfoOutput = strings.ReplaceAll(mediaInfoOutput, "tmp/"+origName, origName)
+	mediaInfoOutput = strings.ReplaceAll(mediaInfoOutput, "tmp\\"+origName, origName)
 
-	// If output is less than 3000 characters, format and send as message
+	if strings.Contains(mediaInfoOutput, "IsTruncated: Yes") && !truncated {
+		truncated = true
+	}
+
+	headline := ""
+	if truncated {
+		headline = "File was truncated — only the first 40 MB were analyzed. Reply /media full to download and analyze the entire file."
+	}
+
 	if len(mediaInfoOutput) < 3000 {
-		formattedOutput := formatMediaInfo(mediaInfoOutput)
-		msg.Edit(formattedOutput)
+		body := formatMediaInfo(mediaInfoOutput)
+		if headline != "" {
+			body = "<b>Note:</b> <i>" + devHTMLEscape(headline) + "</i>\n\n" + body
+		}
+		msg.Edit(body)
 		return nil
 	}
 
-	// Otherwise, post to pastebin
-	url, err := devUploadSpacebin(mediaInfoOutput)
-	if err != nil {
-		m.Reply("Error: " + err.Error())
+	rich := mediaInfoToRich(mediaInfoOutput, headline)
+	if _, err := m.Client.SendRich(m.ChannelID(), rich, &tg.SendOptions{ReplyID: m.ID}); err != nil {
+		msg.Edit("Error sending rich media info: " + err.Error())
 		return nil
 	}
-
-	msg.Edit("<b><a href='"+url+"'>Media Info Pasted</a></b>", &tg.SendOptions{
-		ReplyMarkup: tg.NewKeyboard().AddRow(
-			tg.Button.URL("View", url),
-		).Build(),
-		LinkPreview: true,
-	})
+	msg.Delete()
 	return nil
 }
 
