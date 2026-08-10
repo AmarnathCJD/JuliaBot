@@ -491,38 +491,6 @@ func formatMediaInfo(info string) string {
 	return b.String()
 }
 
-func mediaInfoToRich(info, headline string) *tg.RichBuilder {
-	rich := tg.NewRichMessage()
-	rich.Heading("Media Information")
-	if headline != "" {
-		rich.Quote(headline)
-	}
-	for _, sec := range parseMediaInfoSections(info) {
-		rows := make([][]any, 0, len(sec.Rows))
-		for _, r := range sec.Rows {
-			rows = append(rows, []any{r[0], r[1]})
-		}
-		rich.Details(sec.Name, &tg.PageBlockTable{
-			Bordered: true,
-			Striped:  true,
-			Title:    &tg.TextEmpty{},
-			Rows:     mediaInfoRichRows(rows),
-		})
-	}
-	return rich
-}
-
-func mediaInfoRichRows(rows [][]any) []*tg.PageTableRow {
-	out := make([]*tg.PageTableRow, 0, len(rows))
-	for _, r := range rows {
-		cells := make([]*tg.PageTableCell, 0, len(r))
-		for _, c := range r {
-			cells = append(cells, &tg.PageTableCell{Text: &tg.TextPlain{Text: fmt.Sprint(c)}})
-		}
-		out = append(out, &tg.PageTableRow{Cells: cells})
-	}
-	return out
-}
 
 var reMediaNameUnsafe = regexp.MustCompile(`[^A-Za-z0-9._\- ]+`)
 
@@ -658,12 +626,19 @@ func MediaInfoHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	rich := mediaInfoToRich(mediaInfoOutput, headline)
-	if _, err := m.Client.SendRich(m.ChannelID(), rich, &tg.SendOptions{ReplyID: m.ID}); err != nil {
-		msg.Edit("Error sending rich media info: " + err.Error())
+	url, err := devUploadSpacebin(mediaInfoOutput)
+	if err != nil {
+		msg.Edit("Error uploading media info: " + err.Error())
 		return nil
 	}
-	msg.Delete()
+
+	body := "<b>Media Info</b> — <a href=\"" + url + "\">view full report</a>"
+	if headline != "" {
+		body = "<b>Note:</b> <i>" + devHTMLEscape(headline) + "</i>\n\n" + body
+	}
+	msg.Edit(body, &tg.SendOptions{
+		ReplyMarkup: tg.NewKeyboard().AddRow(tg.Button.URL("View", url)).Build(),
+	})
 	return nil
 }
 
