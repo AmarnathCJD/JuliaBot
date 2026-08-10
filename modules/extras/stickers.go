@@ -86,7 +86,13 @@ func GifToSticker(m *tg.NewMessage) error {
 	}
 
 	ts := time.Now().UnixNano()
-	inPath := filepath.Join(os.TempDir(), fmt.Sprintf("gif2sticker_%d_in", ts))
+	srcExt := ".mp4"
+	if r.File != nil && r.File.Name != "" {
+		if e := strings.ToLower(filepath.Ext(r.File.Name)); e != "" {
+			srcExt = e
+		}
+	}
+	inPath := filepath.Join(os.TempDir(), fmt.Sprintf("gif2sticker_%d_in%s", ts, srcExt))
 	outPath := filepath.Join(os.TempDir(), fmt.Sprintf("gif2sticker_%d.webm", ts))
 	fi, err := r.Download(&tg.DownloadOptions{FileName: inPath})
 	if err != nil {
