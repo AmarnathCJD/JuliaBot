@@ -475,6 +475,36 @@ func formatMediaInfo(info string) string {
 	return formatted.String()
 }
 
+var reMediaNameUnsafe = regexp.MustCompile(`[^A-Za-z0-9._\- ]+`)
+
+func sanitizeMediaFilename(name string) string {
+	name = filepath.Base(strings.ReplaceAll(name, "\\", "/"))
+	name = reMediaNameUnsafe.ReplaceAllString(name, "_")
+	name = strings.Trim(name, " ._")
+	if len(name) > 120 {
+		ext := filepath.Ext(name)
+		name = name[:120-len(ext)] + ext
+	}
+	return name
+}
+
+func mediaOrigFilename(r *tg.NewMessage) string {
+	if r.File != nil {
+		if n := strings.TrimSpace(r.File.Name); n != "" {
+			if s := sanitizeMediaFilename(n); s != "" {
+				return s
+			}
+		}
+		if ext := strings.TrimSpace(r.File.Ext); ext != "" {
+			if !strings.HasPrefix(ext, ".") {
+				ext = "." + ext
+			}
+			return "media" + ext
+		}
+	}
+	return "media.bin"
+}
+
 func MediaInfoHandler(m *tg.NewMessage) error {
 	if !m.IsReply() {
 		m.Reply("Reply to a message to get media info")
@@ -494,25 +524,29 @@ func MediaInfoHandler(m *tg.NewMessage) error {
 
 	msg, _ := m.Reply("<code>Gathering media info...</code>")
 
+	_ = os.MkdirAll("tmp", 0o755)
+	origName := mediaOrigFilename(r)
+	targetPath := filepath.Join("tmp", origName)
+
 	var downloadedFileName string
-	if r.File != nil && r.File.Size > 40*1024*1024 { // 20MB
-		// download first 40MB of the file
-
-		bytes, _, err := m.Client.DownloadChunk(r.Media(), 0, 40*1024*1024, 512*1024)
+	if r.File != nil && r.File.Size > 40*1024*1024 {
+		// large files: fetch only the first 40MB so mediainfo can parse container headers
+		buf, _, err := m.Client.DownloadChunk(r.Media(), 0, 40*1024*1024, 512*1024)
 		if err != nil {
-			m.Reply("Error: " + err.Error())
+			msg.Edit("Error: " + err.Error())
 			return nil
 		}
-
-		os.WriteFile("tmp/media", bytes, 0644)
-		downloadedFileName = "tmp/media"
+		if err := os.WriteFile(targetPath, buf, 0o644); err != nil {
+			msg.Edit("Error: " + err.Error())
+			return nil
+		}
+		downloadedFileName = targetPath
 	} else {
-		fi, err := m.Client.DownloadMedia(r.Media())
+		fi, err := m.Client.DownloadMedia(r.Media(), &tg.DownloadOptions{FileName: targetPath})
 		if err != nil {
-			m.Reply("Error: " + err.Error())
+			msg.Edit("Error: " + err.Error())
 			return nil
 		}
-
 		downloadedFileName = fi
 	}
 	defer os.Remove(downloadedFileName)
