@@ -327,7 +327,11 @@ func quoteResolveFrom(c *tg.Client, senderID, chatID int64) qaFrom {
 	f.IsBot = u.Bot
 	if u.Photo != nil {
 		if p, ok := u.Photo.(*tg.UserProfilePhotoObj); ok && p != nil && p.PhotoID != 0 {
-			f.Photo = &qaPhoto{URL: fmt.Sprintf("%s/avatar/%d.jpg", avatarSelfURL(), senderID)}
+			if u.Username != "" {
+				f.Photo = &qaPhoto{URL: fmt.Sprintf("https://t.me/i/userpic/320/%s.jpg", u.Username)}
+			} else {
+				f.Photo = &qaPhoto{URL: fmt.Sprintf("%s/avatar/%d.jpg", avatarSelfURL(), senderID)}
+			}
 		}
 	}
 	if es, ok := u.EmojiStatus.(*tg.EmojiStatusObj); ok && es.DocumentID != 0 {
@@ -466,24 +470,211 @@ func quoteRequestImage(req qaRequest, wantPNG bool) ([]byte, error) {
 	return data, nil
 }
 
-func QuoteImageHandler(m *tg.NewMessage) error {
-	return quoteImageHandlerImpl(m, false)
+type quoteFlags struct {
+	IncludeReply bool
+	N            int
+	ImageMode    bool
+	HD           bool
+	IsQuote      bool
+	Brand        string
+	Scale        int
+	Bg           string
 }
 
-func QuoteHDImageHandler(m *tg.NewMessage) error {
-	return quoteImageHandlerImpl(m, true)
+func quoteParseFlags(args string) quoteFlags {
+	f := quoteFlags{}
+	for _, tok := range strings.Fields(args) {
+		lower := strings.ToLower(tok)
+		switch {
+		case lower == "r":
+			f.IncludeReply = true
+		case lower == "p":
+			f.ImageMode = true
+		case lower == "hd":
+			f.HD = true
+		case lower == "q":
+			f.IsQuote = true
+		case strings.HasPrefix(lower, "brand="):
+			f.Brand = strings.TrimPrefix(lower, "brand=")
+		case strings.HasPrefix(lower, "scale="):
+			if n, err := strconv.Atoi(strings.TrimPrefix(lower, "scale=")); err == nil && n >= 1 && n <= 20 {
+				f.Scale = n
+			}
+		default:
+			if n, err := strconv.Atoi(tok); err == nil && n >= 1 && n <= 10 {
+				f.N = n
+			} else if f.Bg == "" {
+				f.Bg = tok
+			}
+		}
+	}
+	return f
 }
 
-func quoteImageHandlerImpl(m *tg.NewMessage, hd bool) error {
-	if !m.IsReply() {
-		m.Reply("<b>Usage:</b> reply to a message with <code>/q</code> to generate a quote.")
+func quoteCollectMessages(client *tg.Client, m *tg.NewMessage, target *tg.NewMessage, flags quoteFlags) []qaMessage {
+	chatID := m.ChatID()
+	messages := []qaMessage{quoteBuildMessage(client, target, chatID, flags.IncludeReply)}
+	if flags.IsQuote {
+		messages[0].IsQuote = true
+	}
+	if flags.N <= 1 {
+		return messages
+	}
+	history, err := client.GetMessages(chatID, &tg.SearchOption{
+		MaxID: target.ID,
+		Limit: int32(flags.N - 1),
+	})
+	if err != nil || len(history) == 0 {
+		return messages
+	}
+	extra := make([]qaMessage, 0, len(history))
+	for i := range history {
+		older := &history[i]
+		if older.ID == target.ID {
+			continue
+		}
+		if strings.TrimSpace(older.RawText()) == "" {
+			continue
+		}
+		bm := quoteBuildMessage(client, older, chatID, false)
+		if flags.IsQuote {
+			bm.IsQuote = true
+		}
+		extra = append(extra, bm)
+	}
+	all := make([]qaMessage, 0, len(extra)+len(messages))
+	for i := len(extra) - 1; i >= 0; i-- {
+		all = append(all, extra[i])
+	}
+	all = append(all, messages...)
+	return all
+}
+
+func quoteRateBucket() []byte { return []byte("quote_rate") }
+func quoteVotesBucket() []byte { return []byte("quote_votes") }
+func quotePacksBucket() []byte { return []byte("quote_packs_by_chat") }
+
+func quoteRateIsOn(chatID int64) bool {
+	d, err := db.GetDB()
+	if err != nil || d == nil {
+		return false
+	}
+	on := false
+	_ = d.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(quoteRateBucket())
+		if b == nil {
+			return nil
+		}
+		key := make([]byte, 8)
+		binary.BigEndian.PutUint64(key, uint64(chatID))
+		v := b.Get(key)
+		if len(v) == 1 && v[0] == 1 {
+			on = true
+		}
+		return nil
+	})
+	return on
+}
+
+func quoteRateSet(chatID int64, on bool) error {
+	d, err := db.GetDB()
+	if err != nil || d == nil {
+		return fmt.Errorf("db unavailable")
+	}
+	return d.Update(func(tx *bolt.Tx) error {
+		b, e := tx.CreateBucketIfNotExists(quoteRateBucket())
+		if e != nil {
+			return e
+		}
+		key := make([]byte, 8)
+		binary.BigEndian.PutUint64(key, uint64(chatID))
+		val := []byte{0}
+		if on {
+			val = []byte{1}
+		}
+		return b.Put(key, val)
+	})
+}
+
+type quoteVoteRecord struct {
+	ChatID     int64           `json:"chat_id"`
+	QuoteID    uint64          `json:"quote_id"`
+	Up         map[int64]bool  `json:"up"`
+	Down       map[int64]bool  `json:"down"`
+	QuoterID   int64           `json:"quoter_id"`
+	QuoterName string          `json:"quoter_name"`
+	QuotedID   int64           `json:"quoted_id"`
+	QuotedName string          `json:"quoted_name"`
+	Preview    string          `json:"preview"`
+	MessageID  int32           `json:"message_id"`
+	Timestamp  int64           `json:"ts"`
+}
+
+func quoteVoteKey(chatID int64, quoteID uint64) []byte {
+	b := make([]byte, 16)
+	binary.BigEndian.PutUint64(b[0:8], uint64(chatID))
+	binary.BigEndian.PutUint64(b[8:16], quoteID)
+	return b
+}
+
+func quoteVoteGet(chatID int64, quoteID uint64) *quoteVoteRecord {
+	d, err := db.GetDB()
+	if err != nil || d == nil {
 		return nil
 	}
-	target, err := m.GetReplyMessage()
-	if err != nil || target == nil {
-		m.Reply("<b>Could not read the replied message.</b>")
+	var rec quoteVoteRecord
+	found := false
+	_ = d.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(quoteVotesBucket())
+		if b == nil {
+			return nil
+		}
+		raw := b.Get(quoteVoteKey(chatID, quoteID))
+		if raw == nil {
+			return nil
+		}
+		if jerr := json.Unmarshal(raw, &rec); jerr == nil {
+			found = true
+			if rec.Up == nil {
+				rec.Up = map[int64]bool{}
+			}
+			if rec.Down == nil {
+				rec.Down = map[int64]bool{}
+			}
+		}
+		return nil
+	})
+	if !found {
 		return nil
 	}
+	return &rec
+}
+
+func quoteVoteSave(rec *quoteVoteRecord) error {
+	d, err := db.GetDB()
+	if err != nil || d == nil {
+		return fmt.Errorf("db unavailable")
+	}
+	return d.Update(func(tx *bolt.Tx) error {
+		b, e := tx.CreateBucketIfNotExists(quoteVotesBucket())
+		if e != nil {
+			return e
+		}
+		raw, jerr := json.Marshal(rec)
+		if jerr != nil {
+			return jerr
+		}
+		return b.Put(quoteVoteKey(rec.ChatID, rec.QuoteID), raw)
+	})
+}
+
+func quoteVoteKeyboard(chatID int64, quoteID uint64, up, down int) *tg.ReplyInlineMarkup {
+	upBtn := tg.Button.Data(fmt.Sprintf("👍 %d", up), fmt.Sprintf("qvote:%d:up", quoteID))
+	downBtn := tg.Button.Data(fmt.Sprintf("👎 %d", down), fmt.Sprintf("qvote:%d:down", quoteID))
+	return tg.NewKeyboard().AddRow(upBtn, downBtn).Build()
+}
+
+func quoteRenderCore(m *tg.NewMessage, target *tg.NewMessage, flags quoteFlags) error {
 	if strings.TrimSpace(target.RawText()) == "" {
 		m.Reply("<b>Nothing to quote.</b> Reply to a text message.")
 		return nil
@@ -492,24 +683,36 @@ func quoteImageHandlerImpl(m *tg.NewMessage, hd bool) error {
 	status, _ := m.Reply("<i>painting your quote...</i>")
 
 	scale := 2
-	if hd {
+	if flags.HD {
 		scale = 5
 	}
-	bgColor := "#1b1429"
-	if fields := strings.Fields(m.Args()); len(fields) > 0 {
-		bgColor = fields[0]
+	if flags.Scale > 0 {
+		scale = flags.Scale
+	}
+	bg := flags.Bg
+	if bg == "" {
+		bg = "#1b1429"
+	}
+	brand := flags.Brand
+	if brand == "" {
+		brand = "apple"
 	}
 
+	messages := quoteCollectMessages(m.Client, m, target, flags)
 	req := qaRequest{
-		BackgroundColor: bgColor,
+		BackgroundColor: bg,
 		Width:           512,
 		Height:          768,
 		Scale:           scale,
-		EmojiBrand:      "apple",
-		Messages:        []qaMessage{quoteBuildMessage(m.Client, target, m.ChatID(), true)},
+		EmojiBrand:      brand,
+		Messages:        messages,
+	}
+	if flags.ImageMode {
+		req.Type = "image"
 	}
 
-	data, rerr := quoteRequestImage(req, hd)
+	wantPNG := flags.ImageMode || flags.HD
+	data, rerr := quoteRequestImage(req, wantPNG)
 	if rerr != nil {
 		if status != nil {
 			status.Edit("failed: " + html.EscapeString(rerr.Error()))
@@ -519,7 +722,7 @@ func quoteImageHandlerImpl(m *tg.NewMessage, hd bool) error {
 
 	ext := ".webp"
 	mime := "image/webp"
-	if hd {
+	if wantPNG {
 		ext = ".png"
 		mime = "image/png"
 	}
@@ -532,11 +735,14 @@ func quoteImageHandlerImpl(m *tg.NewMessage, hd bool) error {
 	}
 	defer os.Remove(outPath)
 
+	quotedID, quotedName := quoteExtractQuoted(m.Client, target)
+	quoteID, _ := quoteAutoSave(m, target, quotedID, quotedName)
+
 	opts := &tg.MediaOptions{
 		FileName: "quote" + ext,
 		MimeType: mime,
 	}
-	if !hd {
+	if !wantPNG {
 		opts.Attributes = []tg.DocumentAttribute{
 			&tg.DocumentAttributeSticker{
 				Alt:        "💬",
@@ -545,16 +751,576 @@ func quoteImageHandlerImpl(m *tg.NewMessage, hd bool) error {
 			&tg.DocumentAttributeFilename{FileName: "quote.webp"},
 		}
 	}
-	if _, merr := m.ReplyMedia(outPath, opts); merr != nil {
+	if quoteRateIsOn(m.ChatID()) && quoteID != 0 {
+		opts.ReplyMarkup = quoteVoteKeyboard(m.ChatID(), quoteID, 0, 0)
+	}
+
+	sent, merr := m.ReplyMedia(outPath, opts)
+	if merr != nil {
 		if status != nil {
 			status.Edit("upload failed: " + html.EscapeString(merr.Error()))
 		}
 		return nil
 	}
+	if sent != nil && quoteID != 0 {
+		rec := &quoteVoteRecord{
+			ChatID:     m.ChatID(),
+			QuoteID:    quoteID,
+			Up:         map[int64]bool{},
+			Down:       map[int64]bool{},
+			QuoterID:   m.SenderID(),
+			QuoterName: quoteSenderName(m),
+			QuotedID:   quotedID,
+			QuotedName: quotedName,
+			Preview:    quotePreview(target.RawText()),
+			MessageID:  sent.ID,
+			Timestamp:  time.Now().Unix(),
+		}
+		_ = quoteVoteSave(rec)
+	}
 	if status != nil {
 		status.Delete()
 	}
 	return nil
+}
+
+func quoteExtractQuoted(client *tg.Client, target *tg.NewMessage) (int64, string) {
+	if target == nil {
+		return 0, ""
+	}
+	uid := target.SenderID()
+	if uid == 0 {
+		return 0, "User"
+	}
+	u, err := client.GetUser(uid)
+	if err != nil || u == nil {
+		return uid, fmt.Sprintf("User %d", uid)
+	}
+	name := strings.TrimSpace(u.FirstName + " " + u.LastName)
+	if name == "" {
+		if u.Username != "" {
+			name = "@" + u.Username
+		} else {
+			name = fmt.Sprintf("User %d", uid)
+		}
+	}
+	return uid, name
+}
+
+func quoteSenderName(m *tg.NewMessage) string {
+	if m.Sender == nil {
+		return "User"
+	}
+	name := strings.TrimSpace(m.Sender.FirstName + " " + m.Sender.LastName)
+	if name == "" {
+		if m.Sender.Username != "" {
+			name = "@" + m.Sender.Username
+		} else {
+			name = "User"
+		}
+	}
+	return name
+}
+
+func quotePreview(text string) string {
+	text = strings.TrimSpace(text)
+	if len(text) > 120 {
+		return text[:120] + "..."
+	}
+	return text
+}
+
+func quoteAutoSave(m *tg.NewMessage, target *tg.NewMessage, quotedID int64, quotedName string) (uint64, error) {
+	text := strings.TrimSpace(target.RawText())
+	if text == "" {
+		return 0, nil
+	}
+	if len(text) > 4000 {
+		text = text[:4000]
+	}
+	if err := quotesEnsureBucket(); err != nil {
+		return 0, err
+	}
+	d, err := db.GetDB()
+	if err != nil || d == nil {
+		return 0, fmt.Errorf("db unavailable")
+	}
+	handle := ""
+	if u, uerr := m.Client.GetUser(quotedID); uerr == nil && u != nil {
+		handle = u.Username
+	}
+	savedByName := quoteSenderName(m)
+	var newID uint64
+	werr := d.Update(func(tx *bolt.Tx) error {
+		b, e := tx.CreateBucketIfNotExists(quotesBucket)
+		if e != nil {
+			return e
+		}
+		newID = quotesNextID(tx, m.ChatID())
+		rec := quoteRecord{
+			ID:          newID,
+			ChatID:      m.ChatID(),
+			UserID:      quotedID,
+			UserName:    quotedName,
+			UserHandle:  handle,
+			Text:        text,
+			SavedBy:     m.SenderID(),
+			SavedByName: savedByName,
+			Timestamp:   time.Now().Unix(),
+		}
+		raw, jerr := json.Marshal(&rec)
+		if jerr != nil {
+			return jerr
+		}
+		return b.Put(quotesChatKey(m.ChatID(), newID), raw)
+	})
+	return newID, werr
+}
+
+func QuoteImageHandler(m *tg.NewMessage) error {
+	flags := quoteParseFlags(m.Args())
+	target, err := quoteResolveTarget(m, flags)
+	if err != nil || target == nil {
+		m.Reply("<b>Usage:</b> reply to a message with <code>/q</code>.\nFlags: <code>r</code> include reply, <code>N</code> stack N messages, <code>p</code> image mode, <code>hd</code>, <code>q</code> blockquote style, <code>brand=apple|google|twitter</code>, <code>scale=1-20</code>, color name or hex.")
+		return nil
+	}
+	return quoteRenderCore(m, target, flags)
+}
+
+func QuoteHDImageHandler(m *tg.NewMessage) error {
+	flags := quoteParseFlags(m.Args())
+	flags.HD = true
+	target, err := quoteResolveTarget(m, flags)
+	if err != nil || target == nil {
+		m.Reply("<b>Usage:</b> reply to a message with <code>/qhd</code>.")
+		return nil
+	}
+	return quoteRenderCore(m, target, flags)
+}
+
+func quoteResolveTarget(m *tg.NewMessage, _ quoteFlags) (*tg.NewMessage, error) {
+	if !m.IsReply() {
+		return nil, fmt.Errorf("no reply")
+	}
+	target, err := m.GetReplyMessage()
+	if err != nil || target == nil {
+		return nil, fmt.Errorf("could not read reply")
+	}
+	return target, nil
+}
+
+func QuoteVoteCallback(m *tg.CallbackQuery) error {
+	data := string(m.Data)
+	parts := strings.Split(data, ":")
+	if len(parts) != 3 {
+		m.Answer("bad vote", &tg.CallbackOptions{Alert: false})
+		return nil
+	}
+	quoteID, err := strconv.ParseUint(parts[1], 10, 64)
+	if err != nil {
+		m.Answer("bad vote", &tg.CallbackOptions{Alert: false})
+		return nil
+	}
+	direction := parts[2]
+	if direction != "up" && direction != "down" {
+		m.Answer("bad vote", &tg.CallbackOptions{Alert: false})
+		return nil
+	}
+	chatID := m.ChatID
+	if !quoteRateIsOn(chatID) {
+		m.Answer("voting is disabled here", &tg.CallbackOptions{Alert: false})
+		return nil
+	}
+	rec := quoteVoteGet(chatID, quoteID)
+	if rec == nil {
+		m.Answer("quote not found", &tg.CallbackOptions{Alert: false})
+		return nil
+	}
+	uid := m.SenderID
+	if rec.Up == nil {
+		rec.Up = map[int64]bool{}
+	}
+	if rec.Down == nil {
+		rec.Down = map[int64]bool{}
+	}
+	toast := ""
+	if direction == "up" {
+		if rec.Up[uid] {
+			delete(rec.Up, uid)
+			toast = "removed 👍"
+		} else {
+			rec.Up[uid] = true
+			delete(rec.Down, uid)
+			toast = "👍"
+		}
+	} else {
+		if rec.Down[uid] {
+			delete(rec.Down, uid)
+			toast = "removed 👎"
+		} else {
+			rec.Down[uid] = true
+			delete(rec.Up, uid)
+			toast = "👎"
+		}
+	}
+	_ = quoteVoteSave(rec)
+	kb := quoteVoteKeyboard(chatID, quoteID, len(rec.Up), len(rec.Down))
+	_, _ = m.Client.EditMessage(chatID, rec.MessageID, "", &tg.SendOptions{ReplyMarkup: kb})
+	m.Answer(toast, &tg.CallbackOptions{Alert: false})
+	return nil
+}
+
+func QuoteRateHandler(m *tg.NewMessage) error {
+	if m.IsPrivate() {
+		m.Reply("<b>/qrate</b> works in groups only.")
+		return nil
+	}
+	if !modules.IsUserAdmin(m.Client, m.SenderID(), m.ChatID(), "") {
+		m.Reply("<b>Admins only.</b>")
+		return nil
+	}
+	arg := strings.ToLower(strings.TrimSpace(m.Args()))
+	switch arg {
+	case "on", "enable":
+		if err := quoteRateSet(m.ChatID(), true); err != nil {
+			m.Reply("<b>DB error.</b>")
+			return nil
+		}
+		m.Reply("<b>Quote voting enabled.</b> New <code>/q</code> messages will get 👍/👎 buttons.")
+	case "off", "disable":
+		if err := quoteRateSet(m.ChatID(), false); err != nil {
+			m.Reply("<b>DB error.</b>")
+			return nil
+		}
+		m.Reply("<b>Quote voting disabled.</b>")
+	default:
+		state := "off"
+		if quoteRateIsOn(m.ChatID()) {
+			state = "on"
+		}
+		m.Reply(fmt.Sprintf("<b>Quote voting:</b> <code>%s</code>\n<i>Usage:</i> <code>/qrate on|off</code>", state))
+	}
+	return nil
+}
+
+func QuoteRandHandler(m *tg.NewMessage) error {
+	all, err := quotesListByChat(m.ChatID())
+	if err != nil || len(all) == 0 {
+		m.Reply("<b>No quotes saved here yet.</b> Run <code>/q</code> on a message first.")
+		return nil
+	}
+	idx := int(time.Now().UnixNano()) % len(all)
+	if idx < 0 {
+		idx = -idx
+	}
+	rec := all[idx]
+	preview := rec.Text
+	if len(preview) > 300 {
+		preview = preview[:300] + "..."
+	}
+	m.Reply(fmt.Sprintf("<b>%s</b> once said <code>#%d</code>:\n\n<i>%s</i>",
+		html.EscapeString(rec.UserName), rec.ID, html.EscapeString(preview)))
+	return nil
+}
+
+func QuoteTopHandler(m *tg.NewMessage) error {
+	n := 10
+	if a := strings.TrimSpace(m.Args()); a != "" {
+		if v, err := strconv.Atoi(a); err == nil && v > 0 && v <= 50 {
+			n = v
+		}
+	}
+	d, err := db.GetDB()
+	if err != nil || d == nil {
+		m.Reply("<b>DB error.</b>")
+		return nil
+	}
+	type ranked struct {
+		Rec   *quoteVoteRecord
+		Score int
+	}
+	var out []ranked
+	prefix := make([]byte, 8)
+	binary.BigEndian.PutUint64(prefix, uint64(m.ChatID()))
+	_ = d.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(quoteVotesBucket())
+		if b == nil {
+			return nil
+		}
+		c := b.Cursor()
+		for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
+			var rec quoteVoteRecord
+			if jerr := json.Unmarshal(v, &rec); jerr != nil {
+				continue
+			}
+			score := len(rec.Up) - len(rec.Down)
+			if score == 0 && len(rec.Up)+len(rec.Down) == 0 {
+				continue
+			}
+			out = append(out, ranked{&rec, score})
+		}
+		return nil
+	})
+	if len(out) == 0 {
+		m.Reply("<b>No voted quotes yet.</b> Enable voting with <code>/qrate on</code>.")
+		return nil
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Score != out[j].Score {
+			return out[i].Score > out[j].Score
+		}
+		return out[i].Rec.Timestamp > out[j].Rec.Timestamp
+	})
+	if len(out) > n {
+		out = out[:n]
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "<b>Top Quotes</b> (top %d)\n━━━━━━━━━━━━━━━━\n\n", len(out))
+	for i, r := range out {
+		fmt.Fprintf(&sb, "<b>%d.</b> <code>#%d</code> <b>%s</b> — 👍 %d 👎 %d (score %+d)\n<i>%s</i>\n\n",
+			i+1, r.Rec.QuoteID, html.EscapeString(r.Rec.QuotedName), len(r.Rec.Up), len(r.Rec.Down), r.Score, html.EscapeString(r.Rec.Preview))
+	}
+	m.Reply(sb.String())
+	return nil
+}
+
+type quoteChatPack struct {
+	OwnerID      int64  `json:"owner_id"`
+	OwnerName    string `json:"owner_name"`
+	ShortName    string `json:"short_name"`
+	Title        string `json:"title"`
+	PackNumber   int    `json:"pack_number"`
+	StickerCount int    `json:"sticker_count"`
+}
+
+func quoteChatPackGet(chatID int64) *quoteChatPack {
+	d, err := db.GetDB()
+	if err != nil || d == nil {
+		return nil
+	}
+	var pack quoteChatPack
+	found := false
+	_ = d.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(quotePacksBucket())
+		if b == nil {
+			return nil
+		}
+		key := make([]byte, 8)
+		binary.BigEndian.PutUint64(key, uint64(chatID))
+		raw := b.Get(key)
+		if raw == nil {
+			return nil
+		}
+		if jerr := json.Unmarshal(raw, &pack); jerr == nil {
+			found = true
+		}
+		return nil
+	})
+	if !found {
+		return nil
+	}
+	return &pack
+}
+
+func quoteChatPackSave(chatID int64, pack *quoteChatPack) error {
+	d, err := db.GetDB()
+	if err != nil || d == nil {
+		return fmt.Errorf("db unavailable")
+	}
+	return d.Update(func(tx *bolt.Tx) error {
+		b, e := tx.CreateBucketIfNotExists(quotePacksBucket())
+		if e != nil {
+			return e
+		}
+		key := make([]byte, 8)
+		binary.BigEndian.PutUint64(key, uint64(chatID))
+		raw, jerr := json.Marshal(pack)
+		if jerr != nil {
+			return jerr
+		}
+		return b.Put(key, raw)
+	})
+}
+
+func QuoteStickerHandler(m *tg.NewMessage) error {
+	if m.IsPrivate() {
+		m.Reply("<b>/qs</b> works in groups only.")
+		return nil
+	}
+	flags := quoteParseFlags(m.Args())
+	target, err := quoteResolveTarget(m, flags)
+	if err != nil || target == nil {
+		m.Reply("<b>Usage:</b> reply to a message with <code>/qs</code> to add it to this group's quote sticker pack.")
+		return nil
+	}
+	if strings.TrimSpace(target.RawText()) == "" {
+		m.Reply("<b>Nothing to quote.</b>")
+		return nil
+	}
+
+	status, _ := m.Reply("<i>rendering + adding to pack...</i>")
+
+	scale := 2
+	if flags.HD {
+		scale = 5
+	}
+	if flags.Scale > 0 {
+		scale = flags.Scale
+	}
+	bg := flags.Bg
+	if bg == "" {
+		bg = "#1b1429"
+	}
+	brand := flags.Brand
+	if brand == "" {
+		brand = "apple"
+	}
+
+	messages := quoteCollectMessages(m.Client, m, target, flags)
+	req := qaRequest{
+		BackgroundColor: bg,
+		Width:           512,
+		Height:          768,
+		Scale:           scale,
+		EmojiBrand:      brand,
+		Messages:        messages,
+	}
+	data, rerr := quoteRequestImage(req, false)
+	if rerr != nil {
+		if status != nil {
+			status.Edit("failed: " + html.EscapeString(rerr.Error()))
+		}
+		return nil
+	}
+	outPath := filepath.Join(os.TempDir(), fmt.Sprintf("qs_%d.webp", time.Now().UnixNano()))
+	if werr := os.WriteFile(outPath, data, 0o644); werr != nil {
+		if status != nil {
+			status.Edit("failed to write image: " + html.EscapeString(werr.Error()))
+		}
+		return nil
+	}
+	defer os.Remove(outPath)
+
+	me := m.Client.Me()
+	if me == nil || me.Username == "" {
+		if status != nil {
+			status.Edit("bot has no username; cannot own sticker sets")
+		}
+		return nil
+	}
+
+	pack := quoteChatPackGet(m.ChatID())
+	needNew := pack == nil || pack.StickerCount >= MaxStickersPerPack
+
+	media, gerr := m.Client.GetSendableMedia(outPath, &tg.MediaMetadata{Inline: true})
+	if gerr != nil {
+		if status != nil {
+			status.Edit("prepare media failed: " + html.EscapeString(gerr.Error()))
+		}
+		return nil
+	}
+	inMedia, ok := media.(*tg.InputMediaDocument)
+	if !ok {
+		if status != nil {
+			status.Edit("unexpected media type from Telegram")
+		}
+		return nil
+	}
+	doc := inMedia.ID
+	emoji := "💬"
+
+	if needNew {
+		chatIDAbs := m.ChatID()
+		if chatIDAbs < 0 {
+			chatIDAbs = -chatIDAbs
+		}
+		packNumber := 1
+		if pack != nil {
+			packNumber = pack.PackNumber + 1
+		}
+		title := ""
+		if chat, cerr := m.Client.GetChat(m.ChatID()); cerr == nil && chat != nil {
+			title = chat.Title
+		}
+		if title == "" {
+			title = fmt.Sprintf("Chat %d", m.ChatID())
+		}
+		shortName := fmt.Sprintf("xquotes_%d_%d_by_%s", chatIDAbs, packNumber, me.Username)
+		fullTitle := fmt.Sprintf("%s — Quotes #%d", title, packNumber)
+
+		ownerID := m.SenderID()
+		ownerName := quoteSenderName(m)
+		if pack != nil {
+			ownerID = pack.OwnerID
+			ownerName = pack.OwnerName
+		}
+
+		_, createErr := m.Client.StickersCreateStickerSet(&tg.StickersCreateStickerSetParams{
+			UserID:    &tg.InputUserObj{UserID: ownerID, AccessHash: quoteResolveAccessHash(m, ownerID)},
+			Title:     fullTitle,
+			ShortName: shortName,
+			Stickers: []*tg.InputStickerSetItem{
+				{Document: doc, Emoji: emoji},
+			},
+		})
+		if createErr != nil {
+			if status != nil {
+				status.Edit(html.EscapeString(stickerFriendlyError(m, createErr)))
+			}
+			return nil
+		}
+		newPack := &quoteChatPack{
+			OwnerID:      ownerID,
+			OwnerName:    ownerName,
+			ShortName:    shortName,
+			Title:        fullTitle,
+			PackNumber:   packNumber,
+			StickerCount: 1,
+		}
+		if err := quoteChatPackSave(m.ChatID(), newPack); err != nil {
+			if status != nil {
+				status.Edit("saved on Telegram but DB save failed: " + html.EscapeString(err.Error()))
+			}
+			return nil
+		}
+		if status != nil {
+			status.Edit(fmt.Sprintf(
+				"<b>New quote pack created for this chat.</b>\nPack: <a href=\"https://t.me/addstickers/%s\">%s</a>\nStickers: 1/%d",
+				shortName, html.EscapeString(fullTitle), MaxStickersPerPack,
+			))
+		}
+		return nil
+	}
+
+	_, addErr := m.Client.StickersAddStickerToSet(
+		&tg.InputStickerSetShortName{ShortName: pack.ShortName},
+		&tg.InputStickerSetItem{Document: doc, Emoji: emoji},
+	)
+	if addErr != nil {
+		if status != nil {
+			status.Edit(html.EscapeString(stickerFriendlyError(m, addErr)))
+		}
+		return nil
+	}
+	pack.StickerCount++
+	_ = quoteChatPackSave(m.ChatID(), pack)
+	if status != nil {
+		status.Edit(fmt.Sprintf(
+			"<b>Added to this chat's quote pack.</b>\nPack: <a href=\"https://t.me/addstickers/%s\">%s</a>\nStickers: %d/%d",
+			pack.ShortName, html.EscapeString(pack.Title), pack.StickerCount, MaxStickersPerPack,
+		))
+	}
+	return nil
+}
+
+func quoteResolveAccessHash(m *tg.NewMessage, userID int64) int64 {
+	if m.Sender != nil && m.Sender.ID == userID {
+		return m.Sender.AccessHash
+	}
+	if u, err := m.Client.GetUser(userID); err == nil && u != nil {
+		return u.AccessHash
+	}
+	return 0
 }
 
 func quotesEnsureBucket() error {
@@ -856,6 +1622,11 @@ func registerQuotesHandlers() {
 	c.On("cmd:quotes", QuotesListHandler)
 	c.On("cmd:delq", QuoteDeleteHandler)
 	c.On("cmd:qsearch", QuotesSearchHandler)
+	c.On("cmd:qrate", QuoteRateHandler)
+	c.On("cmd:qrand", QuoteRandHandler)
+	c.On("cmd:qtop", QuoteTopHandler)
+	c.On("cmd:qs", QuoteStickerHandler)
+	c.On("callback:qvote:", QuoteVoteCallback)
 }
 
 func init() {

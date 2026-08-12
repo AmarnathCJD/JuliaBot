@@ -293,9 +293,15 @@ func SedHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	newText := strings.Replace(originalText, find, replace, -1)
-	m.Reply(newText)
+	newText := strings.ReplaceAll(originalText, find, replace)
 
+	replyID := m.ID
+	if replyMsg.IsReply() {
+		if gp := replyMsg.ReplyToMsgID(); gp != 0 {
+			replyID = gp
+		}
+	}
+	m.Client.SendMessage(m.ChatID(), newText, &tg.SendOptions{ReplyID: replyID})
 	return nil
 }
 
