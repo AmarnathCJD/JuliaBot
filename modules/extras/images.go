@@ -783,6 +783,99 @@ var pcardRealMetrics = []pcardMetric{
 		days := (time.Now().Unix() - p.FirstSeen) / 86400
 		return pcardScaleLog(days, 180)
 	}},
+	{"PEAK", "peak", func(p *userPerf) int {
+		var mx, sum int64
+		for _, h := range p.HourBuckets {
+			sum += h
+			if h > mx {
+				mx = h
+			}
+		}
+		if sum == 0 {
+			return 0
+		}
+		return pcardScaleRatio(mx, sum)
+	}},
+	{"STREAK", "streak", func(p *userPerf) int {
+		return pcardScaleLog(int64(pcardLongestDailyStreak(p.DailyMsgs)), 60)
+	}},
+	{"LOYAL", "loyal", func(p *userPerf) int {
+		if p.TotalMsgs == 0 || len(p.Chats) == 0 {
+			return 0
+		}
+		var mx int64
+		for _, c := range p.Chats {
+			if c > mx {
+				mx = c
+			}
+		}
+		return pcardScaleRatio(mx, p.TotalMsgs)
+	}},
+	{"RANGE", "range", func(p *userPerf) int { return pcardScaleLog(int64(len(p.Commands)), 60) }},
+	{"WAVE", "wave", func(p *userPerf) int {
+		if len(p.DailyMsgs) < 3 {
+			return 0
+		}
+		var sum float64
+		for _, v := range p.DailyMsgs {
+			sum += float64(v)
+		}
+		mean := sum / float64(len(p.DailyMsgs))
+		if mean == 0 {
+			return 0
+		}
+		var sq float64
+		for _, v := range p.DailyMsgs {
+			d := float64(v) - mean
+			sq += d * d
+		}
+		stddev := sq / float64(len(p.DailyMsgs))
+		v := int(stddev / mean * 30)
+		if v > 100 {
+			v = 100
+		}
+		return v
+	}},
+	{"DAWN", "dawn", func(p *userPerf) int {
+		var dawn int64
+		for i := 5; i <= 10; i++ {
+			dawn += p.HourBuckets[i]
+		}
+		return pcardScaleRatio(dawn, p.TotalMsgs)
+	}},
+}
+
+func pcardLongestDailyStreak(daily map[string]int64) int {
+	if len(daily) == 0 {
+		return 0
+	}
+	days := make([]time.Time, 0, len(daily))
+	for k, v := range daily {
+		if v <= 0 {
+			continue
+		}
+		t, err := time.Parse("2006-01-02", k)
+		if err != nil {
+			continue
+		}
+		days = append(days, t)
+	}
+	if len(days) == 0 {
+		return 0
+	}
+	sort.Slice(days, func(i, j int) bool { return days[i].Before(days[j]) })
+	best, cur := 1, 1
+	for i := 1; i < len(days); i++ {
+		if days[i].Sub(days[i-1]) == 24*time.Hour {
+			cur++
+			if cur > best {
+				best = cur
+			}
+		} else {
+			cur = 1
+		}
+	}
+	return best
 }
 
 func pcardScaleLog(n, cap int64) int {
@@ -909,41 +1002,62 @@ func pcardBadgesFor(perf *userPerf) []string {
 		return nil
 	}
 	var out []string
+	total := float64(perf.TotalMsgs)
 	if perf.TotalMsgs >= 5000 {
 		out = append(out, "Chatterbox")
 	}
-	if perf.TotalMsgs > 0 && float64(perf.NightMsgs)/float64(perf.TotalMsgs) >= 0.35 {
+	if float64(perf.NightMsgs)/total >= 0.35 {
 		out = append(out, "Night Owl")
 	}
-	if perf.TotalMsgs > 0 && float64(perf.StickerMsgs)/float64(perf.TotalMsgs) >= 0.25 {
+	var dawn int64
+	for i := 5; i <= 10; i++ {
+		dawn += perf.HourBuckets[i]
+	}
+	if float64(dawn)/total >= 0.35 {
+		out = append(out, "Early Bird")
+	}
+	if float64(perf.StickerMsgs)/total >= 0.25 {
 		out = append(out, "Sticker King")
 	}
-	if perf.TotalMsgs > 0 && float64(perf.MediaMsgs)/float64(perf.TotalMsgs) >= 0.4 {
+	if float64(perf.MediaMsgs)/total >= 0.4 {
 		out = append(out, "Media Hoarder")
 	}
-	if perf.TotalMsgs > 0 && float64(perf.ReplyMsgs)/float64(perf.TotalMsgs) >= 0.5 {
+	if float64(perf.ReplyMsgs)/total >= 0.5 {
 		out = append(out, "Reply Guy")
 	}
-	if perf.TotalMsgs > 0 && float64(perf.LinkMsgs)/float64(perf.TotalMsgs) >= 0.2 {
+	if float64(perf.LinkMsgs)/total >= 0.2 {
 		out = append(out, "Linkposter")
 	}
 	if len(perf.Chats) >= 10 {
 		out = append(out, "Nomad")
 	}
+	if len(perf.Chats) >= 25 {
+		out = append(out, "Explorer")
+	}
 	if len(perf.Commands) >= 20 {
 		out = append(out, "Power User")
 	}
-	if perf.TotalMsgs > 0 && float64(perf.CmdMsgs)/float64(perf.TotalMsgs) >= 0.5 {
+	if len(perf.Commands) >= 50 {
+		out = append(out, "Command Master")
+	}
+	if float64(perf.CmdMsgs)/total >= 0.5 {
 		out = append(out, "Bot Whisperer")
 	}
-	if perf.TotalMsgs > 0 {
-		avg := float64(perf.CharSum) / float64(perf.TotalMsgs)
-		if avg >= 120 {
-			out = append(out, "Wordsmith")
-		}
-		if avg <= 8 && perf.TotalMsgs >= 200 {
-			out = append(out, "Terse")
-		}
+	avg := float64(perf.CharSum) / total
+	if avg >= 120 {
+		out = append(out, "Wordsmith")
+	}
+	if avg >= 200 {
+		out = append(out, "Storyteller")
+	}
+	if avg <= 8 && perf.TotalMsgs >= 200 {
+		out = append(out, "Terse")
+	}
+	if perf.FirstSeen > 0 && (time.Now().Unix()-perf.FirstSeen) >= 365*86400 {
+		out = append(out, "Veteran")
+	}
+	if pcardLongestDailyStreak(perf.DailyMsgs) >= 30 {
+		out = append(out, "Regular")
 	}
 	if len(out) > 3 {
 		out = out[:3]
@@ -1944,9 +2058,65 @@ func ProfileCardHandler(m *tg.NewMessage) error {
 	return nil
 }
 
+func CardHelpHandler(m *tg.NewMessage) error {
+	txt := `<b>Card Legend</b>
+
+<b>Rank</b> is based on total messages sent:
+• <code>BRONZE</code> — under 250
+• <code>SILVER</code> — 250+
+• <code>GOLD</code> — 1,000+
+• <code>PLATINUM</code> — 3,000+
+• <code>DIAMOND</code> — 8,000+
+• <code>MYTHIC</code> — 20,000+
+
+<b>Stats</b> (3 randomly picked per card):
+• <code>POWER</code> — total messages sent
+• <code>CHAOS</code> — % of messages between midnight and dawn
+• <code>AURA</code> — number of chats you post in
+• <code>MAGIC</code> — unique commands used
+• <code>VIBE</code> — % of your messages that are replies
+• <code>ECHO</code> — % that are stickers
+• <code>SPARK</code> — % that contain links
+• <code>REACH</code> — % that carry media
+• <code>FLOW</code> — average message length
+• <code>FOCUS</code> — % of messages that are commands
+• <code>PULSE</code> — how recently you were last active
+• <code>GRIT</code> — days since first seen
+• <code>PEAK</code> — how spiky vs spread your day is
+• <code>STREAK</code> — longest run of consecutive active days
+• <code>LOYAL</code> — % of messages in your top single chat
+• <code>RANGE</code> — variety of commands you use
+• <code>WAVE</code> — how bursty your daily activity is
+• <code>DAWN</code> — % of messages in morning hours (5–10)
+
+<b>Badges</b> (up to 3, earned when triggered):
+• <b>Chatterbox</b> — 5,000+ messages
+• <b>Night Owl</b> — 35%+ messages at night
+• <b>Early Bird</b> — 35%+ messages 5–10 AM
+• <b>Sticker King</b> — 25%+ stickers
+• <b>Media Hoarder</b> — 40%+ media
+• <b>Reply Guy</b> — 50%+ replies
+• <b>Linkposter</b> — 20%+ links
+• <b>Nomad</b> — 10+ chats
+• <b>Explorer</b> — 25+ chats
+• <b>Power User</b> — 20+ unique commands
+• <b>Command Master</b> — 50+ unique commands
+• <b>Bot Whisperer</b> — 50%+ commands
+• <b>Wordsmith</b> — avg length ≥ 120 chars
+• <b>Storyteller</b> — avg length ≥ 200 chars
+• <b>Terse</b> — avg length ≤ 8 (over 200 msgs)
+• <b>Veteran</b> — tracked for a year+
+• <b>Regular</b> — 30+ day active streak
+
+<b>Title</b> and <b>aura color</b> are picked from a fixed pool based on your user ID — same every time for you, different for everyone else.`
+	m.Reply(txt)
+	return nil
+}
+
 func registerProfileCardsHandlers() {
 	c := modules.Client
 	c.On("cmd:card", ProfileCardHandler)
+	c.On("cmd:cardhelp", CardHelpHandler)
 }
 
 func initFromSrc_profile_cards_3_1() {
