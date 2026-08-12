@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	modules "main/modules"
@@ -43,6 +44,99 @@ func quoteAPIBase() string {
 	return "http://localhost:8080"
 }
 
+const (
+	avatarCacheTTL   = 6 * time.Hour
+	avatarCacheDir   = "tmp/avatars"
+	avatarNoneMarker = ".none"
+)
+
+var (
+	avatarClient   *tg.Client
+	avatarClientMu sync.RWMutex
+)
+
+func AvatarServerInit(c *tg.Client) {
+	avatarClientMu.Lock()
+	avatarClient = c
+	avatarClientMu.Unlock()
+	_ = os.MkdirAll(avatarCacheDir, 0o755)
+	http.HandleFunc("/avatar/", avatarServeHTTP)
+}
+
+func avatarSelfURL() string {
+	if v := strings.TrimSuffix(strings.TrimSpace(os.Getenv("BOT_PUBLIC_URL")), "/"); v != "" {
+		return v
+	}
+	return "http://localhost:6060"
+}
+
+func avatarServeHTTP(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(r.URL.Path, "/avatar/")
+	name = strings.TrimSuffix(name, ".jpg")
+	uid, err := strconv.ParseInt(name, 10, 64)
+	if err != nil || uid == 0 {
+		http.NotFound(w, r)
+		return
+	}
+
+	cached := filepath.Join(avatarCacheDir, fmt.Sprintf("%d.jpg", uid))
+	miss := filepath.Join(avatarCacheDir, fmt.Sprintf("%d%s", uid, avatarNoneMarker))
+
+	if st, err := os.Stat(cached); err == nil && time.Since(st.ModTime()) < avatarCacheTTL {
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		http.ServeFile(w, r, cached)
+		return
+	}
+	if st, err := os.Stat(miss); err == nil && time.Since(st.ModTime()) < avatarCacheTTL {
+		http.NotFound(w, r)
+		return
+	}
+
+	avatarClientMu.RLock()
+	c := avatarClient
+	avatarClientMu.RUnlock()
+	if c == nil {
+		http.Error(w, "bot not ready", http.StatusServiceUnavailable)
+		return
+	}
+
+	u, err := c.GetUser(uid)
+	if err != nil || u == nil || u.Photo == nil {
+		_ = os.WriteFile(miss, nil, 0o644)
+		http.NotFound(w, r)
+		return
+	}
+	full, err := c.UsersGetFullUser(&tg.InputUserObj{UserID: uid, AccessHash: u.AccessHash})
+	if err != nil || full == nil {
+		_ = os.WriteFile(miss, nil, 0o644)
+		http.NotFound(w, r)
+		return
+	}
+	var photo tg.Photo
+	if full.FullUser.ProfilePhoto != nil {
+		photo = full.FullUser.ProfilePhoto
+	} else if full.FullUser.PersonalPhoto != nil {
+		photo = full.FullUser.PersonalPhoto
+	} else if full.FullUser.FallbackPhoto != nil {
+		photo = full.FullUser.FallbackPhoto
+	}
+	p, ok := photo.(*tg.PhotoObj)
+	if !ok || p == nil {
+		_ = os.WriteFile(miss, nil, 0o644)
+		http.NotFound(w, r)
+		return
+	}
+	if _, err := c.DownloadMedia(p, &tg.DownloadOptions{FileName: cached}); err != nil {
+		os.Remove(cached)
+		http.Error(w, "download failed", http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	http.ServeFile(w, r, cached)
+}
+
 type qaEntity struct {
 	Type   string `json:"type"`
 	Offset int    `json:"offset"`
@@ -56,12 +150,17 @@ type qaPhoto struct {
 }
 
 type qaFrom struct {
-	ID        int64    `json:"id"`
-	FirstName string   `json:"first_name,omitempty"`
-	LastName  string   `json:"last_name,omitempty"`
-	Name      string   `json:"name,omitempty"`
-	Username  string   `json:"username,omitempty"`
-	Photo     *qaPhoto `json:"photo,omitempty"`
+	ID           int64    `json:"id"`
+	FirstName    string   `json:"first_name,omitempty"`
+	LastName     string   `json:"last_name,omitempty"`
+	Name         string   `json:"name,omitempty"`
+	Username     string   `json:"username,omitempty"`
+	Title        string   `json:"title,omitempty"`
+	EmojiStatus  string   `json:"emoji_status,omitempty"`
+	IsPremium    bool     `json:"is_premium,omitempty"`
+	IsVerified   bool     `json:"is_verified,omitempty"`
+	IsBot        bool     `json:"is_bot,omitempty"`
+	Photo        *qaPhoto `json:"photo,omitempty"`
 }
 
 type qaReplyMessage struct {
@@ -69,6 +168,11 @@ type qaReplyMessage struct {
 	Text     string     `json:"text,omitempty"`
 	Entities []qaEntity `json:"entities,omitempty"`
 	ChatID   int64      `json:"chatId,omitempty"`
+	From     *qaFrom    `json:"from,omitempty"`
+}
+
+type qaForward struct {
+	Label string `json:"label,omitempty"`
 }
 
 type qaMessage struct {
@@ -77,6 +181,10 @@ type qaMessage struct {
 	Entities     []qaEntity      `json:"entities,omitempty"`
 	Avatar       bool            `json:"avatar"`
 	ReplyMessage *qaReplyMessage `json:"replyMessage,omitempty"`
+	Forward      *qaForward      `json:"forward,omitempty"`
+	ViaBot       string          `json:"viaBot,omitempty"`
+	SenderTag    string          `json:"senderTag,omitempty"`
+	IsQuote      bool            `json:"isQuote,omitempty"`
 }
 
 type qaRequest struct {
@@ -200,7 +308,7 @@ func quoteBuildEntities(src []tg.MessageEntity) []qaEntity {
 	return out
 }
 
-func quoteResolveFrom(c *tg.Client, senderID int64) qaFrom {
+func quoteResolveFrom(c *tg.Client, senderID, chatID int64) qaFrom {
 	f := qaFrom{ID: senderID}
 	if senderID == 0 {
 		f.Name = "User"
@@ -214,6 +322,19 @@ func quoteResolveFrom(c *tg.Client, senderID int64) qaFrom {
 	f.FirstName = u.FirstName
 	f.LastName = u.LastName
 	f.Username = u.Username
+	f.IsPremium = u.Premium
+	f.IsVerified = u.Verified
+	f.IsBot = u.Bot
+	if u.Photo != nil {
+		if p, ok := u.Photo.(*tg.UserProfilePhotoObj); ok && p != nil && p.PhotoID != 0 {
+			f.Photo = &qaPhoto{URL: fmt.Sprintf("%s/avatar/%d.jpg", avatarSelfURL(), senderID)}
+		}
+	}
+	if es, ok := u.EmojiStatus.(*tg.EmojiStatusObj); ok && es.DocumentID != 0 {
+		f.EmojiStatus = strconv.FormatInt(es.DocumentID, 10)
+	} else if esc, ok := u.EmojiStatus.(*tg.EmojiStatusCollectible); ok && esc.DocumentID != 0 {
+		f.EmojiStatus = strconv.FormatInt(esc.DocumentID, 10)
+	}
 	if strings.TrimSpace(f.FirstName+f.LastName) == "" {
 		if u.Username != "" {
 			f.Name = "@" + u.Username
@@ -221,17 +342,63 @@ func quoteResolveFrom(c *tg.Client, senderID int64) qaFrom {
 			f.Name = fmt.Sprintf("User %d", senderID)
 		}
 	}
+	if chatID != 0 && !u.Bot {
+		if part, perr := c.GetChatMember(chatID, senderID); perr == nil && part != nil {
+			if part.Rank != "" {
+				f.Title = part.Rank
+			} else if part.Status == tg.Creator {
+				f.Title = "Owner"
+			} else if part.Status == tg.Admin {
+				f.Title = "Admin"
+			}
+		}
+	}
 	return f
 }
 
-func quoteBuildMessage(client *tg.Client, msg *tg.NewMessage, includeReply bool) qaMessage {
-	from := quoteResolveFrom(client, msg.SenderID())
-	entities := quoteBuildEntities(msg.Message.Entities)
+func quoteBuildMessage(client *tg.Client, msg *tg.NewMessage, chatID int64, includeReply bool) qaMessage {
+	from := quoteResolveFrom(client, msg.SenderID(), chatID)
 	out := qaMessage{
 		From:     from,
 		Text:     msg.RawText(),
-		Entities: entities,
+		Entities: quoteBuildEntities(msg.Message.Entities),
 		Avatar:   true,
+	}
+	if from.Title != "" {
+		out.SenderTag = from.Title
+	}
+	if msg.Message != nil {
+		if msg.Message.ViaBotID != 0 {
+			if u, err := client.GetUser(msg.Message.ViaBotID); err == nil && u != nil && u.Username != "" {
+				out.ViaBot = "@" + u.Username
+			}
+		}
+		if fh := msg.Message.FwdFrom; fh != nil {
+			label := ""
+			switch fp := fh.FromID.(type) {
+			case *tg.PeerUser:
+				if u, err := client.GetUser(fp.UserID); err == nil && u != nil {
+					label = strings.TrimSpace(u.FirstName + " " + u.LastName)
+					if label == "" && u.Username != "" {
+						label = "@" + u.Username
+					}
+				}
+			case *tg.PeerChannel:
+				if ch, err := client.GetChannel(fp.ChannelID); err == nil && ch != nil {
+					label = ch.Title
+				}
+			case *tg.PeerChat:
+				if ch, err := client.GetChat(fp.ChatID); err == nil && ch != nil {
+					label = ch.Title
+				}
+			}
+			if label == "" && fh.FromName != "" {
+				label = fh.FromName
+			}
+			if label != "" {
+				out.Forward = &qaForward{Label: label}
+			}
+		}
 	}
 	if !includeReply || !msg.IsReply() {
 		return out
@@ -240,7 +407,7 @@ func quoteBuildMessage(client *tg.Client, msg *tg.NewMessage, includeReply bool)
 	if err != nil || prev == nil {
 		return out
 	}
-	prevFrom := quoteResolveFrom(client, prev.SenderID())
+	prevFrom := quoteResolveFrom(client, prev.SenderID(), chatID)
 	prevName := strings.TrimSpace(prevFrom.FirstName + " " + prevFrom.LastName)
 	if prevName == "" {
 		prevName = prevFrom.Name
@@ -252,7 +419,8 @@ func quoteBuildMessage(client *tg.Client, msg *tg.NewMessage, includeReply bool)
 		Name:     prevName,
 		Text:     prev.RawText(),
 		Entities: quoteBuildEntities(prev.Message.Entities),
-		ChatID:   msg.ChatID(),
+		ChatID:   chatID,
+		From:     &prevFrom,
 	}
 	if strings.TrimSpace(rm.Text) == "" && len(rm.Entities) == 0 {
 		return out
@@ -338,7 +506,7 @@ func quoteImageHandlerImpl(m *tg.NewMessage, hd bool) error {
 		Height:          768,
 		Scale:           scale,
 		EmojiBrand:      "apple",
-		Messages:        []qaMessage{quoteBuildMessage(m.Client, target, true)},
+		Messages:        []qaMessage{quoteBuildMessage(m.Client, target, m.ChatID(), true)},
 	}
 
 	data, rerr := quoteRequestImage(req, hd)

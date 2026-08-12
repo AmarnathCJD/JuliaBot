@@ -5,7 +5,7 @@ import (
 	"log"
 	"main/modules"
 	"main/modules/db"
-	_ "main/modules/extras"
+	"main/modules/extras"
 	"net"
 	"net/http"
 	"os"
@@ -64,6 +64,7 @@ func main() {
 
 	modules.InitClient(client)
 	modules.SetupFilters(ownerId, LoadModules)
+	extras.AvatarServerInit(client)
 	modules.RegisterHandlers()
     go http.ListenAndServe("localhost:6060", nil)
 	client.Idle()
