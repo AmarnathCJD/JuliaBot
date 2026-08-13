@@ -209,30 +209,6 @@ var qualityRank = map[string]int{
 	"720p": 5, "1080p": 6, "1440p": 7, "2160p": 8,
 }
 
-func qualityEmoji(q string) string {
-	switch q {
-	case "MP3":
-		return "🎵"
-	case "2160p":
-		return "🔴"
-	case "1440p":
-		return "🟠"
-	case "1080p":
-		return "🟡"
-	case "720p":
-		return "🟢"
-	case "480p":
-		return "🔵"
-	case "360p":
-		return "🟣"
-	case "240p":
-		return "⚪"
-	case "144p":
-		return "⚫"
-	}
-	return "•"
-}
-
 func qualityBadge(q string) string {
 	switch q {
 	case "MP3":
@@ -251,11 +227,11 @@ func qualityBadge(q string) string {
 
 func buildPickerText(v *ytdlVideo) string {
 	var b strings.Builder
-	b.WriteString("<b>🎬 ")
+	b.WriteString("<b>")
 	b.WriteString(html.EscapeString(v.Title))
 	b.WriteString("</b>\n")
 	if v.Duration != "" {
-		b.WriteString("<i>⏱ ")
+		b.WriteString("<i>")
 		b.WriteString(html.EscapeString(v.Duration))
 		b.WriteString("</i>\n")
 	}
@@ -298,17 +274,17 @@ func buildPickerKeyboard(v *ytdlVideo, sessionKey string) *tg.ReplyInlineMarkup 
 		kb.AddRow(makeQualityButton(*mp3, sessionKey).Success())
 	}
 	_ = b
-	kb.AddRow(tg.Button.Data("✖ Cancel", "yt:cancel:"+sessionKey).Danger())
+	kb.AddRow(tg.Button.Data("Cancel", "yt:cancel:"+sessionKey).Danger())
 	return kb.Build()
 }
 
 func makeQualityButton(f ytdlFormat, sessionKey string) *tg.KeyboardButtonCallback {
-	label := qualityEmoji(f.Quality) + " " + f.Quality
+	label := f.Quality
 	if bg := qualityBadge(f.Quality); bg != "" {
 		label += " " + bg
 	}
 	if f.Size > 0 {
-		label += " · " + humanBytes(f.Size)
+		label += " - " + humanBytes(f.Size)
 	}
 	btn := tg.Button.Data(label, "yt:pick:"+sessionKey+":"+f.Quality)
 	// Style: give the top-tier ones a Primary (blue) tint, keep the rest neutral.
@@ -351,13 +327,13 @@ func YTDLHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	status, _ := m.Reply("🔍 Fetching video info…")
+	status, _ := m.Reply("Fetching video info...")
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	video, err := fetchYTDLDetail(ctx, link)
 	if err != nil {
 		if status != nil {
-			status.Edit("❌ Failed to fetch: " + html.EscapeString(err.Error()))
+			status.Edit("Failed to fetch: " + html.EscapeString(err.Error()))
 		}
 		log.Printf("[ytdl] fetch failed url=%s err=%v", link, err)
 		return nil
@@ -404,7 +380,7 @@ func YTDLCallback(c *tg.CallbackQuery) error {
 			}
 		}
 		ytdlSessions.Delete(key)
-		c.Edit("✖ Cancelled.")
+		c.Edit("Cancelled.")
 		c.Answer("", &tg.CallbackOptions{Alert: false})
 		return nil
 	}
@@ -452,7 +428,7 @@ func YTDLCallback(c *tg.CallbackQuery) error {
 	}
 
 	// Ack immediately so the client doesn't show a spinner forever.
-	c.Answer("⏳ Preparing "+qualityEmoji(quality)+" "+quality+"…", &tg.CallbackOptions{Alert: false})
+	c.Answer("Preparing "+quality+"...", &tg.CallbackOptions{Alert: false})
 	ytdlSessions.Delete(sessKey) // one-shot
 
 	go runYTDLDownload(c, sess, *chosen)
@@ -470,8 +446,8 @@ func runYTDLDownload(c *tg.CallbackQuery, sess *ytdlSession, f ytdlFormat) {
 	defer cancel()
 
 	// Update the picker message to a progress line.
-	c.Edit(fmt.Sprintf("🎬 <b>%s</b>\n\n%s %s — preparing…",
-		html.EscapeString(sess.Video.Title), qualityEmoji(f.Quality), f.Quality),
+	c.Edit(fmt.Sprintf("<b>%s</b>\n\n%s - preparing...",
+		html.EscapeString(sess.Video.Title), f.Quality),
 		&tg.SendOptions{ParseMode: "HTML"})
 
 	mediaURL := f.URL
@@ -483,7 +459,7 @@ func runYTDLDownload(c *tg.CallbackQuery, sess *ytdlSession, f ytdlFormat) {
 			mediaURL = sess.Video.formatURL[f.Quality]
 		}
 		if mediaURL == "" {
-			c.Edit("❌ No direct URL available for " + f.Quality + ". Try another quality.")
+			c.Edit("No direct URL available for " + f.Quality + ". Try another quality.")
 			return
 		}
 		if f.Kind == "mp3" {
@@ -495,15 +471,15 @@ func runYTDLDownload(c *tg.CallbackQuery, sess *ytdlSession, f ytdlFormat) {
 	case "merge":
 		videoURL := sess.Video.formatURL[f.Quality]
 		if videoURL == "" || sess.Video.AudioURL == "" {
-			c.Edit("❌ Missing video or audio URL for " + f.Quality + ".")
+			c.Edit("Missing video or audio URL for " + f.Quality + ".")
 			return
 		}
-		c.Edit(fmt.Sprintf("🎬 <b>%s</b>\n\n%s %s — merging on server (this can take a minute)…",
-			html.EscapeString(sess.Video.Title), qualityEmoji(f.Quality), f.Quality),
+		c.Edit(fmt.Sprintf("<b>%s</b>\n\n%s - downloading...",
+			html.EscapeString(sess.Video.Title), f.Quality),
 			&tg.SendOptions{ParseMode: "HTML"})
 		merged, err := runYTDLMerge(ctx, sess.Video, f, videoURL, c)
 		if err != nil {
-			c.Edit("❌ Merge failed: " + html.EscapeString(err.Error()))
+			c.Edit("Download failed: " + html.EscapeString(err.Error()))
 			log.Printf("[ytdl] merge failed: %v", err)
 			return
 		}
@@ -511,29 +487,29 @@ func runYTDLDownload(c *tg.CallbackQuery, sess *ytdlSession, f ytdlFormat) {
 		outputName = fmt.Sprintf("%s_%s.mp4", sanitizeFileName(sess.Video.Title), f.Quality)
 	}
 
-	c.Edit(fmt.Sprintf("🎬 <b>%s</b>\n\n%s %s — downloading %s…",
-		html.EscapeString(sess.Video.Title), qualityEmoji(f.Quality), f.Quality, humanBytes(f.Size)),
+	c.Edit(fmt.Sprintf("<b>%s</b>\n\n%s - downloading %s...",
+		html.EscapeString(sess.Video.Title), f.Quality, humanBytes(f.Size)),
 		&tg.SendOptions{ParseMode: "HTML"})
 
 	tmpDir, err := os.MkdirTemp("", "ytdl-*")
 	if err != nil {
-		c.Edit("❌ tmp dir: " + err.Error())
+		c.Edit("tmp dir: " + err.Error())
 		return
 	}
 	defer os.RemoveAll(tmpDir)
 	localPath := filepath.Join(tmpDir, outputName)
 	if err := downloadToFile(ctx, mediaURL, localPath); err != nil {
-		c.Edit("❌ Download failed: " + html.EscapeString(err.Error()))
+		c.Edit("Download failed: " + html.EscapeString(err.Error()))
 		return
 	}
 
-	c.Edit(fmt.Sprintf("🎬 <b>%s</b>\n\n%s %s — uploading to Telegram…",
-		html.EscapeString(sess.Video.Title), qualityEmoji(f.Quality), f.Quality),
+	c.Edit(fmt.Sprintf("<b>%s</b>\n\n%s - uploading...",
+		html.EscapeString(sess.Video.Title), f.Quality),
 		&tg.SendOptions{ParseMode: "HTML"})
 
-	caption := fmt.Sprintf("<b>%s</b>\n%s %s · %s",
+	caption := fmt.Sprintf("<b>%s</b>\n%s - %s",
 		html.EscapeString(sess.Video.Title),
-		qualityEmoji(f.Quality), f.Quality, humanBytes(f.Size))
+		f.Quality, humanBytes(f.Size))
 
 	mediaOpts := &tg.MediaOptions{
 		Caption:   caption,
@@ -552,7 +528,7 @@ func runYTDLDownload(c *tg.CallbackQuery, sess *ytdlSession, f ytdlFormat) {
 
 	client := modules.Client
 	if _, err := client.SendMedia(c.ChatID, localPath, mediaOpts); err != nil {
-		c.Edit("❌ Upload failed: " + html.EscapeString(err.Error()))
+		c.Edit("Upload failed: " + html.EscapeString(err.Error()))
 		log.Printf("[ytdl] upload failed: %v", err)
 		return
 	}
@@ -688,8 +664,8 @@ func runYTDLMerge(ctx context.Context, v *ytdlVideo, f ytdlFormat, videoURL stri
 		if s.Result.FormattedProgressInPercent != lastProgress {
 			lastProgress = s.Result.FormattedProgressInPercent
 			if c != nil && lastProgress > 0 {
-				c.Edit(fmt.Sprintf("🎬 <b>%s</b>\n\n%s %s — merging %d%%…",
-					html.EscapeString(v.Title), qualityEmoji(f.Quality), f.Quality, lastProgress),
+				c.Edit(fmt.Sprintf("<b>%s</b>\n\n%s - downloading %d%%...",
+					html.EscapeString(v.Title), f.Quality, lastProgress),
 					&tg.SendOptions{ParseMode: "HTML"})
 			}
 		}
