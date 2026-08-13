@@ -3,16 +3,18 @@ package modules
 import (
 	"encoding/json"
 	"fmt"
-	"go.etcd.io/bbolt"
 	"html"
 	"main/modules/db"
 	"math/rand"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
 	tg "github.com/amarnathcjd/gogram/telegram"
+	"go.etcd.io/bbolt"
 )
 
 type AFK struct {
@@ -248,52 +250,177 @@ func IsSticker(m tg.MessageMedia) bool {
 	return false
 }
 
-func SedHandler(m *tg.NewMessage) error {
-	text := m.Text()
-	if len(text) < 4 {
-		return nil
+func parseSed(text string) (find, replace, flags string, ok bool) {
+	if len(text) < 4 || text[0] != 's' {
+		return "", "", "", false
+	}
+	d := text[1]
+	if d != '/' && d != '\\' && d != '|' && d != '#' {
+		return "", "", "", false
+	}
+	rest := text[2:]
+
+	take := func(s string) (segment, remainder string, found bool) {
+		var b strings.Builder
+		for i := 0; i < len(s); i++ {
+			if s[i] == '\\' && i+1 < len(s) && s[i+1] == d {
+				b.WriteByte(d)
+				i++
+				continue
+			}
+			if s[i] == d {
+				return b.String(), s[i+1:], true
+			}
+			b.WriteByte(s[i])
+		}
+		return "", s, false
 	}
 
-	if text[0] != 's' {
-		return nil
+	var found1, found2 bool
+	find, rest, found1 = take(rest)
+	if !found1 {
+		return "", "", "", false
+	}
+	replace, rest, found2 = take(rest)
+	if !found2 {
+		replace = rest
+		rest = ""
 	}
 
-	delimiter := text[1]
-	if delimiter != '/' && delimiter != '\\' {
-		return nil
+	for i := 0; i < len(rest); i++ {
+		switch rest[i] {
+		case 'g', 'i':
+			flags += string(rest[i])
+		case ' ', '\t':
+			i = len(rest)
+		}
 	}
-
-	parts := strings.Split(text[2:], string(delimiter))
-	if len(parts) < 2 {
-		return nil
-	}
-
-	find := parts[0]
-	replace := parts[1]
 
 	if find == "" {
+		return "", "", "", false
+	}
+	return find, replace, flags, true
+}
+
+func expandSedBackrefs(repl string) string {
+	var b strings.Builder
+	for i := 0; i < len(repl); i++ {
+		if repl[i] == '\\' && i+1 < len(repl) {
+			c := repl[i+1]
+			if c == '&' || c == '0' {
+				b.WriteString("${0}")
+				i++
+				continue
+			}
+			if c >= '1' && c <= '9' {
+				b.WriteString("${")
+				b.WriteByte(c)
+				b.WriteString("}")
+				i++
+				continue
+			}
+			if c == '\\' {
+				b.WriteString(`\\`)
+				i++
+				continue
+			}
+		}
+		if repl[i] == '&' {
+			b.WriteString("${0}")
+			continue
+		}
+		if repl[i] == '$' {
+			b.WriteString(`$$`)
+			continue
+		}
+		b.WriteByte(repl[i])
+	}
+	return b.String()
+}
+
+const sedMaxOutputLen = 4096
+
+func SedHandler(m *tg.NewMessage) error {
+	find, replace, flags, ok := parseSed(m.Text())
+	if !ok {
 		return nil
 	}
-
 	if !m.IsReply() {
 		return nil
 	}
-
 	replyMsg, err := m.GetReplyMessage()
 	if err != nil {
 		return nil
 	}
-
+	if me := m.Client.Me(); me != nil && replyMsg.SenderID() == me.ID {
+		return nil
+	}
 	originalText := replyMsg.Text()
 	if originalText == "" {
 		return nil
 	}
 
-	if !strings.Contains(originalText, find) {
-		return nil
+	global := strings.ContainsRune(flags, 'g')
+	insensitive := strings.ContainsRune(flags, 'i')
+
+	pattern := find
+	if insensitive {
+		pattern = "(?i)" + pattern
 	}
 
-	newText := strings.ReplaceAll(originalText, find, replace)
+	var newText string
+	if re, rerr := regexp.Compile(pattern); rerr == nil && re.MatchString(originalText) {
+		goRepl := expandSedBackrefs(replace)
+		if global {
+			newText = re.ReplaceAllString(originalText, goRepl)
+		} else {
+			loc := re.FindStringIndex(originalText)
+			if loc == nil {
+				return nil
+			}
+			newText = originalText[:loc[0]] +
+				re.ReplaceAllString(originalText[loc[0]:loc[1]], goRepl) +
+				originalText[loc[1]:]
+		}
+	} else {
+		haystack := originalText
+		needle := find
+		if insensitive {
+			if lre, err := regexp.Compile("(?i)" + regexp.QuoteMeta(find)); err == nil {
+				if !lre.MatchString(haystack) {
+					return nil
+				}
+				if global {
+					newText = lre.ReplaceAllString(haystack, replace)
+				} else {
+					newText = lre.ReplaceAllStringFunc(haystack, func(s string) string {
+						return replace
+					})
+					if loc := lre.FindStringIndex(haystack); loc != nil {
+						newText = haystack[:loc[0]] + replace + haystack[loc[1]:]
+					}
+				}
+			} else {
+				return nil
+			}
+		} else {
+			if !strings.Contains(haystack, needle) {
+				return nil
+			}
+			if global {
+				newText = strings.ReplaceAll(haystack, needle, replace)
+			} else {
+				newText = strings.Replace(haystack, needle, replace, 1)
+			}
+		}
+	}
+
+	if newText == originalText {
+		return nil
+	}
+	if len(newText) > sedMaxOutputLen {
+		return nil
+	}
 
 	replyID := m.ID
 	if replyMsg.IsReply() {
