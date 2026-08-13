@@ -422,11 +422,9 @@ func SedHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	replyID := m.ID
-	if replyMsg.IsReply() {
-		if gp := replyMsg.ReplyToMsgID(); gp != 0 {
-			replyID = gp
-		}
+	replyID := replyMsg.ID
+	if gp := replyMsg.ReplyToMsgID(); gp != 0 {
+		replyID = gp
 	}
 	m.Client.SendMessage(m.ChatID(), newText, &tg.SendOptions{ReplyID: replyID})
 	return nil
