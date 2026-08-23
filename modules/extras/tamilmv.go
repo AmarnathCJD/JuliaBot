@@ -31,7 +31,7 @@ var (
 	tamilMVTags      = regexp.MustCompile(`<[^>]+>`)
 	tamilMVLinks     = regexp.MustCompile(`(?is)<a[^>]+href=["']((?:https?://|magnet:\?)[^"']+)["'][^>]*>(.*?)</a>`)
 	tamilMVPoster    = regexp.MustCompile(`(?is)<img[^>]+src=["'](https://pbs\.twimg\.com/[^"']+)["']`)
-	tamilMVReleaseRe = regexp.MustCompile(`(?is)(<strong[^>]*>(?:[^<]|<span[^>]*>[^<]*</span>)*</strong>)\s*<br>\s*<strong>\s*<a[^>]+data-fileext=["']torrent["'][^>]+href=["']([^"']+)["'][^>]*>.*?</a>.*?<a[^>]+href=["'](magnet:\?[^"']+)["'][^>]*>.*?</a>.*?<a[^>]+href=["'](https?://[^"']+)["'][^>]*>.*?</a>`)
+	tamilMVReleaseRe = regexp.MustCompile(`(?is)<a[^>]+data-fileext=["']torrent["'][^>]+href=["']([^"']+)["'][^>]*>.*?</a>.*?<a[^>]+href=["'](magnet:\?[^"']+)["'][^>]*>.*?</a>.*?<a[^>]+href=["'](https?://[^"']+)["'][^>]*>.*?</a>`)
 )
 
 func tamilMVTopicTitle(slug string) string {
@@ -86,7 +86,12 @@ func tamilMVParseReleases(page string) (string, []tamilMVRelease) {
 	}
 	items := make([]tamilMVRelease, 0)
 	for _, m := range tamilMVReleaseRe.FindAllStringSubmatch(page, -1) {
-		items = append(items, tamilMVRelease{Title: tamilMVClean(m[1]), Torrent: html.UnescapeString(m[2]), Magnet: html.UnescapeString(m[3]), Direct: html.UnescapeString(m[4])})
+		torrent, magnet, direct := html.UnescapeString(m[1]), html.UnescapeString(m[2]), html.UnescapeString(m[3])
+		title := "Release"
+		if u, err := url.Parse(magnet); err == nil {
+			if dn := u.Query().Get("dn"); dn != "" { title = dn }
+		}
+		items = append(items, tamilMVRelease{Title: tamilMVClean(title), Torrent: torrent, Magnet: magnet, Direct: direct})
 	}
 	return poster, items
 }

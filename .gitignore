@@ -2,6 +2,8 @@
 .env
 *.dat
 *.db
+*.db-shm
+*.db-wal
 *.rar
 *.ipa
 *.mp4
