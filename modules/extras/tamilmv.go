@@ -35,14 +35,19 @@ var (
 )
 
 func tamilMVTopicTitle(slug string) string {
+	if decoded, err := url.PathUnescape(slug); err == nil {
+		slug = decoded
+	}
 	slug = strings.ReplaceAll(slug, "-", " ")
+	slug = strings.ReplaceAll(slug, "\u00a0", " ")
+	slug = regexp.MustCompile(`(?i)\btrue\b`).ReplaceAllString(slug, "")
 	for _, marker := range []string{" hq predvd", " predvd", " true web dl", " web dl", " bluray", " hd ", " uhd ", " 4k "} {
 		if i := strings.Index(strings.ToLower(slug), marker); i > 0 {
 			slug = slug[:i]
 			break
 		}
 	}
-	return tamilMVClean(slug)
+	return strings.Title(tamilMVClean(slug))
 }
 
 func tamilMVLanguage(title string) string {
