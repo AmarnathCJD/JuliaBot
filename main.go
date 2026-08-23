@@ -21,8 +21,6 @@ import (
 var ownerId int64 = 0
 var LoadModules = os.Getenv("ENV") != "development"
 
-
-
 func main() {
 	logZap, err := os.OpenFile("log.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
@@ -66,12 +64,12 @@ func main() {
 	modules.SetupFilters(ownerId, LoadModules)
 	extras.AvatarServerInit(client)
 	modules.RegisterHandlers()
-    go http.ListenAndServe("localhost:6060", nil)
+	go http.ListenAndServe("localhost:6060", nil)
 	client.Idle()
 	db.CloseDB()
+	db.CloseSQLDB()
 	client.Logger.Info("Bot stopped")
 }
-
 
 func buildSocksProxy() *tg.Socks5Proxy {
 	raw := strings.TrimSpace(os.Getenv("PROXY"))
