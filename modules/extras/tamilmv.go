@@ -28,6 +28,7 @@ var (
 	tamilMVTopics    sync.Map
 	tamilMVAnchor    = regexp.MustCompile(`(?is)<a[^>]+href=["']([^"']*/forums/topic/[^"']*)["'][^>]*>(.*?)</a>`)
 	tamilMVSlug      = regexp.MustCompile(`/forums/topic/\d+-([^/?#]+)`)
+	tamilMVTopicURL  = regexp.MustCompile(`(?i)(?:https?://[^\s"'<>]+|/index\.php\?/forums/topic/[^\s"'<>]+)`)
 	tamilMVTags      = regexp.MustCompile(`<[^>]+>`)
 	tamilMVLinks     = regexp.MustCompile(`(?is)<a[^>]+href=["']((?:https?://|magnet:\?)[^"']+)["'][^>]*>(.*?)</a>`)
 	tamilMVPoster    = regexp.MustCompile(`(?is)<img[^>]+src=["'](https://pbs\.twimg\.com/[^"']+)["']`)
@@ -207,11 +208,34 @@ func tamilMVParse(page string, filter string, limit int) []tamilMVItem {
 			break
 		}
 	}
+	if len(out) == 0 {
+		for _, raw := range tamilMVTopicURL.FindAllString(page, -1) {
+			href := html.UnescapeString(raw)
+			if i := strings.Index(href, "&"); i >= 0 {
+				href = href[:i]
+			}
+			sm := tamilMVSlug.FindStringSubmatch(href)
+			if len(sm) != 2 || sm[1] == "0" || len(sm[1]) < 8 {
+				continue
+			}
+			title := tamilMVTopicTitle(sm[1])
+			if !strings.Contains(strings.ToLower(title), strings.ToLower(filter)) || seen[href] {
+				continue
+			}
+			seen[href] = true
+			lang := tamilMVLanguage(title)
+			out = append(out, tamilMVItem{Title: tamilMVStripLanguage(title), URL: href, Lang: lang})
+			if len(out) >= limit {
+				break
+			}
+		}
+	}
 	return out
 }
 
 func tamilMVSearchURL(q string) string {
-	return tamilMVBase + "/index.php?/search/&q=" + url.QueryEscape(q) + "&type=forums_topic"
+	encoded := strings.ReplaceAll(url.QueryEscape(q), "+", "%20")
+	return tamilMVBase + "/index.php?/search/&q=" + encoded + "&type=forums_topic"
 }
 
 func tamilMVKeyboard(items []tamilMVItem) *tg.ReplyInlineMarkup {
