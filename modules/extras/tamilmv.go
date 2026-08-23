@@ -31,6 +31,7 @@ var (
 	tamilMVTags      = regexp.MustCompile(`<[^>]+>`)
 	tamilMVLinks     = regexp.MustCompile(`(?is)<a[^>]+href=["']((?:https?://|magnet:\?)[^"']+)["'][^>]*>(.*?)</a>`)
 	tamilMVPoster    = regexp.MustCompile(`(?is)<img[^>]+src=["'](https://pbs\.twimg\.com/[^"']+)["']`)
+	tamilMVOGTitle   = regexp.MustCompile(`(?is)<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']`)
 	tamilMVReleaseRe = regexp.MustCompile(`(?is)<a[^>]+data-fileext=["']torrent["'][^>]+href=["']([^"']+)["'][^>]*>.*?</a>.*?<a[^>]+href=["'](magnet:\?[^"']+)["'][^>]*>.*?</a>.*?<a[^>]+href=["'](https?://[^"']+)["'][^>]*>.*?</a>`)
 )
 
@@ -89,11 +90,31 @@ func tamilMVParseReleases(page string) (string, []tamilMVRelease) {
 		torrent, magnet, direct := html.UnescapeString(m[1]), html.UnescapeString(m[2]), html.UnescapeString(m[3])
 		title := "Release"
 		if u, err := url.Parse(magnet); err == nil {
-			if dn := u.Query().Get("dn"); dn != "" { title = dn }
+			if dn := u.Query().Get("dn"); dn != "" {
+				title = dn
+			}
 		}
 		items = append(items, tamilMVRelease{Title: tamilMVClean(title), Torrent: torrent, Magnet: magnet, Direct: direct})
 	}
 	return poster, items
+}
+
+func tamilMVQualityLabel(title string) string {
+	parts := strings.Fields(strings.ReplaceAll(title, ".mkv", ""))
+	quality, size := "Quality", ""
+	for _, p := range parts {
+		v := strings.ToLower(p)
+		if quality == "Quality" && strings.HasSuffix(v, "p") {
+			quality = p
+		}
+		if size == "" && (strings.HasSuffix(v, "mb") || strings.HasSuffix(v, "gb")) {
+			size = p
+		}
+	}
+	if size != "" {
+		return quality + " • " + size
+	}
+	return quality
 }
 
 func tamilMVFetch(ctx context.Context, target string) (string, error) {
@@ -274,6 +295,15 @@ func tamilMVCallback(c *tg.CallbackQuery) error {
 			return nil
 		}
 	}
+	if key, ok := strings.CutPrefix(data, "tm:magnet:"); ok {
+		if raw, found := tamilMVReleases.Load(key); found {
+			c.Answer("Magnet link sent", &tg.CallbackOptions{Alert: false})
+			_, _ = modules.Client.SendMessage(c.ChatID, raw.(tamilMVRelease).Magnet)
+		} else {
+			c.Answer("This result expired.", &tg.CallbackOptions{Alert: true})
+		}
+		return nil
+	}
 	if after, ok := strings.CutPrefix(data, "tm:quality:"); ok {
 		key := after
 		raw, ok := tamilMVReleases.Load(key)
@@ -283,8 +313,12 @@ func tamilMVCallback(c *tg.CallbackQuery) error {
 		}
 		r := raw.(tamilMVRelease)
 		c.Answer("Choose a link", &tg.CallbackOptions{Alert: false})
-		k := tg.NewKeyboard().AddRow(tg.Button.URL("Torrent", r.Torrent), tg.Button.URL("Magnet", r.Magnet)).AddRow(tg.Button.URL("Direct Link", r.Direct))
-		c.Edit("<b>"+html.EscapeString(r.Title)+"</b>", &tg.SendOptions{ParseMode: "HTML", ReplyMarkup: k.Build()})
+		k := tg.NewKeyboard().AddRow(tg.Button.URL("Torrent", r.Torrent), tg.Button.Data("Magnet", "tm:magnet:"+key)).AddRow(tg.Button.URL("Direct Link", r.Direct))
+		text := "<b>" + html.EscapeString(r.Title) + "</b>\nChoose a link:"
+		if _, err := c.Edit(text, &tg.SendOptions{ParseMode: "HTML", ReplyMarkup: k.Build()}); err != nil {
+			c.Answer("Could not edit the result message; sending links separately.", &tg.CallbackOptions{Alert: true})
+			_, _ = modules.Client.SendMessage(c.ChatID, text, &tg.SendOptions{ParseMode: "HTML", ReplyMarkup: k.Build()})
+		}
 		return nil
 	}
 	token := strings.TrimPrefix(c.DataString(), "tm:open:")
@@ -304,19 +338,21 @@ func tamilMVCallback(c *tg.CallbackQuery) error {
 	poster, releases := tamilMVParseReleases(page)
 	if len(releases) > 0 {
 		var b strings.Builder
-		b.WriteString("<b>Select quality</b>")
+		topicTitle := "TamilMV release"
+		if m := tamilMVOGTitle.FindStringSubmatch(page); len(m) == 2 {
+			topicTitle = tamilMVClean(m[1])
+		}
+		b.WriteString("<b>" + html.EscapeString(topicTitle) + "</b>")
 		if poster != "" {
-			b.WriteString("\nPoster: <a href=\"")
-			b.WriteString(html.EscapeString(poster))
-			b.WriteString("\">open image</a>")
+			b.WriteString("\n" + html.EscapeString(poster))
 		}
 		k := tg.NewKeyboard()
 		for i, r := range releases {
 			key := fmt.Sprintf("%s:%d", token, i)
 			tamilMVReleases.Store(key, r)
-			k.AddRow(tg.Button.Data(r.Title, "tm:quality:"+key))
+			k.AddRow(tg.Button.Data(tamilMVQualityLabel(r.Title), "tm:quality:"+key))
 		}
-		c.Edit(b.String(), &tg.SendOptions{ParseMode: "HTML", ReplyMarkup: k.Build()})
+		c.Edit(b.String(), &tg.SendOptions{ParseMode: "HTML", LinkPreview: true, ReplyMarkup: k.Build()})
 		return nil
 	}
 	var b strings.Builder
