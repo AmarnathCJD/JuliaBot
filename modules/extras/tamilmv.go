@@ -26,7 +26,7 @@ const tamilMVFallback = "https://www.1tamilmv.fi"
 var (
 	tamilMVHTTP      = &http.Client{Timeout: 20 * time.Second}
 	tamilMVTopics    sync.Map
-	tamilMVAnchor    = regexp.MustCompile(`(?is)<a[^>]+href=["']([^"']*?/index\.php\?[^"']*/forums/topic/[^"']*)["'][^>]*>(.*?)</a>`)
+	tamilMVAnchor    = regexp.MustCompile(`(?is)<a[^>]+href=["']([^"']*/forums/topic/[^"']*)["'][^>]*>(.*?)</a>`)
 	tamilMVSlug      = regexp.MustCompile(`/forums/topic/\d+-([^/?#]+)`)
 	tamilMVTags      = regexp.MustCompile(`<[^>]+>`)
 	tamilMVLinks     = regexp.MustCompile(`(?is)<a[^>]+href=["']((?:https?://|magnet:\?)[^"']+)["'][^>]*>(.*?)</a>`)
@@ -180,6 +180,9 @@ func tamilMVParse(page string, filter string, limit int) []tamilMVItem {
 	out := make([]tamilMVItem, 0, limit)
 	for _, m := range tamilMVAnchor.FindAllStringSubmatch(page, -1) {
 		href := html.UnescapeString(m[1])
+		if i := strings.Index(href, "&"); i >= 0 {
+			href = href[:i]
+		}
 		title := tamilMVClean(m[2])
 		if sm := tamilMVSlug.FindStringSubmatch(href); len(sm) == 2 {
 			if sm[1] == "0" || len(sm[1]) < 8 {
