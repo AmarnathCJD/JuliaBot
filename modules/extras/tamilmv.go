@@ -297,8 +297,21 @@ func tamilMVCallback(c *tg.CallbackQuery) error {
 	}
 	if key, ok := strings.CutPrefix(data, "tm:magnet:"); ok {
 		if raw, found := tamilMVReleases.Load(key); found {
-			c.Answer("Magnet link sent", &tg.CallbackOptions{Alert: false})
-			_, _ = modules.Client.SendMessage(c.ChatID, raw.(tamilMVRelease).Magnet)
+			r := raw.(tamilMVRelease)
+			c.Answer("Magnet link", &tg.CallbackOptions{Alert: false})
+			k := tg.NewKeyboard().AddRow(tg.Button.Data("Back", "tm:back:"+key))
+			c.Edit("<b>Magnet link</b>\n<pre>"+html.EscapeString(r.Magnet)+"</pre>", &tg.SendOptions{ParseMode: "HTML", ReplyMarkup: k.Build()})
+		} else {
+			c.Answer("This result expired.", &tg.CallbackOptions{Alert: true})
+		}
+		return nil
+	}
+	if key, ok := strings.CutPrefix(data, "tm:back:"); ok {
+		if raw, found := tamilMVReleases.Load(key); found {
+			r := raw.(tamilMVRelease)
+			k := tg.NewKeyboard().AddRow(tg.Button.URL("Torrent", r.Torrent), tg.Button.Data("Magnet", "tm:magnet:"+key)).AddRow(tg.Button.URL("Direct Link", r.Direct))
+			c.Answer("Back", &tg.CallbackOptions{Alert: false})
+			c.Edit("<b>"+html.EscapeString(r.Title)+"</b>\nChoose a link:", &tg.SendOptions{ParseMode: "HTML", ReplyMarkup: k.Build()})
 		} else {
 			c.Answer("This result expired.", &tg.CallbackOptions{Alert: true})
 		}
@@ -342,9 +355,10 @@ func tamilMVCallback(c *tg.CallbackQuery) error {
 		if m := tamilMVOGTitle.FindStringSubmatch(page); len(m) == 2 {
 			topicTitle = tamilMVClean(m[1])
 		}
-		b.WriteString("<b>" + html.EscapeString(topicTitle) + "</b>")
 		if poster != "" {
-			b.WriteString("\n" + html.EscapeString(poster))
+			b.WriteString("<a href=\"" + html.EscapeString(poster) + "\"><b>" + html.EscapeString(topicTitle) + "</b></a>")
+		} else {
+			b.WriteString("<b>" + html.EscapeString(topicTitle) + "</b>")
 		}
 		k := tg.NewKeyboard()
 		for i, r := range releases {
