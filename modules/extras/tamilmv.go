@@ -31,7 +31,7 @@ var (
 	tamilMVTags      = regexp.MustCompile(`<[^>]+>`)
 	tamilMVLinks     = regexp.MustCompile(`(?is)<a[^>]+href=["']((?:https?://|magnet:\?)[^"']+)["'][^>]*>(.*?)</a>`)
 	tamilMVPoster    = regexp.MustCompile(`(?is)<img[^>]+src=["'](https://pbs\.twimg\.com/[^"']+)["']`)
-	tamilMVReleaseRe = regexp.MustCompile(`(?is)(<strong[^>]*>(?:(?!<strong|</strong>).)*</strong>)\s*<br>\s*<strong>\s*<a[^>]+data-fileext=["']torrent["'][^>]+href=["']([^"']+)["'][^>]*>.*?</a>.*?<a[^>]+href=["'](magnet:\?[^"']+)["'][^>]*>.*?</a>.*?<a[^>]+href=["'](https?://[^"']+)["'][^>]*>.*?</a>`)
+	tamilMVReleaseRe = regexp.MustCompile(`(?is)(<strong[^>]*>(?:[^<]|<span[^>]*>[^<]*</span>)*</strong>)\s*<br>\s*<strong>\s*<a[^>]+data-fileext=["']torrent["'][^>]+href=["']([^"']+)["'][^>]*>.*?</a>.*?<a[^>]+href=["'](magnet:\?[^"']+)["'][^>]*>.*?</a>.*?<a[^>]+href=["'](https?://[^"']+)["'][^>]*>.*?</a>`)
 )
 
 func tamilMVTopicTitle(slug string) string {
@@ -243,6 +243,27 @@ func tamilMVHandler(m *tg.NewMessage) error {
 
 func tamilMVCallback(c *tg.CallbackQuery) error {
 	data := c.DataString()
+	if after, ok := strings.CutPrefix(data, "tm:settings:"); ok {
+		p := strings.Split(after, ":")
+		if len(p) == 2 {
+			id, _ := strconv.ParseInt(p[0], 10, 64)
+			switch p[1] {
+			case "on":
+				db.SetTamilMVAlertEnabled(id, c.SenderID, true)
+			case "off":
+				db.SetTamilMVAlertEnabled(id, c.SenderID, false)
+			case "5m":
+				db.SetTamilMVAlertInterval(id, c.SenderID, 300)
+			case "30m":
+				db.SetTamilMVAlertInterval(id, c.SenderID, 1800)
+			case "1h":
+				db.SetTamilMVAlertInterval(id, c.SenderID, 3600)
+			}
+			c.Answer("Settings updated", &tg.CallbackOptions{Alert: false})
+			c.Edit("Alert settings updated.")
+			return nil
+		}
+	}
 	if after, ok := strings.CutPrefix(data, "tm:quality:"); ok {
 		key := after
 		raw, ok := tamilMVReleases.Load(key)
@@ -321,21 +342,11 @@ func registerTamilMVHandlers() {
 const tamilMVAlertMin = time.Minute
 
 func tamilMVAlertArgs(s string) (string, time.Duration, error) {
-	p := strings.Fields(strings.TrimSpace(s))
-	if len(p) == 0 {
+	title := strings.TrimSpace(s)
+	if title == "" {
 		return "", 0, fmt.Errorf("missing title")
 	}
-	d := 24 * time.Hour
-	if len(p) > 1 {
-		if x, e := time.ParseDuration(p[len(p)-1]); e == nil {
-			d = x
-			p = p[:len(p)-1]
-		}
-	}
-	if d < tamilMVAlertMin {
-		return "", 0, fmt.Errorf("interval must be at least 1m")
-	}
-	return strings.Join(p, " "), d, nil
+	return title, 24 * time.Hour, nil
 }
 func tamilMVAlertCreate(m *tg.NewMessage) error {
 	title, d, e := tamilMVAlertArgs(m.Args())
@@ -366,6 +377,26 @@ func tamilMVAlertList(m *tg.NewMessage) error {
 		b.WriteString(fmt.Sprintf("#%d %s (%s)\n", a.ID, a.Title, time.Duration(a.Interval)*time.Second))
 	}
 	m.Reply(b.String())
+	return nil
+}
+
+func tamilMVSettings(m *tg.NewMessage) error {
+	as, e := db.ListTamilMVAlerts(m.SenderID())
+	if e != nil || len(as) == 0 {
+		m.Reply("No TamilMV alerts.")
+		return nil
+	}
+	k := tg.NewKeyboard()
+	for _, a := range as {
+		state := "off"
+		if a.Enabled != 0 {
+			state = "on"
+		}
+		id := strconv.FormatInt(a.ID, 10)
+		k.AddRow(tg.Button.Data(fmt.Sprintf("#%d %s [%s]", a.ID, a.Title, state), "tm:settings:"+id+":"+state))
+		k.AddRow(tg.Button.Data("5m", "tm:settings:"+id+":5m"), tg.Button.Data("30m", "tm:settings:"+id+":30m"), tg.Button.Data("1h", "tm:settings:"+id+":1h"))
+	}
+	m.Reply("<b>TamilMV alert settings</b>", &tg.SendOptions{ParseMode: "HTML", ReplyMarkup: k.Build()})
 	return nil
 }
 func tamilMVAlertDelete(m *tg.NewMessage) error {
@@ -414,6 +445,7 @@ func registerTamilMVAlertHandlers() {
 	modules.Client.On("cmd:tmalert", tamilMVAlertCreate)
 	modules.Client.On("cmd:tmalerts", tamilMVAlertList)
 	modules.Client.On("cmd:tmalertoff", tamilMVAlertDelete)
+	modules.Client.On("cmd:tmsettings", tamilMVSettings)
 	go tamilMVAlertWorker()
 }
 func init() {

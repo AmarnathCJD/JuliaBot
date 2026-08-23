@@ -32,8 +32,12 @@ func GetSQLDB() (*sql.DB, error) {
 			interval_seconds INTEGER NOT NULL,
 			last_seen TEXT NOT NULL DEFAULT '',
 			last_checked INTEGER NOT NULL DEFAULT 0,
+			enabled INTEGER NOT NULL DEFAULT 1,
 			created_at INTEGER NOT NULL
 		)`)
+		if sqlErr == nil {
+			_, _ = sqlDB.Exec(`ALTER TABLE tamilmv_alerts ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1`)
+		}
 	})
 	return sqlDB, sqlErr
 }
@@ -50,6 +54,7 @@ type TamilMVAlert struct {
 	Title                 string
 	Interval, LastChecked int64
 	LastSeen              string
+	Enabled               int64
 }
 
 func SaveTamilMVAlert(a *TamilMVAlert) error {
@@ -73,7 +78,7 @@ func ListTamilMVAlerts(uid int64) ([]TamilMVAlert, error) {
 	if e != nil {
 		return nil, e
 	}
-	rows, e := d.Query(`SELECT id,chat_id,user_id,title,interval_seconds,last_seen,last_checked FROM tamilmv_alerts WHERE user_id=? ORDER BY id`, uid)
+	rows, e := d.Query(`SELECT id,chat_id,user_id,title,interval_seconds,last_seen,last_checked,enabled FROM tamilmv_alerts WHERE user_id=? ORDER BY id`, uid)
 	if e != nil {
 		return nil, e
 	}
@@ -81,7 +86,7 @@ func ListTamilMVAlerts(uid int64) ([]TamilMVAlert, error) {
 	var out []TamilMVAlert
 	for rows.Next() {
 		var a TamilMVAlert
-		if e = rows.Scan(&a.ID, &a.ChatID, &a.UserID, &a.Title, &a.Interval, &a.LastSeen, &a.LastChecked); e == nil {
+		if e = rows.Scan(&a.ID, &a.ChatID, &a.UserID, &a.Title, &a.Interval, &a.LastSeen, &a.LastChecked, &a.Enabled); e == nil {
 			out = append(out, a)
 		}
 	}
@@ -100,7 +105,7 @@ func DueTamilMVAlerts(now int64) ([]TamilMVAlert, error) {
 	if e != nil {
 		return nil, e
 	}
-	rows, e := d.Query(`SELECT id,chat_id,user_id,title,interval_seconds,last_seen,last_checked FROM tamilmv_alerts WHERE last_checked=0 OR last_checked+interval_seconds<=?`, now)
+	rows, e := d.Query(`SELECT id,chat_id,user_id,title,interval_seconds,last_seen,last_checked,enabled FROM tamilmv_alerts WHERE enabled=1 AND (last_checked=0 OR last_checked+interval_seconds<=?)`, now)
 	if e != nil {
 		return nil, e
 	}
@@ -108,11 +113,32 @@ func DueTamilMVAlerts(now int64) ([]TamilMVAlert, error) {
 	var out []TamilMVAlert
 	for rows.Next() {
 		var a TamilMVAlert
-		if e = rows.Scan(&a.ID, &a.ChatID, &a.UserID, &a.Title, &a.Interval, &a.LastSeen, &a.LastChecked); e == nil {
+		if e = rows.Scan(&a.ID, &a.ChatID, &a.UserID, &a.Title, &a.Interval, &a.LastSeen, &a.LastChecked, &a.Enabled); e == nil {
 			out = append(out, a)
 		}
 	}
 	return out, rows.Err()
+}
+
+func SetTamilMVAlertEnabled(id, uid int64, enabled bool) error {
+	d, e := GetSQLDB()
+	if e != nil {
+		return e
+	}
+	v := int64(0)
+	if enabled {
+		v = 1
+	}
+	_, e = d.Exec(`UPDATE tamilmv_alerts SET enabled=? WHERE id=? AND user_id=?`, v, id, uid)
+	return e
+}
+func SetTamilMVAlertInterval(id, uid, seconds int64) error {
+	d, e := GetSQLDB()
+	if e != nil {
+		return e
+	}
+	_, e = d.Exec(`UPDATE tamilmv_alerts SET interval_seconds=? WHERE id=? AND user_id=?`, seconds, id, uid)
+	return e
 }
 func TouchTamilMVAlert(id int64, seen string, checked int64) error {
 	d, e := GetSQLDB()
