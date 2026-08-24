@@ -197,7 +197,7 @@ func tamilMVParse(page string, filter string, limit int) []tamilMVItem {
 		if !strings.HasPrefix(href, "http") {
 			href = tamilMVBase + "/" + strings.TrimPrefix(href, "/")
 		}
-		if !strings.Contains(strings.ToLower(title), strings.ToLower(filter)) || seen[href] {
+		if !tamilMVMatchesQuery(title, filter) || seen[href] {
 			continue
 		}
 		seen[href] = true
@@ -219,7 +219,7 @@ func tamilMVParse(page string, filter string, limit int) []tamilMVItem {
 				continue
 			}
 			title := tamilMVTopicTitle(sm[1])
-			if !strings.Contains(strings.ToLower(title), strings.ToLower(filter)) || seen[href] {
+			if !tamilMVMatchesQuery(title, filter) || seen[href] {
 				continue
 			}
 			seen[href] = true
@@ -231,6 +231,23 @@ func tamilMVParse(page string, filter string, limit int) []tamilMVItem {
 		}
 	}
 	return out
+}
+
+func tamilMVMatchesQuery(title, query string) bool {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return true
+	}
+	title = strings.ToLower(title)
+	for _, word := range strings.Fields(query) {
+		if len(word) < 2 {
+			continue
+		}
+		if !strings.Contains(title, word) {
+			return false
+		}
+	}
+	return true
 }
 
 func tamilMVSearchURL(q string) string {
@@ -285,7 +302,11 @@ func tamilMVHandler(m *tg.NewMessage) error {
 		}
 		return nil
 	}
-	items := tamilMVParse(page, filter, 25)
+	parseFilter := filter
+	if target != tamilMVBase && !strings.HasSuffix(target, "/") {
+		parseFilter = arg
+	}
+	items := tamilMVParse(page, parseFilter, 25)
 	if len(items) == 0 {
 		if status != nil {
 			status.Edit("No TamilMV releases found.")
