@@ -166,7 +166,7 @@ func snipeCacheMessage(m *tg.NewMessage) {
 	snipeMsgCache[chatID][m.ID] = entry
 	if len(snipeMsgCache[chatID]) > 500 {
 		var oldestID int32
-		var oldestTime int64 = 1<<62
+		var oldestTime int64 = 1 << 62
 		for id, e := range snipeMsgCache[chatID] {
 			if e.Time < oldestTime {
 				oldestTime = e.Time
@@ -494,7 +494,7 @@ func snipesKeyboard(page, totalPages int, userID int64) *tg.ReplyInlineMarkup {
 	}
 	b := tg.Button
 	kb := tg.NewKeyboard()
-	var row []tg.KeyboardButton
+	var row []tg.KeyboardInlineButton
 	if page > 1 {
 		row = append(row, b.Data("« Prev", fmt.Sprintf("snipes_%d_%d", page-1, userID)))
 	}

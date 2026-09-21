@@ -327,7 +327,7 @@ func urbanKeyboard(term string, page, pages int) *tg.ReplyInlineMarkup {
 	}
 	b := tg.Button
 	kb := tg.NewKeyboard()
-	var row []tg.KeyboardButton
+	var row []tg.KeyboardInlineButton
 	if page > 0 {
 		row = append(row, b.Data("« Prev", fmt.Sprintf("urban:%s:%d", term, page-1)))
 	}

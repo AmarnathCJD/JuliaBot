@@ -592,7 +592,6 @@ func SaveTempNoteHandler(m *tg.NewMessage) error {
 	return nil
 }
 
-
 func registerNoteHandlers() {
 	c := modules.Client
 	c.On("cmd:save", SaveNoteHandler)
@@ -633,6 +632,7 @@ Example: <code>/save welcome Hello! [Visit](url) | [Help](url)</code>
 
 <b>Permission:</b> Admins with Change Info permission can manage notes.`)
 }
+
 type reminderEntry struct {
 	ID         uint64 `json:"id"`
 	UserID     int64  `json:"user_id"`
@@ -941,6 +941,7 @@ func registerRemindersHandlers() {
 func initFromSrc_reminders_1_1() {
 	modules.QueueHandlerRegistration(registerRemindersHandlers)
 }
+
 type timerData struct {
 	chatID   int64
 	userID   int64
@@ -1017,8 +1018,10 @@ func sendTimerNotification(timerID string) {
 		text += "\n" + timer.message
 	}
 
-	snoozeBtn := tg.Button.Data("Snooze 5m", "snooze_"+timerID).Primary()
-	dismissBtn := tg.Button.Data("Dismiss", "dismiss_"+timerID).Danger()
+	snoozeBtn := tg.Button.Data("Snooze 5m", "snooze_"+timerID)
+	snoozeBtn.Style = &tg.KeyboardButtonStyle{BgPrimary: true}
+	dismissBtn := tg.Button.Data("Dismiss", "dismiss_"+timerID)
+	dismissBtn.Style = &tg.KeyboardButtonStyle{BgDanger: true}
 	keyboard := tg.NewKeyboard().AddRow(snoozeBtn).AddRow(dismissBtn).Build()
 
 	if timer.media != nil {

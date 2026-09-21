@@ -3,7 +3,7 @@ module main
 go 1.25.0
 
 require (
-	github.com/amarnathcjd/gogram v1.7.72-0.20260810174835-28760bf052e0
+	github.com/amarnathcjd/gogram v1.8.0-beta.1
 	github.com/fogleman/gg v1.3.0
 	github.com/joho/godotenv v1.5.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
@@ -28,7 +28,6 @@ require (
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	modernc.org/libc v1.74.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

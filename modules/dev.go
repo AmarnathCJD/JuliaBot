@@ -216,7 +216,7 @@ const goModContents = `module main
 
 go 1.25.0
 
-require github.com/amarnathcjd/gogram v1.6.10-0.20251206151850-63c357afc3a5
+require github.com/amarnathcjd/gogram v1.8.0-beta.1
 `
 
 func perfomEval(code string, m *tg.NewMessage, imports []string) (string, bool) {
@@ -619,7 +619,6 @@ func formatMediaInfo(info string) string {
 	}
 	return b.String()
 }
-
 
 var reMediaNameUnsafe = regexp.MustCompile(`[^A-Za-z0-9._\- ]+`)
 

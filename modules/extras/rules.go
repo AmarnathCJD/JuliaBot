@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-func parseButtons(content string) (string, [][]tg.KeyboardButton) {
+func parseButtons(content string) (string, [][]tg.KeyboardInlineButton) {
 	btnRegex := regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
 	matches := btnRegex.FindAllStringSubmatch(content, -1)
 
@@ -25,8 +25,8 @@ func parseButtons(content string) (string, [][]tg.KeyboardButton) {
 	}
 
 	cleanContent := content
-	var rows [][]tg.KeyboardButton
-	var currentRow []tg.KeyboardButton
+	var rows [][]tg.KeyboardInlineButton
+	var currentRow []tg.KeyboardInlineButton
 
 	for _, match := range matches {
 		fullMatch := match[0]
@@ -40,7 +40,7 @@ func parseButtons(content string) (string, [][]tg.KeyboardButton) {
 			label = strings.TrimPrefix(label, "same:")
 		}
 
-		var btn tg.KeyboardButton
+		var btn tg.KeyboardInlineButton
 		if action == "rules" {
 			btn = tg.Button.Data(label, "rules_show")
 		} else if strings.HasPrefix(action, "http://") || strings.HasPrefix(action, "https://") {
@@ -55,7 +55,7 @@ func parseButtons(content string) (string, [][]tg.KeyboardButton) {
 			if len(currentRow) > 0 {
 				rows = append(rows, currentRow)
 			}
-			currentRow = []tg.KeyboardButton{btn}
+			currentRow = []tg.KeyboardInlineButton{btn}
 		}
 	}
 
@@ -69,7 +69,7 @@ func parseButtons(content string) (string, [][]tg.KeyboardButton) {
 	return cleanContent, rows
 }
 
-func buildKeyboard(rows [][]tg.KeyboardButton) *tg.ReplyInlineMarkup {
+func buildKeyboard(rows [][]tg.KeyboardInlineButton) *tg.ReplyInlineMarkup {
 	if len(rows) == 0 {
 		return nil
 	}
@@ -137,14 +137,14 @@ func SetRulesHandler(m *tg.NewMessage) error {
 		for _, row := range buttons {
 			var rowStr []string
 			for _, btn := range row {
-				switch b := btn.(type) {
-				case *tg.KeyboardButtonURL:
-					rowStr = append(rowStr, fmt.Sprintf("[%s](%s)", b.Text, b.URL))
-				case *tg.KeyboardButtonCallback:
+				switch b := btn.Type.(type) {
+				case *tg.InlineButtonTypeURL:
+					rowStr = append(rowStr, fmt.Sprintf("[%s](%s)", btn.Text, b.URL))
+				case *tg.InlineButtonTypeCallback:
 					if string(b.Data) == "rules_show" {
-						rowStr = append(rowStr, fmt.Sprintf("[%s](rules)", b.Text))
+						rowStr = append(rowStr, fmt.Sprintf("[%s](rules)", btn.Text))
 					} else {
-						rowStr = append(rowStr, fmt.Sprintf("[%s](%s)", b.Text, string(b.Data)))
+						rowStr = append(rowStr, fmt.Sprintf("[%s](%s)", btn.Text, string(b.Data)))
 					}
 				}
 			}
@@ -302,6 +302,7 @@ Set and display group rules with optional media.
 
 <b>Note:</b> Only admins with Change Info permission can modify rules.`)
 }
+
 const tmpRulesBucket = "tmprules"
 
 type tmpRule struct {

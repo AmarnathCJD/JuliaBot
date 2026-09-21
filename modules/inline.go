@@ -129,11 +129,9 @@ func PinterestInlineHandle(i *telegram.InlineQuery) error {
 	button := telegram.Button
 	if i.Args() == "" {
 		b.Article("No query", "Please enter a query to search for", "No query", &telegram.ArticleOptions{
-			ReplyMarkup: button.Keyboard(
-				button.Row(
-					button.SwitchInline("Search!!!", true, "pin "),
-				),
-			),
+			ReplyMarkup: telegram.NewKeyboard().AddRow(
+				button.SwitchInline("Search!!!", true, "pin "),
+			).Build(),
 		})
 
 		i.Answer(b.Results())
@@ -152,11 +150,9 @@ func PinterestInlineHandle(i *telegram.InlineQuery) error {
 
 	if len(images) == 0 {
 		b.Article("No images found", "No images found for the query", "No images found", &telegram.ArticleOptions{
-			ReplyMarkup: button.Keyboard(
-				button.Row(
-					button.SwitchInline("Search again", true, "pin "),
-				),
-			),
+			ReplyMarkup: telegram.NewKeyboard().AddRow(
+				button.SwitchInline("Search again", true, "pin "),
+			).Build(),
 		})
 
 		i.Answer(b.Results())
@@ -165,11 +161,9 @@ func PinterestInlineHandle(i *telegram.InlineQuery) error {
 			b.Photo(images[im], &telegram.ArticleOptions{
 				ID:    fmt.Sprintf("%d", im),
 				Title: fmt.Sprintf("pinterest-image-%d", im+1),
-				ReplyMarkup: button.Keyboard(
-					button.Row(
-						button.SwitchInline("Search again", true, "pin "),
-					),
-				),
+				ReplyMarkup: telegram.NewKeyboard().AddRow(
+					button.SwitchInline("Search again", true, "pin "),
+				).Build(),
 			})
 		}
 
@@ -268,20 +262,20 @@ func fetchPinterestImages(query string, lim int, offset int) ([]string, error) {
 func EmptyPreviewInline(i *telegram.InlineQuery) error {
 	b := i.Builder()
 
-b.Article(
-	"Preview",
-	"Empty webpage preview",
-	"",
-	&telegram.ArticleOptions{
-		WebPage: &telegram.InputBotInlineMessageMediaWebPage{
-			URL:      "https://telegram.org/",
-			//Optional: true,
-			//Message:  "",
+	b.Article(
+		"Preview",
+		"Empty webpage preview",
+		"",
+		&telegram.ArticleOptions{
+			WebPage: &telegram.InputBotInlineMessageMediaWebPage{
+				URL: "https://telegram.org/",
+				//Optional: true,
+				//Message:  "",
+			},
 		},
-	},
-)
+	)
 
- fmt.Println(i.Answer(b.Results()))
+	fmt.Println(i.Answer(b.Results()))
 	return nil
 }
 

@@ -309,16 +309,13 @@ func UserHandle(m *tg.NewMessage) error {
 	userString += "\n<a href=\"tg://user?id=" + strconv.FormatInt(un.ID, 10) + "\">View full profile</a>"
 
 	var keyb = tg.NewKeyboard()
+	profileButton := tg.Button.URL("View Profile", "tg://user?id="+strconv.FormatInt(un.ID, 10))
+	profileButton.Style = &tg.KeyboardButtonStyle{BgPrimary: true}
 	sendableUser, err := m.Client.GetSendableUser(un)
 	if err == nil {
-		keyb.AddRow(
-			tg.Button.Mention("View Profile", sendableUser).Primary(),
-		)
-	} else {
-		keyb.AddRow(
-			tg.Button.URL("View Profile", "tg://user?id="+strconv.FormatInt(un.ID, 10)).Primary(),
-		)
+		profileButton.Type = &tg.InputInlineButtonTypeUserProfile{UserID: sendableUser}
 	}
+	keyb.AddRow(profileButton)
 
 	var dcId = 0
 
@@ -417,8 +414,6 @@ func getCountryFlag(dcId int) string {
 	}
 	return ""
 }
-
-
 
 var st = time.Now()
 

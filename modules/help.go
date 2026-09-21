@@ -62,7 +62,7 @@ func HelpHandle(m *telegram.NewMessage) error {
 	if !m.IsPrivate() {
 		m.Reply("Use /help in private chat for detailed help.",
 			&telegram.SendOptions{
-				ReplyMarkup: b.Keyboard(b.Row(b.URL("Open Private Chat", "t.me/"+m.Client.Me().Username+"?start=help"))),
+				ReplyMarkup: telegram.NewKeyboard().AddRow(b.URL("Open Private Chat", "t.me/"+m.Client.Me().Username+"?start=help")).Build(),
 			})
 		return nil
 	}
@@ -74,7 +74,7 @@ func HelpHandle(m *telegram.NewMessage) error {
 		return sortedMods[i].Name < sortedMods[j].Name
 	})
 
-	var buttons []telegram.KeyboardButton
+	var buttons []telegram.KeyboardInlineButton
 	for _, v := range sortedMods {
 		buttons = append(buttons, b.Data(v.Name, "help_"+strings.ToLower(v.Name)))
 	}
@@ -119,7 +119,7 @@ func HelpBackCallback(c *telegram.CallbackQuery) error {
 		return sortedMods[i].Name < sortedMods[j].Name
 	})
 
-	var buttons []telegram.KeyboardButton
+	var buttons []telegram.KeyboardInlineButton
 	for _, v := range sortedMods {
 		buttons = append(buttons, b.Data(v.Name, "help_"+strings.ToLower(v.Name)))
 	}

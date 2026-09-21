@@ -142,27 +142,27 @@ Usage: /setwelcome <message> or reply to a message
 	return nil
 }
 
-func serializeButtons(buttons [][]tg.KeyboardButton) string {
+func serializeButtons(buttons [][]tg.KeyboardInlineButton) string {
 	var lines []string
 	for _, row := range buttons {
 		var rowParts []string
 		for i, btn := range row {
-			switch b := btn.(type) {
-			case *tg.KeyboardButtonURL:
+			switch b := btn.Type.(type) {
+			case *tg.InlineButtonTypeURL:
 				if i > 0 {
-					rowParts = append(rowParts, fmt.Sprintf("[same:%s](%s)", b.Text, b.URL))
+					rowParts = append(rowParts, fmt.Sprintf("[same:%s](%s)", btn.Text, b.URL))
 				} else {
-					rowParts = append(rowParts, fmt.Sprintf("[%s](%s)", b.Text, b.URL))
+					rowParts = append(rowParts, fmt.Sprintf("[%s](%s)", btn.Text, b.URL))
 				}
-			case *tg.KeyboardButtonCallback:
+			case *tg.InlineButtonTypeCallback:
 				data := string(b.Data)
 				if data == "rules_show" {
 					data = "rules"
 				}
 				if i > 0 {
-					rowParts = append(rowParts, fmt.Sprintf("[same:%s](%s)", b.Text, data))
+					rowParts = append(rowParts, fmt.Sprintf("[same:%s](%s)", btn.Text, data))
 				} else {
-					rowParts = append(rowParts, fmt.Sprintf("[%s](%s)", b.Text, data))
+					rowParts = append(rowParts, fmt.Sprintf("[%s](%s)", btn.Text, data))
 				}
 			}
 		}
@@ -1157,14 +1157,14 @@ func startCaptcha(p *tg.ParticipantUpdate) {
 
 		b := tg.Button
 		kb := tg.NewKeyboard()
-		row := []tg.KeyboardButton{}
+		row := []tg.KeyboardInlineButton{}
 		for i, o := range opts {
 			label := strconv.Itoa(o)
 			data := fmt.Sprintf("%smath:%d:%d:%s", captchaPrefix, chatID, userID, label)
 			row = append(row, b.Data(label, data))
 			if (i+1)%2 == 0 {
 				kb.AddRow(row...)
-				row = []tg.KeyboardButton{}
+				row = []tg.KeyboardInlineButton{}
 			}
 		}
 		if len(row) > 0 {

@@ -11,7 +11,7 @@
 
 ### Setting up
 
-- Install Go 1.18 or higher
+- Install Go 1.25 or higher
 
 ```bash
 git clone https://github.com/amarnathcjd/JuliaBot.git

@@ -11,7 +11,6 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN go get -u github.com/amarnathcjd/gogram@master
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-w -s" -o julia
 
 RUN apk del .build-deps
@@ -51,8 +50,8 @@ ENV GOMODCACHE=/app/.cache/go-mod
 
 RUN mkdir -p /app/.cache/go-build /app/.cache/go-mod /app/tmp
 
-COPY --from=builder /app/tmp/go.mod /app/tmp/
+COPY --from=builder /app/tmp/go.mod /app/tmp/go.sum /app/tmp/
 COPY --from=builder /app/tmp/main.go /app/tmp/
-RUN cd /app/tmp && go mod tidy && go get -u github.com/amarnathcjd/gogram@9a6ed44
+RUN cd /app/tmp && go mod download
 
 ENTRYPOINT ["/app/julia"]

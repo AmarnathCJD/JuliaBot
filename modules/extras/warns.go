@@ -85,13 +85,14 @@ func WarnUserHandler(m *tg.NewMessage) error {
 		return nil
 	}
 
-	b := tg.Button
+	removeButton := tg.Button.Data("Remove Warning", fmt.Sprintf("rmwarn_%d_%d", userID, m.SenderID()))
+	removeButton.Style = &tg.KeyboardButtonStyle{BgDanger: true}
 	m.Reply(
 		fmt.Sprintf("Warning issued to %s (%d/%d)\nReason: %s",
 			userName, count, settings.MaxWarns, reason),
 		&tg.SendOptions{
 			ReplyMarkup: tg.NewKeyboard().AddRow(
-				b.Data("Remove Warning", fmt.Sprintf("rmwarn_%d_%d", userID, m.SenderID())).Danger(),
+				removeButton,
 			).Build(),
 		},
 	)
@@ -495,4 +496,3 @@ func TemporaryWarnHandler(m *tg.NewMessage) error {
 
 	return nil
 }
-

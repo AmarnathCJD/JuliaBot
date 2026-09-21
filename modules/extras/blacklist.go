@@ -513,14 +513,15 @@ func BlacklistRemovalMenu(m *tg.NewMessage) error {
 
 		for i := 0; i < maxDisplay && i < 10; i += 2 {
 			// Create row with up to 2 delete buttons
+			removeButton := b.Data(fmt.Sprintf("Remove %d", i+1), fmt.Sprintf("rmblmedia_%d_%d", m.ChatID(), i))
+			removeButton.Style = &tg.KeyboardButtonStyle{BgDanger: true}
+			row := []tg.KeyboardInlineButton{removeButton}
 			if i+1 < maxDisplay {
-				kb.AddRow(
-					b.Data(fmt.Sprintf("Remove %d", i+1), fmt.Sprintf("rmblmedia_%d_%d", m.ChatID(), i)).Danger(),
-					b.Data(fmt.Sprintf("Remove %d", i+2), fmt.Sprintf("rmblmedia_%d_%d", m.ChatID(), i+1)).Danger(),
-				)
-			} else {
-				kb.AddRow(b.Data(fmt.Sprintf("Remove %d", i+1), fmt.Sprintf("rmblmedia_%d_%d", m.ChatID(), i)).Danger())
+				nextButton := b.Data(fmt.Sprintf("Remove %d", i+2), fmt.Sprintf("rmblmedia_%d_%d", m.ChatID(), i+1))
+				nextButton.Style = &tg.KeyboardButtonStyle{BgDanger: true}
+				row = append(row, nextButton)
 			}
+			kb.AddRow(row...)
 		}
 
 		resp.WriteString(fmt.Sprintf("\nTotal: <b>%d media</b>, <b>%d words</b>", len(mediaEntries), len(wordEntries)))

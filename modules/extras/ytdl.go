@@ -40,15 +40,15 @@ var (
 	ytdlURLRe    = regexp.MustCompile(`(?i)https?://(?:www\.|m\.)?(?:youtube\.com/(?:watch\?[^\s]*v=|shorts/|live/|embed/|v/)|youtu\.be/)[A-Za-z0-9_\-]{11}[^\s]*`)
 	ytdlIDRe     = regexp.MustCompile(`(?i)(?:youtu\.be/|youtube\.com/(?:watch\?(?:[^"' ]*&)?v=|shorts/|live/|embed/|v/))([A-Za-z0-9_\-]{11})`)
 
-	reFormatURL   = regexp.MustCompile(`'([0-9]{3,4}p|MP3)':\s*'(https://[^']+)'`)
-	reAudioURL    = regexp.MustCompile(`(?s)const\s+audioUrl\s*=\s*'([^']+)'`)
-	reMergeNonce  = regexp.MustCompile(`'nonce',\s*'([a-f0-9]+)'`)
-	reVideoID     = regexp.MustCompile(`name="video_id"\s+value="([A-Za-z0-9_\-]{11})"`)
-	reVideoTitle  = regexp.MustCompile(`(?s)class="col-lg-12[^"]*videoTitle"[^>]*title="([^"]+)"`)
-	reDuration    = regexp.MustCompile(`<label class="duration">Duration:\s*([^<]+)</label>`)
-	reThumbnail   = regexp.MustCompile(`<img class="thumbnail"\s+src="(https?://[^"]+)"`)
-	reQualityRow  = regexp.MustCompile(`(?s)data-quality="([^"]+)"[^>]*?data-size="([0-9]+)"[^>]*?onclick="([a-zA-Z0-9]+)\(`)
-	reHasAudioIn  = regexp.MustCompile(`data-has-audio="([^"]+)"`)
+	reFormatURL  = regexp.MustCompile(`'([0-9]{3,4}p|MP3)':\s*'(https://[^']+)'`)
+	reAudioURL   = regexp.MustCompile(`(?s)const\s+audioUrl\s*=\s*'([^']+)'`)
+	reMergeNonce = regexp.MustCompile(`'nonce',\s*'([a-f0-9]+)'`)
+	reVideoID    = regexp.MustCompile(`name="video_id"\s+value="([A-Za-z0-9_\-]{11})"`)
+	reVideoTitle = regexp.MustCompile(`(?s)class="col-lg-12[^"]*videoTitle"[^>]*title="([^"]+)"`)
+	reDuration   = regexp.MustCompile(`<label class="duration">Duration:\s*([^<]+)</label>`)
+	reThumbnail  = regexp.MustCompile(`<img class="thumbnail"\s+src="(https?://[^"]+)"`)
+	reQualityRow = regexp.MustCompile(`(?s)data-quality="([^"]+)"[^>]*?data-size="([0-9]+)"[^>]*?onclick="([a-zA-Z0-9]+)\(`)
+	reHasAudioIn = regexp.MustCompile(`data-has-audio="([^"]+)"`)
 )
 
 type ytdlFormat struct {
@@ -240,7 +240,6 @@ func buildPickerText(v *ytdlVideo) string {
 }
 
 func buildPickerKeyboard(v *ytdlVideo, sessionKey string) *tg.ReplyInlineMarkup {
-	b := tg.Button
 	kb := tg.NewKeyboard()
 
 	// Sort formats: MP3 first, then video ascending resolution (so highest quality is at the bottom = easiest to tap on mobile? No — user expectation is highest first. Do descending video, mp3 last row.)
@@ -264,21 +263,24 @@ func buildPickerKeyboard(v *ytdlVideo, sessionKey string) *tg.ReplyInlineMarkup 
 	}
 
 	for i := 0; i < len(video); i += 2 {
-		row := []tg.KeyboardButton{makeQualityButton(video[i], sessionKey)}
+		row := []tg.KeyboardInlineButton{makeQualityButton(video[i], sessionKey)}
 		if i+1 < len(video) {
 			row = append(row, makeQualityButton(video[i+1], sessionKey))
 		}
 		kb.AddRow(row...)
 	}
 	if mp3 != nil {
-		kb.AddRow(makeQualityButton(*mp3, sessionKey).Success())
+		mp3Button := makeQualityButton(*mp3, sessionKey)
+		mp3Button.Style = &tg.KeyboardButtonStyle{BgSuccess: true}
+		kb.AddRow(mp3Button)
 	}
-	_ = b
-	kb.AddRow(tg.Button.Data("Cancel", "yt:cancel:"+sessionKey).Danger())
+	cancelButton := tg.Button.Data("Cancel", "yt:cancel:"+sessionKey)
+	cancelButton.Style = &tg.KeyboardButtonStyle{BgDanger: true}
+	kb.AddRow(cancelButton)
 	return kb.Build()
 }
 
-func makeQualityButton(f ytdlFormat, sessionKey string) *tg.KeyboardButtonCallback {
+func makeQualityButton(f ytdlFormat, sessionKey string) tg.KeyboardInlineButton {
 	label := f.Quality
 	if bg := qualityBadge(f.Quality); bg != "" {
 		label += " " + bg
@@ -290,9 +292,9 @@ func makeQualityButton(f ytdlFormat, sessionKey string) *tg.KeyboardButtonCallba
 	// Style: give the top-tier ones a Primary (blue) tint, keep the rest neutral.
 	switch f.Quality {
 	case "2160p", "1440p":
-		return btn.Danger()
+		btn.Style = &tg.KeyboardButtonStyle{BgDanger: true}
 	case "1080p", "720p":
-		return btn.Primary()
+		btn.Style = &tg.KeyboardButtonStyle{BgPrimary: true}
 	}
 	return btn
 }
@@ -553,11 +555,11 @@ type ytdlMergeAjax struct {
 type ytdlMergeStatus struct {
 	Success bool `json:"success"`
 	Result  struct {
-		JobID                     string `json:"job_id"`
-		Status                    string `json:"status"`
-		Progress                  int    `json:"progress"`
-		FormattedProgressInPercent int   `json:"formatted_progress_in_percent"`
-		Output                    *struct {
+		JobID                      string `json:"job_id"`
+		Status                     string `json:"status"`
+		Progress                   int    `json:"progress"`
+		FormattedProgressInPercent int    `json:"formatted_progress_in_percent"`
+		Output                     *struct {
 			Key       string `json:"key"`
 			URL       string `json:"url"`
 			ExpiresAt string `json:"expiresAt"`

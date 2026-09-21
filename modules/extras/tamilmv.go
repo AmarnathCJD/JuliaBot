@@ -266,11 +266,11 @@ func tamilMVKeyboard(items []tamilMVItem) *tg.ReplyInlineMarkup {
 		button := tg.Button.Data(item.Title[:min(len(item.Title), 55)], "tm:open:"+token)
 		switch item.Lang {
 		case "malayalam":
-			button = button.Success()
+			button.Style = &tg.KeyboardButtonStyle{BgSuccess: true}
 		case "tamil":
-			button = button.Danger()
+			button.Style = &tg.KeyboardButtonStyle{BgDanger: true}
 		default:
-			button = button.Primary()
+			button.Style = &tg.KeyboardButtonStyle{BgPrimary: true}
 		}
 		k.AddRow(button)
 	}
