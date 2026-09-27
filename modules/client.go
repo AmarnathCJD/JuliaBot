@@ -30,7 +30,7 @@ func RegisterHandlers() {
 	}
 
 	_, _ = Client.UpdatesGetState()
-	Client.SetCommandPrefixes("./!-?")
+	Client.SetCommandPrefixes("./!?-")
 
 	if me := Client.Me(); me != nil && me.Username != "" {
 		if purged, err := db.PurgeStickersIfBotChanged(me.Username); err == nil && purged {
